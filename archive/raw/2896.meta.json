@@ -1,0 +1,18 @@
+{
+  "url": "https://www.dvdcompare.net/comparisons/film.php?fid=2896",
+  "fid": 2896,
+  "status_code": 200,
+  "fetch_timestamp": "2026-09-07T22:07:55.035187+00:00",
+  "content_length": 29274,
+  "content_sha256": "40cfcf8a6b8d44c09d765c609c7ab8e6e60cc9ca22c853c4256d68fea889bfb3",
+  "headers": {
+    "Date": "Mon, 07 Sep 2026 22:07:56 GMT",
+    "Server": "Apache",
+    "Keep-Alive": "timeout=5, max=90",
+    "Connection": "Keep-Alive",
+    "Transfer-Encoding": "chunked",
+    "Content-Type": "text/html; charset=UTF-8"
+  },
+  "is_missing": false,
+  "parser_version": "1.0.0"
+}
