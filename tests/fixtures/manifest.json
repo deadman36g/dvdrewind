@@ -1,0 +1,110 @@
+[
+  {
+    "fid": 1,
+    "label": "zombie_dvd",
+    "category": "Very first comparison (fid=1), classic DVD with multiple editions and AKA titles",
+    "fixture_path": "tests/fixtures/1_zombie_dvd.html",
+    "sha256": "",
+    "is_missing": false,
+    "size_bytes": 64016
+  },
+  {
+    "fid": 111,
+    "label": "blade_runner_dvd",
+    "category": "DVD with many releases",
+    "fixture_path": "tests\\fixtures\\111_blade_runner_dvd.html",
+    "sha256": "e2605c32c2a0fef96bcb0fd28594973b9b84ba1eba66d8bc7c53c40e7be5b551",
+    "is_missing": false,
+    "size_bytes": 164540
+  },
+  {
+    "fid": 12240,
+    "label": "blade_runner_bluray",
+    "category": "Blu-ray with extensive extras",
+    "fixture_path": "tests\\fixtures\\12240_blade_runner_bluray.html",
+    "sha256": "37380efb0508aab44b2be55f71a6a675d72d00b4e23c90c3bb6d79af5c82cc6a",
+    "is_missing": false,
+    "size_bytes": 149470
+  },
+  {
+    "fid": 43651,
+    "label": "blade_runner_4k",
+    "category": "4K UHD with 14 international editions",
+    "fixture_path": "tests\\fixtures\\43651_blade_runner_4k.html",
+    "sha256": "655902fa1b6b7752b4fe71b2dfbed7ecbf9a3a9666dba5657062be1836d5d218",
+    "is_missing": false,
+    "size_bytes": 107241
+  },
+  {
+    "fid": 45272,
+    "label": "adam_and_evil_dvd",
+    "category": "DVD with few releases",
+    "fixture_path": "tests\\fixtures\\45272_adam_and_evil_dvd.html",
+    "sha256": "963206be93ceccd01b334629ec482d8fb3edaa3a9ecbf9cd1b59ba75a939b6da",
+    "is_missing": false,
+    "size_bytes": 22216
+  },
+  {
+    "fid": 6726,
+    "label": "halloween_dvd",
+    "category": "DVD with detailed cuts",
+    "fixture_path": "tests\\fixtures\\6726_halloween_dvd.html",
+    "sha256": "d274f7eeee060a46bff04ad30f1d9fc1fc3d3b4850e2ef6efde14631b0bb57be",
+    "is_missing": false,
+    "size_bytes": 18306
+  },
+  {
+    "fid": 57756,
+    "label": "halloween_bluray",
+    "category": "Blu-ray with complex overall recommendation",
+    "fixture_path": "tests\\fixtures\\57756_halloween_bluray.html",
+    "sha256": "36178fb543d3b99e418bdc1cbeed4d02efc701ec22080928ab824904d287e748",
+    "is_missing": false,
+    "size_bytes": 17347
+  },
+  {
+    "fid": 62354,
+    "label": "halloween_4k",
+    "category": "Modern 4K UHD horror release",
+    "fixture_path": "tests\\fixtures\\62354_halloween_4k.html",
+    "sha256": "2082675e0e88d77122b558784a17301736ae2534d2c1133a59004d8b060c4e77",
+    "is_missing": false,
+    "size_bytes": 12773
+  },
+  {
+    "fid": 58934,
+    "label": "halloween2_4k",
+    "category": "4K UHD with multiple domestic editions",
+    "fixture_path": "tests\\fixtures\\58934_halloween2_4k.html",
+    "sha256": "5479ea7ba97af8485b108745f2e09686f3076e7801335863f531c180a0ab8322",
+    "is_missing": false,
+    "size_bytes": 11668
+  },
+  {
+    "fid": 10,
+    "label": "early_comparison_fid10",
+    "category": "Very early low-ID comparison",
+    "fixture_path": "tests\\fixtures\\10_early_comparison_fid10.html",
+    "sha256": "14a9557158eff49389ef766115fc1020dcfcac9e0873e14c571f3088f4a94d91",
+    "is_missing": true,
+    "size_bytes": 7145
+  },
+  {
+    "fid": 76145,
+    "label": "recent_comparison_fid76145",
+    "category": "Recently added comparison",
+    "fixture_path": "tests\\fixtures\\76145_recent_comparison_fid76145.html",
+    "sha256": "ab695bd6c8aa42159c21254855d5a79f494bef27eaacb03354c467d8902a2b4d",
+    "is_missing": false,
+    "size_bytes": 12177
+  },
+  {
+    "fid": 80000,
+    "label": "missing_fid80000",
+    "category": "Non-existent film ID negative test",
+    "fixture_path": "tests\\fixtures\\80000_missing_fid80000.html",
+    "sha256": "14a9557158eff49389ef766115fc1020dcfcac9e0873e14c571f3088f4a94d91",
+    "is_missing": true,
+    "size_bytes": 7145
+  }
+]
