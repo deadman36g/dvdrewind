@@ -430,6 +430,31 @@
 
 {# ================= COUNTRY / TERRITORY BADGES ================= #}
 
+{% macro country_flag(country) %}
+{% if country %}
+  {% set c = country|lower %}
+  {% if 'america' in c or 'united states' in c or 'usa' in c %}🇺🇸
+  {% elif 'united kingdom' in c or 'uk' in c %}🇬🇧
+  {% elif 'germany' in c %}🇩🇪
+  {% elif 'france' in c %}🇫🇷
+  {% elif 'japan' in c %}🇯🇵
+  {% elif 'australia' in c %}🇦🇺
+  {% elif 'spain' in c %}🇪🇸
+  {% elif 'italy' in c %}🇮🇹
+  {% elif 'canada' in c %}🇨🇦
+  {% elif 'holland' in c or 'netherlands' in c %}🇳🇱
+  {% elif 'sweden' in c %}🇸🇪
+  {% elif 'scandinavia' in c %}🇩🇰/🇸🇪
+  {% elif 'brazil' in c %}🇧🇷
+  {% elif 'hungary' in c %}🇭🇺
+  {% elif 'poland' in c %}🇵🇱
+  {% elif 'romania' in c %}🇷🇴
+  {% elif 'hong kong' in c %}🇭🇰
+  {% elif 'korea' in c %}🇰🇷
+  {% else %}🌐{% endif %}
+{% endif %}
+{% endmacro %}
+
 {% macro country_badge(country) %}
 {% if country %}
   {% set c = country|lower %}

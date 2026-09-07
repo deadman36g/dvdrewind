@@ -115,8 +115,8 @@ function initFilters() {
       const matchCut = !cut || cardCut === cut;
 
       if (matchCountry && matchRegion && matchCut) {
-        card.style.display = "block";
-        visibleCount++;
+        card.style.display = card.tagName === "TR" ? "" : "block";
+        if (card.tagName === "TR") visibleCount++;
       } else {
         card.style.display = "none";
       }
@@ -153,10 +153,15 @@ function initCompareSelector() {
           alert("You can compare up to 4 editions simultaneously.");
           return;
         }
-        selectedIndices.push(idx);
+        if (!selectedIndices.includes(idx)) selectedIndices.push(idx);
       } else {
         selectedIndices = selectedIndices.filter(i => i !== idx);
       }
+
+      // Synchronize all checkboxes for this edition (table row and spec card)
+      document.querySelectorAll(`.edition-compare-cb[data-index="${idx}"]`).forEach(other => {
+        other.checked = cb.checked;
+      });
 
       if (selectedIndices.length >= 2) {
         stickyBar.style.display = "flex";

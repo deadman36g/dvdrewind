@@ -43,9 +43,9 @@ class TestWebServer(AioHTTPTestCase):
         self.assertEqual(resp.status, 200)
         text = await resp.text()
         self.assertIn("Blade Runner", text)
-        self.assertIn("OVERALL RECOMMENDATION", text)
+        self.assertIn("OVERALL VERDICT", text)
         self.assertIn("Draw", text)
-        self.assertIn("Cuts & Version Differences", text)
+        self.assertIn("Cuts &amp; Censorship Differences", text)
         self.assertIn("Available Formats:", text)
         self.assertIn("imdb.com", text)
 
