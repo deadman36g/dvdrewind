@@ -32,9 +32,9 @@ class ArchiveRepository:
             self.conn.execute("""
                 INSERT INTO titles (
                     fid, raw_title, clean_title, aka_titles, year, format_category,
-                    imdb_id, dvdbeaver_url, source_url, added_by, added_date, updated_by, updated_date,
+                    imdb_id, dvdbeaver_url, director, synopsis, source_url, added_by, added_date, updated_by, updated_date,
                     source_hash, is_missing, raw_html_path, scraped_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(fid) DO UPDATE SET
                     raw_title = excluded.raw_title,
                     clean_title = excluded.clean_title,
@@ -43,6 +43,8 @@ class ArchiveRepository:
                     format_category = excluded.format_category,
                     imdb_id = excluded.imdb_id,
                     dvdbeaver_url = excluded.dvdbeaver_url,
+                    director = excluded.director,
+                    synopsis = excluded.synopsis,
                     source_url = excluded.source_url,
                     added_by = excluded.added_by,
                     added_date = excluded.added_date,
@@ -61,6 +63,8 @@ class ArchiveRepository:
                 data.get("format_category", "Unknown"),
                 data.get("imdb_id"),
                 data.get("dvdbeaver_url"),
+                data.get("director"),
+                data.get("synopsis"),
                 url,
                 data.get("added_by"),
                 data.get("added_date"),

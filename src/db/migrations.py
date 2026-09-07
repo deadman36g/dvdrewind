@@ -27,6 +27,13 @@ def init_db(db_path: Path = DB_PATH) -> None:
             curr = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
             if curr is None:
                 conn.execute("INSERT INTO schema_version (version) VALUES (1);")
+
+            # Check for existing table columns and migrate if necessary
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(titles);").fetchall()]
+            if "director" not in cols:
+                conn.execute("ALTER TABLE titles ADD COLUMN director TEXT;")
+            if "synopsis" not in cols:
+                conn.execute("ALTER TABLE titles ADD COLUMN synopsis TEXT;")
     finally:
         conn.close()
 

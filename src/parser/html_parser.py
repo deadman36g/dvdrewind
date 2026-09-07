@@ -62,7 +62,18 @@ class DVDCompareParser:
 
         title_info = parse_title_header(raw_title)
 
-        # 3. IMDb Link & External Reviews
+        # 3. Synopsis, Director, IMDb Link & External Reviews
+        synopsis = None
+        director = None
+        if h2 and h2.parent:
+            i_tag = h2.parent.find("i")
+            if i_tag:
+                synopsis = i_tag.get_text(" ", strip=True)
+            parent_text = h2.parent.get_text("\n", strip=True)
+            dir_m = re.search(r'Director:\s*([^\n\r<]+)', parent_text)
+            if dir_m:
+                director = dir_m.group(1).strip()
+
         imdb_id = None
         imdb_link = soup.find("a", href=re.compile(r'imdb\.com/title/(tt\d+)', re.IGNORECASE))
         if imdb_link:
@@ -117,6 +128,8 @@ class DVDCompareParser:
             "format_category": title_info["format_category"],
             "imdb_id": imdb_id,
             "dvdbeaver_url": dvdbeaver_url,
+            "director": director,
+            "synopsis": synopsis,
             "releases": releases_data,
             "recommendation": rec_data,
             "cuts": cuts_data,

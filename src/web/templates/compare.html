@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "icons.html" as icons %}
 
 {% block title %}Compare Editions: {{ title.clean_title }} - DVDRewind{% endblock %}
 
@@ -32,6 +33,7 @@
             <span class="release-number">#{{ e.release_index }}</span>
             <div style="margin-top: 0.35rem; font-size: 1rem; color: var(--text-primary);">
               {{ e.header_raw }}
+              {{ icons.boutique_badge(e.distributor) }}
             </div>
           </th>
           {% endfor %}

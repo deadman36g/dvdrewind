@@ -848,3 +848,99 @@ footer {
     font-size: 1.75rem;
   }
 }
+
+/* Boutique Label Chips */
+.boutique-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.15s ease;
+  user-select: none;
+  margin-left: 0.4rem;
+}
+.boutique-chip:hover {
+  transform: scale(1.03);
+}
+
+.boutique-criterion { background: #111111; color: #ffffff; border: 1px solid #333333; }
+.boutique-arrow { background: #2a0845; color: #00f0ff; border: 1px solid #ff0055; }
+.boutique-scream { background: #450a0a; color: #fef2f2; border: 1px solid #dc2626; }
+.boutique-shout { background: #0369a1; color: #fef08a; border: 1px solid #38bdf8; }
+.boutique-kino { background: #991b1b; color: #ffffff; border: 1px solid #ef4444; }
+.boutique-warner-archive { background: #0f172a; color: #f59e0b; border: 1px solid #d97706; }
+.boutique-vinegar { background: #4a044e; color: #22d3ee; border: 1px solid #e879f9; }
+.boutique-severin { background: #3f0713; color: #fecdd3; border: 1px solid #e11d48; }
+.boutique-moc { background: #18181b; color: #facc15; border: 1px solid #ca8a04; }
+.boutique-indicator { background: #09090b; color: #ffffff; border: 1px solid #e11d48; }
+.boutique-secondsight { background: #1e293b; color: #38bdf8; border: 1px solid #64748b; }
+.boutique-blueunderground { background: #075985; color: #ffffff; border: 1px solid #38bdf8; }
+.boutique-88films { background: #b91c1c; color: #ffffff; border: 1px solid #f87171; }
+.boutique-umbrella { background: #78350f; color: #fef08a; border: 1px solid #f59e0b; }
+.boutique-bfi { background: #000000; color: #ffffff; border: 1px solid #52525b; }
+.boutique-studiocanal { background: #18181b; color: #38bdf8; border: 1px solid #27272a; }
+.boutique-imprint { background: #082f49; color: #38bdf8; border: 1px solid #0284c7; }
+.boutique-radiance { background: #451a03; color: #fbbf24; border: 1px solid #d97706; }
+.boutique-synapse { background: #3b0764; color: #4ade80; border: 1px solid #a855f7; }
+.boutique-anchorbay { background: #0c4a6e; color: #e0f2fe; border: 1px solid #0284c7; }
+.boutique-lionsgate { background: #1e293b; color: #94a3b8; border: 1px solid #475569; }
+.boutique-warner { background: #1e3a8a; color: #f59e0b; border: 1px solid #3b82f6; }
+.boutique-universal { background: #172554; color: #93c5fd; border: 1px solid #2563eb; }
+
+/* Movie Hero Director & Synopsis */
+.movie-director-line {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+}
+.movie-director-line strong {
+  color: var(--text-primary);
+}
+.movie-synopsis-hero {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  background-color: var(--bg-tertiary);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-style: italic;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Synopsis Bottom Section */
+.synopsis-bottom-card {
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-tertiary));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.synopsis-bottom-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+.synopsis-bottom-text {
+  font-size: 1.05rem;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+}
+.synopsis-director-badge {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+

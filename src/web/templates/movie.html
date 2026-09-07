@@ -50,9 +50,21 @@
         </span>
       </div>
 
+      {% if title.director %}
+      <div class="movie-director-line">
+        <strong>Director:</strong> {{ title.director }}
+      </div>
+      {% endif %}
+
       {% if title.aka_titles %}
       <div class="movie-aka">
         <strong>Also Known As:</strong> {{ title.aka_titles|join(' &bull; ') }}
+      </div>
+      {% endif %}
+
+      {% if title.synopsis %}
+      <div class="movie-synopsis-hero">
+        &ldquo;{{ title.synopsis }}&rdquo;
       </div>
       {% endif %}
 
@@ -215,6 +227,7 @@
         <div class="release-title-group">
           <span class="release-number">#{{ r.release_index }}</span>
           <span class="release-headline">{{ r.header_raw }}</span>
+          {{ icons.boutique_badge(r.distributor) }}
         </div>
         <label class="release-select-cb">
           <input type="checkbox" class="edition-compare-cb" data-index="{{ r.release_index }}">
@@ -229,6 +242,7 @@
           <div class="spec-value">
             <strong>{{ r.country or 'Unknown' }}</strong> &bull; {{ r.distributor or 'N/A' }}
             {% if r.release_year %}({{ r.release_year }}){% endif %}
+            {{ icons.boutique_badge(r.distributor) }}
           </div>
           <div style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">
             Region: <strong>{{ r.region or 'Unknown' }}</strong> &bull; Case: {{ r.case_type or 'Standard' }}
@@ -329,6 +343,37 @@
     </div>
     {% endfor %}
   </section>
+
+  <!-- Bottom Film Synopsis Card -->
+  {% if title.synopsis %}
+  <section class="card synopsis-bottom-card" id="synopsis">
+    <h3><span>📜</span> DVDCompare Plot Synopsis</h3>
+    <p class="synopsis-bottom-text">&ldquo;{{ title.synopsis }}&rdquo;</p>
+    {% if title.director %}
+    <div class="synopsis-director-badge">
+      <strong>Directed by:</strong> {{ title.director }}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- Overall DVDCompare Verdict Summary -->
+  {% if title.recommendation and title.recommendation.overall_winner %}
+  <section class="winner-hero" style="margin-top: 1.5rem;">
+    <div class="winner-header">
+      <span style="font-size: 1.5rem;">🏆</span>
+      <span class="winner-badge">OVERALL DVDCOMPARE VERDICT</span>
+      <span class="winner-name">{{ title.recommendation.overall_winner }}</span>
+    </div>
+    <div class="winner-rationale">
+      {% if title.recommendation.recommendation_text %}
+        {{ title.recommendation.recommendation_text }}
+      {% else %}
+        All listed editions offer identical presentation quality and extras. Winner declared as a Draw.
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 
   <!-- Provenance & Update Log Box -->
   <section style="margin-top: 2.5rem; padding: 1.25rem; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">

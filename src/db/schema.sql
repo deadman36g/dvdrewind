@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS titles (
     imdb_id TEXT, -- e.g. 'tt0083658'
     poster_url TEXT, -- e.g. '/static/posters/tt0062909.jpg'
     dvdbeaver_url TEXT, -- e.g. 'http://www.dvdbeaver.com/film/...'
+    director TEXT, -- e.g. 'Freddie Francis'
+    synopsis TEXT, -- e.g. 'When his castle is exorcised...'
     source_url TEXT NOT NULL,
     added_by TEXT,
     added_date TEXT,
