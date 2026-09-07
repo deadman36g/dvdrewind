@@ -42,26 +42,32 @@
       <tbody>
         <!-- Country & Region -->
         <tr>
-          <th>Territory & Region</th>
+          <th>🌐 Territory &amp; Region</th>
           {% for e in editions %}
           <td>
-            <strong>{{ e.country or 'Unknown' }}</strong>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
-              Region: {{ e.region or 'N/A' }}
+            <div style="display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start;">
+              {{ icons.country_badge(e.country) }}
+              {{ icons.region_badge(e.region, title.format_category) }}
             </div>
           </td>
           {% endfor %}
         </tr>
 
-        <!-- Distributor & Year -->
+        <!-- Distributor & Label -->
         <tr>
-          <th>Distributor & Label</th>
+          <th>🏷️ Distributor &amp; Packaging</th>
           {% for e in editions %}
           <td>
-            {{ e.distributor or 'N/A' }}
-            {% if e.release_year %}
-            <span style="color: var(--text-muted); font-size: 0.85rem;">({{ e.release_year }})</span>
-            {% endif %}
+            <div style="font-weight: 700; color: var(--text-primary);">
+              {{ e.distributor or 'N/A' }}
+              {% if e.release_year %}
+              <span style="color: var(--text-muted); font-size: 0.85rem;">({{ e.release_year }})</span>
+              {% endif %}
+            </div>
+            <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+              {{ icons.boutique_badge(e.distributor) }}
+              {{ icons.case_badge(e.case_type) }}
+            </div>
           </td>
           {% endfor %}
         </tr>
@@ -76,13 +82,13 @@
 
         <!-- Video & Aspect Ratio -->
         <tr>
-          <th>Video & Aspect Ratio</th>
+          <th>🎞️ Video &amp; Framing</th>
           {% for e in editions %}
           <td>
-            {{ e.picture_format or 'N/A' }}
-            {% if e.aspect_ratio %}
-            <div style="font-size: 0.85rem; color: var(--text-muted);">{{ e.aspect_ratio }}</div>
-            {% endif %}
+            <div>{{ e.picture_format or 'N/A' }}</div>
+            <div style="margin-top: 0.3rem;">
+              {{ icons.aspect_badge(e.aspect_ratio) }}
+            </div>
           </td>
           {% endfor %}
         </tr>
@@ -93,9 +99,9 @@
           {% for e in editions %}
           <td>
             {% if e.hdr_format %}
-            <span class="badge badge-4k">{{ e.hdr_format }}</span>
+            {{ icons.hdr_badge(e.hdr_format) }}
             {% else %}
-            <span style="color: var(--text-muted); font-size: 0.85rem;">None (SDR)</span>
+            <span style="color: var(--text-muted); font-size: 0.85rem;">SDR (Standard Dynamic Range)</span>
             {% endif %}
           </td>
           {% endfor %}

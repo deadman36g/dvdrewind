@@ -224,8 +224,10 @@
     {% for r in title.releases %}
     <div class="release-card" data-country="{{ r.country or '' }}" data-region="{{ r.region or '' }}">
       <div class="release-header-row">
-        <div class="release-title-group">
+        <div class="release-title-group" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <span class="release-number">#{{ r.release_index }}</span>
+          {{ icons.country_badge(r.country) }}
+          {{ icons.region_badge(r.region, title.format_category) }}
           <span class="release-headline">{{ r.header_raw }}</span>
           {{ icons.boutique_badge(r.distributor) }}
         </div>
@@ -238,47 +240,54 @@
       <div class="release-body">
         <!-- Technical Specs Block -->
         <div class="spec-block">
-          <span class="spec-label">Territory & Label</span>
-          <div class="spec-value">
-            <strong>{{ r.country or 'Unknown' }}</strong> &bull; {{ r.distributor or 'N/A' }}
-            {% if r.release_year %}({{ r.release_year }}){% endif %}
-            {{ icons.boutique_badge(r.distributor) }}
+          <span class="spec-label">🌐 Territory &amp; Region</span>
+          <div class="spec-value" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            {{ icons.country_badge(r.country) }}
+            {{ icons.region_badge(r.region, title.format_category) }}
           </div>
-          <div style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">
-            Region: <strong>{{ r.region or 'Unknown' }}</strong> &bull; Case: {{ r.case_type or 'Standard' }}
+          <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: 0.85rem;">
+            <strong style="color: var(--text-primary);">{{ r.distributor or 'N/A' }}</strong>
+            {% if r.release_year %}<span style="color: var(--text-muted);">({{ r.release_year }})</span>{% endif %}
+            {{ icons.boutique_badge(r.distributor) }}
+            {{ icons.case_badge(r.case_type) }}
           </div>
         </div>
 
         <!-- Video & HDR Block -->
         <div class="spec-block">
-          <span class="spec-label">Video Master & Transfer</span>
-          <div class="spec-value">
-            {{ r.picture_format or 'N/A' }}
-            {% if r.aspect_ratio %}({{ r.aspect_ratio }}){% endif %}
+          <span class="spec-label">🎞️ Video Master &amp; Framing</span>
+          <div class="spec-value" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <span>{{ r.picture_format or 'N/A' }}</span>
+            {{ icons.aspect_badge(r.aspect_ratio) }}
           </div>
           {% if r.hdr_format %}
           <div style="margin-top: 0.4rem;">
-            <span class="badge badge-4k">{{ r.hdr_format }}</span>
+            {{ icons.hdr_badge(r.hdr_format) }}
           </div>
           {% endif %}
           {% if r.tv_system and r.tv_system != 'None' %}
-          <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
-            TV System: {{ r.tv_system }}
+          <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+            TV System: <strong style="color: var(--text-primary);">{{ r.tv_system }}</strong>
           </div>
           {% endif %}
         </div>
 
         <!-- Audio Tracks Block -->
         <div class="spec-block">
-          <span class="spec-label">Soundtracks ({{ r.audio_tracks|length }})</span>
+          <span class="spec-label">🔊 Soundtracks ({{ r.audio_tracks|length }})</span>
           <div class="spec-value" style="font-size: 0.85rem;">
             {% if r.audio_tracks %}
-              <ul style="list-style: disc; margin-left: 1rem; line-height: 1.4;">
+              <ul style="list-style: none; padding: 0; margin: 0; line-height: 1.5;">
                 {% for a in r.audio_tracks[:5] %}
-                <li>{{ a.raw_text }}</li>
+                <li class="audio-track-item">
+                  {% if a.codec %}
+                  <span class="audio-codec-pill">{{ a.codec }}</span>
+                  {% endif %}
+                  <span>{{ a.raw_text }}</span>
+                </li>
                 {% endfor %}
                 {% if r.audio_tracks|length > 5 %}
-                <li style="color: var(--text-muted);">+ {{ r.audio_tracks|length - 5 }} more tracks</li>
+                <li style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem;">+ {{ r.audio_tracks|length - 5 }} more tracks</li>
                 {% endif %}
               </ul>
             {% else %}
@@ -289,7 +298,7 @@
 
         <!-- Subtitles Block -->
         <div class="spec-block">
-          <span class="spec-label">Subtitles ({{ r.subtitle_tracks|length }})</span>
+          <span class="spec-label">💬 Subtitles ({{ r.subtitle_tracks|length }})</span>
           <div class="spec-value" style="font-size: 0.85rem;">
             {% if r.subtitle_tracks %}
               <div>

@@ -275,3 +275,230 @@
 {% endif %}
 {% endmacro %}
 
+{# ================= REGION BADGES (R1, R2, BLU-RAY A, B, ALL) ================= #}
+
+{% macro globe_icon(size=14, stroke="#F59E0B") %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" style="vertical-align: middle; flex-shrink: 0;">
+  <circle cx="12" cy="12" r="10" stroke="{{ stroke }}" stroke-width="1.8"/>
+  <line x1="2" y1="12" x2="22" y2="12" stroke="{{ stroke }}" stroke-width="1.5"/>
+  <ellipse cx="12" cy="12" rx="5" ry="10" stroke="{{ stroke }}" stroke-width="1.5"/>
+</svg>
+{% endmacro %}
+
+{% macro hex_icon(size=14, letter="A", color="#38BDF8") %}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" style="vertical-align: middle; flex-shrink: 0;">
+  <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" stroke="{{ color }}" stroke-width="1.8" fill="rgba(56,189,248,0.12)"/>
+  <text x="12" y="16" font-size="11" font-weight="900" text-anchor="middle" fill="{{ color }}">{{ letter }}</text>
+</svg>
+{% endmacro %}
+
+{% macro region_badge(region, format_category="") %}
+{% if region %}
+  {% set r = region|lower %}
+  {% if 'blu-ray all' in r or 'region all' in r or 'region free' in r or 'abc' in r or ('all' in r and 'blu' in format_category|lower) %}
+    <span class="region-badge region-bd-all" title="Blu-ray Region Free: Playable on all players worldwide">
+      {{ hex_icon(14, '✓', '#00E054') }}
+      <span>REGION FREE (A·B·C)</span>
+    </span>
+  {% elif 'blu-ray a' in r or r == 'a' or ('region a' in r) %}
+    <span class="region-badge region-bd-a" title="Blu-ray Region A: Americas, East/Southeast Asia">
+      {{ hex_icon(14, 'A', '#38BDF8') }}
+      <span>REGION A</span>
+    </span>
+  {% elif 'blu-ray b' in r or r == 'b' or ('region b' in r) %}
+    <span class="region-badge region-bd-b" title="Blu-ray Region B: Europe, UK, Australia, Africa, Middle East">
+      {{ hex_icon(14, 'B', '#38BDF8') }}
+      <span>REGION B</span>
+    </span>
+  {% elif 'blu-ray c' in r or r == 'c' or ('region c' in r) %}
+    <span class="region-badge region-bd-c" title="Blu-ray Region C: Central/South Asia, China, Russia">
+      {{ hex_icon(14, 'C', '#38BDF8') }}
+      <span>REGION C</span>
+    </span>
+  {% elif '4k' in format_category|lower or 'uhd' in format_category|lower %}
+    <span class="region-badge region-uhd-free" title="Ultra HD: Region-free by global standard">
+      {{ globe_icon(14, '#F59E0B') }}
+      <span>4K REGION FREE</span>
+    </span>
+  {% elif 'r1' in r %}
+    <span class="region-badge region-dvd-1" title="DVD Region 1: USA, Canada, US Territories">
+      {{ globe_icon(14, '#60A5FA') }}
+      <span>DVD R1 (USA/CAN)</span>
+    </span>
+  {% elif 'r2' in r %}
+    <span class="region-badge region-dvd-2" title="DVD Region 2: Europe, UK, Japan, Middle East, South Africa">
+      {{ globe_icon(14, '#F472B6') }}
+      <span>DVD R2 (UK/EUR/JPN)</span>
+    </span>
+  {% elif 'r3' in r %}
+    <span class="region-badge region-dvd-3" title="DVD Region 3: Southeast Asia, Hong Kong, South Korea, Taiwan">
+      {{ globe_icon(14, '#A78BFA') }}
+      <span>DVD R3 (ASIA)</span>
+    </span>
+  {% elif 'r4' in r %}
+    <span class="region-badge region-dvd-4" title="DVD Region 4: Latin America, Australia, New Zealand">
+      {{ globe_icon(14, '#34D399') }}
+      <span>DVD R4 (AUS/LATAM)</span>
+    </span>
+  {% elif 'r5' in r %}
+    <span class="region-badge region-dvd-5" title="DVD Region 5: Eastern Europe, South Asia, Africa">
+      {{ globe_icon(14, '#FBBF24') }}
+      <span>DVD R5 (EEUR/AFR)</span>
+    </span>
+  {% elif 'r6' in r %}
+    <span class="region-badge region-dvd-6" title="DVD Region 6: Mainland China">
+      {{ globe_icon(14, '#F87171') }}
+      <span>DVD R6 (CHINA)</span>
+    </span>
+  {% elif 'r0' in r or 'region 0' in r %}
+    <span class="region-badge region-dvd-0" title="DVD Region 0: Region Free worldwide">
+      {{ globe_icon(14, '#00E054') }}
+      <span>DVD R0 (ALL)</span>
+    </span>
+  {% else %}
+    <span class="region-badge region-generic">
+      {{ globe_icon(14, '#94A3B8') }}
+      <span>{{ region }}</span>
+    </span>
+  {% endif %}
+{% endif %}
+{% endmacro %}
+
+{# ================= COUNTRY / TERRITORY BADGES ================= #}
+
+{% macro country_badge(country) %}
+{% if country %}
+  {% set c = country|lower %}
+  <span class="country-chip country-{{ c|replace(' ', '-') }}">
+    {% if 'america' in c or 'united states' in c or 'usa' in c %}
+      <span class="country-flag">🇺🇸</span> <span>America</span>
+    {% elif 'united kingdom' in c or 'uk' in c %}
+      <span class="country-flag">🇬🇧</span> <span>United Kingdom</span>
+    {% elif 'germany' in c %}
+      <span class="country-flag">🇩🇪</span> <span>Germany</span>
+    {% elif 'france' in c %}
+      <span class="country-flag">🇫🇷</span> <span>France</span>
+    {% elif 'japan' in c %}
+      <span class="country-flag">🇯🇵</span> <span>Japan</span>
+    {% elif 'australia' in c %}
+      <span class="country-flag">🇦🇺</span> <span>Australia</span>
+    {% elif 'spain' in c %}
+      <span class="country-flag">🇪🇸</span> <span>Spain</span>
+    {% elif 'italy' in c %}
+      <span class="country-flag">🇮🇹</span> <span>Italy</span>
+    {% elif 'canada' in c %}
+      <span class="country-flag">🇨🇦</span> <span>Canada</span>
+    {% elif 'holland' in c or 'netherlands' in c %}
+      <span class="country-flag">🇳🇱</span> <span>Netherlands</span>
+    {% elif 'sweden' in c %}
+      <span class="country-flag">🇸🇪</span> <span>Sweden</span>
+    {% elif 'scandinavia' in c %}
+      <span class="country-flag">🇩🇰/🇸🇪</span> <span>Scandinavia</span>
+    {% elif 'brazil' in c %}
+      <span class="country-flag">🇧🇷</span> <span>Brazil</span>
+    {% elif 'hungary' in c %}
+      <span class="country-flag">🇭🇺</span> <span>Hungary</span>
+    {% elif 'poland' in c %}
+      <span class="country-flag">🇵🇱</span> <span>Poland</span>
+    {% elif 'romania' in c %}
+      <span class="country-flag">🇷🇴</span> <span>Romania</span>
+    {% elif 'hong kong' in c %}
+      <span class="country-flag">🇭🇰</span> <span>Hong Kong</span>
+    {% elif 'korea' in c %}
+      <span class="country-flag">🇰🇷</span> <span>South Korea</span>
+    {% else %}
+      <span class="country-flag">🌐</span> <span>{{ country }}</span>
+    {% endif %}
+  </span>
+{% endif %}
+{% endmacro %}
+
+{# ================= PACKAGING / CASE TYPE BADGES ================= #}
+
+{% macro case_badge(case_type) %}
+{% if case_type and case_type != 'None' and case_type != 'Unknown' %}
+  {% set ct = case_type|lower %}
+  {% if 'steelbook' in ct %}
+    <span class="case-chip case-steelbook" title="SteelBook® Metal Packaging">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="2" fill="#E2E8F0" stroke="#94A3B8" stroke-width="1.5"/><line x1="8" y1="2" x2="8" y2="22" stroke="#64748B" stroke-width="1.5"/></svg>
+      <span>SteelBook®</span>
+    </span>
+  {% elif 'mediabook' in ct or 'digibook' in ct %}
+    <span class="case-chip case-mediabook" title="Collector's Hardcover Mediabook">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 4v16a2 2 0 0 0 2 2h14V4H6a2 2 0 0 0-2 2z" fill="#78350F" stroke="#F59E0B" stroke-width="1.5"/><line x1="8" y1="4" x2="8" y2="22" stroke="#F59E0B" stroke-width="1.5"/></svg>
+      <span>{{ case_type }}</span>
+    </span>
+  {% elif 'digipak' in ct %}
+    <span class="case-chip case-digipak" title="Fold-out Digipak Packaging">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="3,6 9,3 15,6 21,3 21,19 15,22 9,19 3,22" stroke="#A855F7" stroke-width="1.5" fill="rgba(168,85,247,0.1)"/></svg>
+      <span>Digipak</span>
+    </span>
+  {% elif 'snapper' in ct %}
+    <span class="case-chip case-snapper" title="Warner Bros. Snapper Case">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="1" stroke="#38BDF8" stroke-width="1.5"/><line x1="17" y1="3" x2="17" y2="21" stroke="#38BDF8" stroke-width="2.5"/></svg>
+      <span>Snapper Case</span>
+    </span>
+  {% elif 'special' in ct or 'box' in ct or 'collector' in ct %}
+    <span class="case-chip case-deluxe" title="Collector's Deluxe Box Set">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="15" rx="2" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1.5"/><path d="M3 10h18M12 6v15" stroke="#F59E0B" stroke-width="1.5"/></svg>
+      <span>{{ case_type }}</span>
+    </span>
+  {% elif 'keep' in ct or 'amaray' in ct %}
+    <span class="case-chip case-keepcase" title="Standard Amaray Keep Case">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" fill="rgba(148,163,184,0.15)" stroke="#94A3B8" stroke-width="1.5"/><circle cx="12" cy="12" r="3" stroke="#94A3B8" stroke-width="1.5"/></svg>
+      <span>Keep Case</span>
+    </span>
+  {% else %}
+    <span class="case-chip case-generic">
+      <span>{{ case_type }}</span>
+    </span>
+  {% endif %}
+{% endif %}
+{% endmacro %}
+
+{# ================= HDR BADGES ================= #}
+
+{% macro hdr_badge(hdr) %}
+{% if hdr and hdr != 'None' %}
+  {% set h = hdr|lower %}
+  <div style="display: inline-flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;">
+  {% if 'dolby vision' in h %}
+    <span class="tech-badge badge-dv" title="Dolby Vision High Dynamic Range">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><path d="M4 4h6a8 8 0 0 1 0 16H4V4zm10 0h6v16h-6a8 8 0 0 1 0-16z" fill="#FFFFFF"/></svg>
+      <span>Dolby Vision</span>
+    </span>
+  {% endif %}
+  {% if 'hdr10+' in h %}
+    <span class="tech-badge badge-hdr10plus" title="HDR10+ Dynamic Metadata">HDR10+</span>
+  {% elif 'hdr10' in h %}
+    <span class="tech-badge badge-hdr10" title="HDR10 Static Metadata">HDR10</span>
+  {% elif 'hdr' in h and 'dolby' not in h %}
+    <span class="tech-badge badge-hdr10">{{ hdr }}</span>
+  {% endif %}
+  </div>
+{% endif %}
+{% endmacro %}
+
+{# ================= ASPECT RATIO BADGES ================= #}
+
+{% macro aspect_badge(ratio) %}
+{% if ratio and ratio != 'None' and ratio != 'Unknown' %}
+  {% set r = ratio|lower %}
+  <span class="aspect-chip" title="Framing Aspect Ratio: {{ ratio }}">
+    {% if '2.3' in r or '2.4' in r or 'scope' in r %}
+      <svg width="14" height="10" viewBox="0 0 28 14" fill="none" style="vertical-align: middle;"><rect x="1" y="2" width="26" height="10" rx="1.5" stroke="#38BDF8" stroke-width="2" fill="rgba(56,189,248,0.15)"/></svg>
+      <span>{{ ratio }} (Scope)</span>
+    {% elif '1.8' in r or '1.7' in r or '16:9' in r or '1.6' in r %}
+      <svg width="14" height="10" viewBox="0 0 22 14" fill="none" style="vertical-align: middle;"><rect x="1" y="1" width="20" height="12" rx="1.5" stroke="#F59E0B" stroke-width="2" fill="rgba(245,158,11,0.15)"/></svg>
+      <span>{{ ratio }} (Widescreen)</span>
+    {% elif '1.3' in r or '4:3' in r or 'academy' in r %}
+      <svg width="12" height="10" viewBox="0 0 16 14" fill="none" style="vertical-align: middle;"><rect x="1" y="1" width="14" height="12" rx="1.5" stroke="#A855F7" stroke-width="2" fill="rgba(168,85,247,0.15)"/></svg>
+      <span>{{ ratio }} (Full Frame)</span>
+    {% else %}
+      <span>{{ ratio }}</span>
+    {% endif %}
+  </span>
+{% endif %}
+{% endmacro %}
+
+
