@@ -1126,9 +1126,10 @@ footer {
 .audio-track-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.3rem;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
   font-size: 0.84rem;
+  flex-wrap: wrap;
 }
 .audio-codec-pill {
   font-size: 0.7rem;
@@ -1140,5 +1141,174 @@ footer {
   color: var(--accent-blue);
   text-transform: uppercase;
 }
+
+/* Extreme Scream Factory & Shout Factory Badges */
+.boutique-scream-extreme {
+  background: linear-gradient(135deg, #2b0303, #150202);
+  border: 1px solid #dc2626;
+  color: #f87171;
+  padding: 0.2rem 0.6rem;
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.scream-title {
+  font-family: 'Arial Black', 'Impact', sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #fca5a5;
+  font-size: 0.82rem;
+}
+.scream-sub {
+  background: #dc2626;
+  color: #ffffff;
+  padding: 0.05rem 0.35rem;
+  border-radius: 2px;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  margin-left: 0.2rem;
+}
+
+.boutique-shout-extreme {
+  background: linear-gradient(135deg, #0a3273, #061c40);
+  border: 1px solid #3b82f6;
+  color: #ffffff;
+  padding: 0.2rem 0.6rem;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.shout-title {
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+  font-size: 0.85rem;
+}
+.shout-sub {
+  background: #facc15;
+  color: #000000;
+  padding: 0.05rem 0.35rem;
+  border-radius: 2px;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  margin-left: 0.2rem;
+}
+
+/* Authentic Audio Brand Badges */
+.audio-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  flex-shrink: 0;
+}
+.audio-brand {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.dolby-atmos-badge {
+  background: #000000;
+  border: 1px solid #00e5ff;
+  color: #ffffff;
+}
+.dolby-atmos-badge .audio-tech {
+  color: #00e5ff;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.dolby-truehd-badge {
+  background: #000000;
+  border: 1px solid #38bdf8;
+  color: #ffffff;
+}
+.dolby-truehd-badge .audio-tech {
+  color: #38bdf8;
+  font-weight: 900;
+}
+
+.dolby-digital-badge {
+  background: #0a0a0a;
+  border: 1px solid #64748b;
+  color: #ffffff;
+}
+.dolby-digital-badge .audio-tech {
+  color: #f1f5f9;
+  font-weight: 900;
+}
+
+.dts-hd-badge {
+  background: #0f172a;
+  border: 1px solid #0284c7;
+  color: #38bdf8;
+}
+.dts-glyph {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #38bdf8;
+}
+.dts-x-badge {
+  background: #0f172a;
+  border: 1px solid #06b6d4;
+  color: #ffffff;
+}
+.dts-x-glyph {
+  font-family: 'Impact', sans-serif;
+  font-size: 0.88rem;
+  font-style: italic;
+  font-weight: 900;
+  color: #22d3ee;
+  margin-left: 0.1rem;
+}
+.dts-surround-badge {
+  background: #18181b;
+  border: 1px solid #52525b;
+  color: #e2e8f0;
+}
+
+.lpcm-badge {
+  background: #422006;
+  border: 1px solid #d97706;
+  color: #fef08a;
+}
+.lpcm-glyph {
+  font-weight: 900;
+  color: #f59e0b;
+}
+
+.audio-channels-chip {
+  background: rgba(255,255,255,0.18);
+  padding: 0.08rem 0.35rem;
+  border-radius: 2px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  margin-left: 0.15rem;
+}
+.audio-tech-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+.audio-generic-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
 
 

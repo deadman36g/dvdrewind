@@ -75,16 +75,26 @@
 {% endmacro %}
 
 {% macro scream_factory_badge() %}
-<span class="boutique-chip boutique-scream" title="Scream Factory">
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" fill="#DC2626"/><text x="12" y="16" font-size="12" font-weight="900" text-anchor="middle" fill="#FFFFFF">!</text></svg>
-  <span>SCREAM FACTORY</span>
+<span class="boutique-chip boutique-scream-extreme" title="Scream Factory Collector's Edition">
+  <svg width="20" height="14" viewBox="0 0 40 28" fill="none" style="vertical-align: middle; flex-shrink: 0;">
+    <path d="M4 2h32l2 24-18 2-18-2z" fill="#450A0A" stroke="#EF4444" stroke-width="1.8"/>
+    <line x1="7" y1="5" x2="11" y2="23" stroke="#DC2626" stroke-width="1.5"/>
+    <text x="20" y="19" font-family="'Impact', 'Arial Black', sans-serif" font-size="16" font-weight="900" text-anchor="middle" fill="#F87171">!</text>
+  </svg>
+  <span class="scream-title">SCREAM</span>
+  <span class="scream-sub">FACTORY</span>
 </span>
 {% endmacro %}
 
 {% macro shout_factory_badge() %}
-<span class="boutique-chip boutique-shout" title="Shout! Factory">
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#0284C7"/><text x="12" y="17" font-size="14" font-weight="900" text-anchor="middle" fill="#FACC15">!</text></svg>
-  <span>SHOUT! FACTORY</span>
+<span class="boutique-chip boutique-shout-extreme" title="Shout! Factory">
+  <svg width="18" height="14" viewBox="0 0 36 28" fill="none" style="vertical-align: middle; flex-shrink: 0;">
+    <rect x="2" y="2" width="32" height="24" rx="4" fill="#0A3273" stroke="#2563EB" stroke-width="1.5"/>
+    <line x1="18" y1="6" x2="18" y2="13" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="18" cy="18" r="2.5" fill="#EF4444"/>
+  </svg>
+  <span class="shout-title">SHOUT!</span>
+  <span class="shout-sub">FACTORY</span>
 </span>
 {% endmacro %}
 
@@ -500,5 +510,150 @@
   </span>
 {% endif %}
 {% endmacro %}
+
+{# ================= DOLBY & DTS EXTREME AUDIO LOGOS ================= #}
+
+{% macro dolby_double_d(width=16, height=11, color="currentColor") %}
+<svg width="{{ width }}" height="{{ height }}" viewBox="0 0 32 18" fill="none" style="vertical-align: middle; flex-shrink: 0;">
+  <path d="M14 1H6a5 5 0 0 0-5 5v6a5 5 0 0 0 5 5h8V1zm-4 13H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4v10z" fill="{{ color }}"/>
+  <path d="M18 1h8a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-8V1zm4 13h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4v10z" fill="{{ color }}"/>
+</svg>
+{% endmacro %}
+
+{% macro dolby_atmos_badge() %}
+<span class="audio-logo-badge dolby-atmos-badge" title="Dolby Atmos Immersive Object-Based Audio">
+  <svg width="18" height="12" viewBox="0 0 32 18" fill="none">
+    <path d="M14 1H6a5 5 0 0 0-5 5v6a5 5 0 0 0 5 5h8V1zm-4 13H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4v10z" fill="#00E5FF"/>
+    <path d="M18 1h8a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-8V1zm4 13h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4v10z" fill="#00E5FF"/>
+  </svg>
+  <span class="audio-brand">DOLBY</span>
+  <span class="audio-tech">ATMOS</span>
+</span>
+{% endmacro %}
+
+{% macro dolby_truehd_badge() %}
+<span class="audio-logo-badge dolby-truehd-badge" title="Dolby TrueHD Advanced Lossless Audio">
+  <svg width="16" height="11" viewBox="0 0 32 18" fill="none">
+    <path d="M14 1H6a5 5 0 0 0-5 5v6a5 5 0 0 0 5 5h8V1zm-4 13H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4v10z" fill="#38BDF8"/>
+    <path d="M18 1h8a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-8V1zm4 13h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4v10z" fill="#38BDF8"/>
+  </svg>
+  <span class="audio-brand">DOLBY</span>
+  <span class="audio-tech">TrueHD</span>
+</span>
+{% endmacro %}
+
+{% macro dolby_digital_badge(channels="") %}
+<span class="audio-logo-badge dolby-digital-badge" title="Dolby Digital {{ channels }}">
+  <svg width="16" height="11" viewBox="0 0 32 18" fill="none">
+    <path d="M14 1H6a5 5 0 0 0-5 5v6a5 5 0 0 0 5 5h8V1zm-4 13H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4v10z" fill="#FFFFFF"/>
+    <path d="M18 1h8a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-8V1zm4 13h4a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4v10z" fill="#FFFFFF"/>
+  </svg>
+  <span class="audio-brand">DOLBY</span>
+  <span class="audio-tech">DIGITAL</span>
+  {% if channels %}<span class="audio-channels-chip">{{ channels }}</span>{% endif %}
+</span>
+{% endmacro %}
+
+{% macro dts_hd_ma_badge(channels="") %}
+<span class="audio-logo-badge dts-hd-badge" title="DTS-HD Master Audio Lossless">
+  <span class="dts-glyph">dts-HD</span>
+  <span class="audio-tech-sub">Master Audio</span>
+  {% if channels %}<span class="audio-channels-chip">{{ channels }}</span>{% endif %}
+</span>
+{% endmacro %}
+
+{% macro dts_x_badge() %}
+<span class="audio-logo-badge dts-x-badge" title="DTS:X Immersive Audio">
+  <span class="dts-glyph">dts</span>
+  <span class="dts-x-glyph">:X</span>
+</span>
+{% endmacro %}
+
+{% macro dts_surround_badge(channels="") %}
+<span class="audio-logo-badge dts-surround-badge" title="DTS Digital Surround">
+  <span class="dts-glyph">dts</span>
+  <span class="audio-tech-sub">Surround</span>
+  {% if channels %}<span class="audio-channels-chip">{{ channels }}</span>{% endif %}
+</span>
+{% endmacro %}
+
+{% macro lpcm_badge(channels="") %}
+<span class="audio-logo-badge lpcm-badge" title="LPCM Uncompressed Linear PCM Audio">
+  <span class="lpcm-glyph">LPCM</span>
+  <span class="audio-tech-sub">Uncompressed</span>
+  {% if channels %}<span class="audio-channels-chip">{{ channels }}</span>{% endif %}
+</span>
+{% endmacro %}
+
+{# Master audio renderer: inspects raw audio line and renders genuine brand logos #}
+{% macro audio_track_badge(raw_text) %}
+{% if raw_text %}
+  {% set t = raw_text|lower %}
+  {# Extract channels like 5.1, 7.1, 2.0, 1.0, Mono, Stereo #}
+  {% set ch = "" %}
+  {% if '5.1' in t %}
+    {% set ch = "5.1" %}
+  {% elif '7.1' in t %}
+    {% set ch = "7.1" %}
+  {% elif '2.0' in t %}
+    {% set ch = "2.0" %}
+  {% elif '1.0' in t or 'mono' in t %}
+    {% set ch = "Mono" %}
+  {% elif 'stereo' in t %}
+    {% set ch = "Stereo" %}
+  {% elif '6.1' in t %}
+    {% set ch = "6.1" %}
+  {% endif %}
+
+  {% if 'atmos' in t %}
+    {{ dolby_atmos_badge() }}
+  {% elif 'truehd' in t %}
+    {{ dolby_truehd_badge() }}
+  {% elif 'dts-hd master' in t or 'dts-hd ma' in t %}
+    {{ dts_hd_ma_badge(ch) }}
+  {% elif 'dts:x' in t %}
+    {{ dts_x_badge() }}
+  {% elif 'dts-hd' in t %}
+    <span class="audio-logo-badge dts-hd-badge"><span class="dts-glyph">dts-HD</span>{% if ch %}<span class="audio-channels-chip">{{ ch }}</span>{% endif %}</span>
+  {% elif 'dts' in t %}
+    {{ dts_surround_badge(ch) }}
+  {% elif 'dolby digital' in t or 'dolby audio' in t or ('dolby' in t and 'truehd' not in t and 'atmos' not in t) %}
+    {{ dolby_digital_badge(ch) }}
+  {% elif 'lpcm' in t or 'linear pcm' in t or 'uncompressed pcm' in t or ' pcm' in t %}
+    {{ lpcm_badge(ch) }}
+  {% else %}
+    <span class="audio-generic-badge"><span class="audio-channels-chip">{{ ch or 'Audio' }}</span></span>
+  {% endif %}
+{% endif %}
+{% endmacro %}
+
+{# Macro to extract and display top release audio capabilities badges in spec header #}
+{% macro audio_summary_badges(tracks) %}
+{% if tracks %}
+  {% set all_text = [] %}
+  {% for tr in tracks %}{% set _ = all_text.append(tr.raw_text|lower) %}{% endfor %}
+  {% set full = all_text|join(' ') %}
+  <div style="display: inline-flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; margin-left: 0.5rem;">
+  {% if 'atmos' in full %}
+    {{ dolby_atmos_badge() }}
+  {% elif 'truehd' in full %}
+    {{ dolby_truehd_badge() }}
+  {% elif 'dolby digital' in full %}
+    {{ dolby_digital_badge() }}
+  {% endif %}
+  {% if 'dts:x' in full %}
+    {{ dts_x_badge() }}
+  {% elif 'dts-hd' in full %}
+    {{ dts_hd_ma_badge() }}
+  {% elif 'dts' in full and 'dts-hd' not in full %}
+    {{ dts_surround_badge() }}
+  {% endif %}
+  {% if 'lpcm' in full or ' pcm' in full %}
+    {{ lpcm_badge() }}
+  {% endif %}
+  </div>
+{% endif %}
+{% endmacro %}
+
 
 

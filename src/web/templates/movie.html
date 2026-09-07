@@ -274,20 +274,21 @@
 
         <!-- Audio Tracks Block -->
         <div class="spec-block">
-          <span class="spec-label">🔊 Soundtracks ({{ r.audio_tracks|length }})</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 0.35rem;">
+            <span class="spec-label" style="margin-bottom: 0;">🔊 Soundtracks ({{ r.audio_tracks|length }})</span>
+            {{ icons.audio_summary_badges(r.audio_tracks) }}
+          </div>
           <div class="spec-value" style="font-size: 0.85rem;">
             {% if r.audio_tracks %}
-              <ul style="list-style: none; padding: 0; margin: 0; line-height: 1.5;">
-                {% for a in r.audio_tracks[:5] %}
+              <ul style="list-style: none; padding: 0; margin: 0; line-height: 1.6;">
+                {% for a in r.audio_tracks[:6] %}
                 <li class="audio-track-item">
-                  {% if a.codec %}
-                  <span class="audio-codec-pill">{{ a.codec }}</span>
-                  {% endif %}
+                  {{ icons.audio_track_badge(a.raw_text) }}
                   <span>{{ a.raw_text }}</span>
                 </li>
                 {% endfor %}
-                {% if r.audio_tracks|length > 5 %}
-                <li style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem;">+ {{ r.audio_tracks|length - 5 }} more tracks</li>
+                {% if r.audio_tracks|length > 6 %}
+                <li style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.2rem;">+ {{ r.audio_tracks|length - 6 }} more audio tracks</li>
                 {% endif %}
               </ul>
             {% else %}

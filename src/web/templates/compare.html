@@ -109,13 +109,19 @@
 
         <!-- Audio Tracks -->
         <tr>
-          <th>Soundtracks</th>
+          <th>🔊 Soundtracks</th>
           {% for e in editions %}
           <td>
+            <div style="margin-bottom: 0.35rem;">
+              {{ icons.audio_summary_badges(e.audio_tracks) }}
+            </div>
             {% if e.audio_tracks %}
-              <ul style="list-style: disc; margin-left: 1rem; font-size: 0.85rem;">
+              <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.82rem; line-height: 1.6;">
                 {% for a in e.audio_tracks %}
-                <li>{{ a.raw_text }}</li>
+                <li class="audio-track-item">
+                  {{ icons.audio_track_badge(a.raw_text) }}
+                  <span>{{ a.raw_text }}</span>
+                </li>
                 {% endfor %}
               </ul>
             {% else %}
