@@ -1,81 +1,131 @@
 {% extends "base.html" %}
+{% import "icons.html" as icons %}
 
 {% block title %}{{ title.clean_title }} ({{ title.year or 'N/A' }}) [{{ title.format_category }}] - DVDRewind{% endblock %}
 
 {% block content %}
 <article>
-  <!-- Movie Header -->
-  <div class="movie-header">
-    <div class="movie-title-area">
-      <h1 class="movie-main-title">{{ title.clean_title }}</h1>
-      <span class="movie-year">({{ title.year or 'N/A' }})</span>
-      <span class="badge badge-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}" style="font-size: 0.9rem; padding: 0.3rem 0.6rem;">
-        {{ title.format_category }}
-      </span>
-    </div>
-
-    {% if title.aka_titles %}
-    <div class="movie-aka">
-      <strong>Also Known As:</strong> {{ title.aka_titles|join(' &bull; ') }}
-    </div>
-    {% endif %}
-
-    <!-- Format Sibling Switcher -->
-    <div class="format-pills">
-      <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 0.25rem;">Available Formats:</span>
-      <span class="format-pill active">
-        <span>📀</span> {{ title.format_category }}
-        <span class="format-pill-count">({{ title.releases|length }} editions)</span>
-      </span>
-      {% for s in title.format_siblings %}
-      <a href="/film/{{ s.fid }}" class="format-pill">
-        <span>💿</span> {{ s.format_category }}
-        {% if s.release_count %}
-        <span class="format-pill-count">({{ s.release_count }} editions)</span>
+  <!-- Movie Hero Layout with Poster -->
+  <div class="movie-hero-layout">
+    <!-- Poster Column -->
+    <div class="movie-poster-col">
+      <div class="movie-poster-wrapper" id="poster-wrapper">
+        {% if title.poster_url %}
+        <img src="{{ title.poster_url }}" alt="{{ title.clean_title }} poster" class="movie-poster-img" id="main-poster-img">
+        {% else %}
+        <div class="movie-poster-placeholder" id="poster-placeholder">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎬</div>
+          <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary);">{{ title.clean_title }}</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">({{ title.year or 'N/A' }})</div>
+          <div style="margin-top: 0.75rem;">
+            {% if '4K' in title.format_category %}
+              {{ icons.uhd_logo(54, 20) }}
+            {% elif 'Blu-ray' in title.format_category %}
+              {{ icons.bluray_logo(48, 18) }}
+            {% else %}
+              {{ icons.dvd_logo(44, 18) }}
+            {% endif %}
+          </div>
+        </div>
         {% endif %}
-      </a>
-      {% endfor %}
+      </div>
+      <button id="btn-fetch-poster" class="poster-action-btn" data-fid="{{ title.fid }}" data-imdb="{{ title.imdb_id or '' }}" data-title="{{ title.clean_title }}" data-year="{{ title.year or '' }}">
+        <span>🖼️</span> <span id="poster-btn-text">{{ 'Change Poster' if title.poster_url else 'Fetch TMDB Poster' }}</span>
+      </button>
     </div>
 
-    <!-- External Collector Resources & Links Bar -->
-    <div class="external-links-bar">
-      <span class="ext-links-label">External Links:</span>
-      
-      {% if title.imdb_id %}
-      <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-link-chip imdb-chip">
-        <span>🎬</span>
-        <span>IMDb</span>
-        <span class="chip-sub">({{ title.imdb_id }})</span>
-      </a>
+    <!-- Movie Details Column -->
+    <div class="movie-info-col">
+      <div class="movie-title-area">
+        <h1 class="movie-main-title">{{ title.clean_title }}</h1>
+        <span class="movie-year">({{ title.year or 'N/A' }})</span>
+        <span style="margin-left: 0.5rem; display: inline-flex; align-items: center;">
+          {% if '4K' in title.format_category %}
+            {{ icons.uhd_logo(64, 24) }}
+          {% elif 'Blu-ray' in title.format_category %}
+            {{ icons.bluray_logo(58, 22) }}
+          {% else %}
+            {{ icons.dvd_logo(52, 22) }}
+          {% endif %}
+        </span>
+      </div>
+
+      {% if title.aka_titles %}
+      <div class="movie-aka">
+        <strong>Also Known As:</strong> {{ title.aka_titles|join(' &bull; ') }}
+      </div>
       {% endif %}
 
-      {% if title.dvdbeaver_url %}
-      <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-link-chip beaver-chip">
-        <span>🦫</span>
-        <span>DVDBeaver Review</span>
-        <span class="chip-sub">&amp; Screenshots</span>
-      </a>
-      {% endif %}
+      <!-- Format Sibling Switcher with Vector Logos -->
+      <div class="format-pills">
+        <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 0.25rem;">Available Formats:</span>
+        <span class="format-pill active">
+          {% if '4K' in title.format_category %}
+            {{ icons.uhd_logo(46, 16) }}
+          {% elif 'Blu-ray' in title.format_category %}
+            {{ icons.bluray_logo(42, 16) }}
+          {% else %}
+            {{ icons.dvd_logo(38, 16) }}
+          {% endif %}
+          <span>{{ title.format_category }}</span>
+          <span class="format-pill-count">({{ title.releases|length }} editions)</span>
+        </span>
+        {% for s in title.format_siblings %}
+        <a href="/film/{{ s.fid }}" class="format-pill">
+          {% if '4K' in s.format_category %}
+            {{ icons.uhd_logo(46, 16) }}
+          {% elif 'Blu-ray' in s.format_category %}
+            {{ icons.bluray_logo(42, 16) }}
+          {% else %}
+            {{ icons.dvd_logo(38, 16) }}
+          {% endif %}
+          <span>{{ s.format_category }}</span>
+          {% if s.release_count %}
+          <span class="format-pill-count">({{ s.release_count }} editions)</span>
+          {% endif %}
+        </a>
+        {% endfor %}
+      </div>
 
-      <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-link-chip bluray-chip">
-        <span>💿</span>
-        <span>Blu-ray.com</span>
-      </a>
+      <!-- External Collector Resources Bar with Official Logos -->
+      <div class="external-links-bar">
+        <span class="ext-links-label">External Links:</span>
+        
+        {% if title.imdb_id %}
+        <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-link-chip imdb-chip">
+          {{ icons.imdb_logo(38, 18) }}
+          <span class="chip-sub">({{ title.imdb_id }})</span>
+        </a>
+        {% endif %}
 
-      <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-link-chip letterboxd-chip">
-        <span>🍿</span>
-        <span>Letterboxd</span>
-      </a>
+        {% if title.dvdbeaver_url %}
+        <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-link-chip beaver-chip">
+          {{ icons.beaver_logo(18) }}
+          <span>DVDBeaver</span>
+          <span class="chip-sub">Review &amp; Screenshots</span>
+        </a>
+        {% endif %}
 
-      <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-link-chip rewind-chip">
-        <span>🌐</span>
-        <span>DVDCompare (Live)</span>
-      </a>
+        <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-link-chip bluray-chip">
+          {{ icons.bluray_logo(36, 14) }}
+          <span>Blu-ray.com</span>
+        </a>
 
-      <a href="/archive/{{ title.fid }}" target="_blank" class="ext-link-chip archive-chip">
-        <span>📄</span>
-        <span>Archived HTML</span>
-      </a>
+        <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-link-chip letterboxd-chip">
+          {{ icons.letterboxd_logo(16) }}
+          <span>Letterboxd</span>
+        </a>
+
+        <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-link-chip rewind-chip">
+          {{ icons.rewind_logo(16) }}
+          <span>DVDCompare (Live)</span>
+        </a>
+
+        <a href="/archive/{{ title.fid }}" target="_blank" class="ext-link-chip archive-chip">
+          <span>📄</span>
+          <span>Archived HTML</span>
+        </a>
+      </div>
     </div>
   </div>
 

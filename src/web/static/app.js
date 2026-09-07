@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initSearch();
   initFilters();
   initCompareSelector();
+  initPosterManager();
   initKeyboardShortcuts();
 });
 
@@ -177,6 +178,64 @@ function initCompareSelector() {
       }
     });
   }
+}
+
+// 5. Poster Management (TMDB & Custom URL)
+function initPosterManager() {
+  const btn = document.getElementById("btn-fetch-poster");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    const fid = btn.getAttribute("data-fid");
+    const imdb = btn.getAttribute("data-imdb");
+    const title = btn.getAttribute("data-title");
+
+    const input = prompt(
+      `Fetch poster for "${title}" from TMDB:\n\n` +
+      `Enter your TMDB API Key (or paste a direct image URL):\n` +
+      `(Leave blank if you've already configured TMDB_API_KEY in the server)`,
+      localStorage.getItem("tmdb_key") || ""
+    );
+
+    if (input === null) return; // User cancelled
+
+    const payload = {};
+    const trimmed = input.trim();
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      payload.poster_url = trimmed;
+    } else if (trimmed) {
+      payload.api_key = trimmed;
+      localStorage.setItem("tmdb_key", trimmed);
+    }
+
+    btn.disabled = true;
+    const originalText = document.getElementById("poster-btn-text").textContent;
+    document.getElementById("poster-btn-text").textContent = "Fetching...";
+
+    try {
+      const res = await fetch(`/api/poster/${fid}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok && data.poster_url) {
+        const wrapper = document.getElementById("poster-wrapper");
+        wrapper.innerHTML = `<img src="${data.poster_url}" alt="${escapeHtml(title)} poster" class="movie-poster-img" id="main-poster-img">`;
+        document.getElementById("poster-btn-text").textContent = "Change Poster";
+      } else {
+        alert(data.error || "Could not fetch poster from TMDB. Please check your API key or paste a direct image URL.");
+        document.getElementById("poster-btn-text").textContent = originalText;
+      }
+    } catch (err) {
+      console.error("Poster error:", err);
+      alert("Network error updating poster.");
+      document.getElementById("poster-btn-text").textContent = originalText;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 // 5. Keyboard Shortcuts

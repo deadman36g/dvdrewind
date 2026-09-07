@@ -320,5 +320,18 @@ class ArchiveRepository:
             title_data.get("year")
         )).fetchall()
         title_data["format_siblings"] = [dict(s) for s in siblings]
-
         return title_data
+
+    def update_poster_url(self, fid: int, poster_url: str) -> None:
+        """Updates the cached poster URL for a title and all sibling formats with the same IMDb ID."""
+        with self.conn:
+            # Find IMDb ID
+            row = self.conn.execute("SELECT id, imdb_id, clean_title, year FROM titles WHERE fid = ?", (fid,)).fetchone()
+            if not row:
+                return
+            title_id, imdb_id, clean_title, year = row["id"], row["imdb_id"], row["clean_title"], row["year"]
+
+            if imdb_id:
+                self.conn.execute("UPDATE titles SET poster_url = ? WHERE imdb_id = ?", (poster_url, imdb_id))
+            else:
+                self.conn.execute("UPDATE titles SET poster_url = ? WHERE clean_title = ? AND year = ?", (poster_url, clean_title, year))

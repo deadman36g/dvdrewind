@@ -168,6 +168,51 @@ async def handle_raw_archive_file(request: web.Request) -> web.Response:
     # Deliver with UTF-8 or CP1252
     return web.Response(body=content, content_type="text/html", charset="utf-8")
 
+async def handle_api_poster(request: web.Request) -> web.Response:
+    from src.scraper.posters import fetch_poster_from_tmdb, save_tmdb_key
+    fid = int(request.match_info["fid"])
+    data = {}
+    try:
+        data = await request.json()
+    except Exception:
+        pass
+
+    api_key = data.get("api_key")
+    if api_key:
+        save_tmdb_key(api_key)
+
+    custom_url = data.get("poster_url")
+    repo = ArchiveRepository()
+    try:
+        title = repo.get_title_detail(fid)
+        if not title:
+            return web.json_response({"error": "Title not found"}, status=404)
+
+        if custom_url:
+            from src.scraper.posters import cache_custom_poster
+            cache_key = title.get("imdb_id") or f"custom_{fid}"
+            cached_url = cache_custom_poster(custom_url, cache_key)
+            repo.update_poster_url(fid, cached_url)
+            return web.json_response({"success": True, "poster_url": cached_url})
+
+        # Fetch from TMDB
+        poster = fetch_poster_from_tmdb(
+            imdb_id=title.get("imdb_id"),
+            clean_title=title["clean_title"],
+            year=title.get("year"),
+            api_key=api_key
+        )
+        if poster:
+            repo.update_poster_url(fid, poster)
+            return web.json_response({"success": True, "poster_url": poster})
+        else:
+            return web.json_response({
+                "success": False,
+                "error": "Could not fetch poster from TMDB. Ensure TMDB API key is provided."
+            }, status=400)
+    finally:
+        repo.close()
+
 def create_app() -> web.Application:
     # Ensure database is initialized
     init_db()
@@ -180,11 +225,16 @@ def create_app() -> web.Application:
     app.router.add_get("/search", handle_search)
     app.router.add_get("/api/search", handle_api_search)
     app.router.add_get("/film/{fid}", handle_movie)
+    app.router.add_post("/api/poster/{fid}", handle_api_poster)
     app.router.add_get("/compare", handle_compare)
     app.router.add_get("/archive/{fid}", handle_archive_view)
     app.router.add_get("/archive/raw/{fid}", handle_raw_archive_file)
 
     # Static assets
+    from src.config import ARCHIVE_DIR
+    posters_dir = ARCHIVE_DIR / "posters"
+    posters_dir.mkdir(parents=True, exist_ok=True)
+    app.router.add_static("/static/posters/", path=str(posters_dir), name="posters")
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
 
     return app
