@@ -43,10 +43,11 @@ class TestWebServer(AioHTTPTestCase):
         self.assertEqual(resp.status, 200)
         text = await resp.text()
         self.assertIn("Blade Runner", text)
-        self.assertIn("OVERALL WINNER", text)
+        self.assertIn("OVERALL RECOMMENDATION", text)
         self.assertIn("Draw", text)
         self.assertIn("Cuts & Version Differences", text)
-        self.assertIn("Formats:", text)
+        self.assertIn("Available Formats:", text)
+        self.assertIn("External Links:", text)
 
     @unittest_run_loop
     async def test_compare_page(self):

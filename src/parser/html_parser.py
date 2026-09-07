@@ -62,13 +62,18 @@ class DVDCompareParser:
 
         title_info = parse_title_header(raw_title)
 
-        # 3. IMDb Link
+        # 3. IMDb Link & External Reviews
         imdb_id = None
         imdb_link = soup.find("a", href=re.compile(r'imdb\.com/title/(tt\d+)', re.IGNORECASE))
         if imdb_link:
             m = re.search(r'(tt\d+)', imdb_link["href"])
             if m:
                 imdb_id = m.group(1)
+
+        dvdbeaver_url = None
+        beaver_link = soup.find("a", href=re.compile(r'dvdbeaver\.com', re.IGNORECASE))
+        if beaver_link:
+            dvdbeaver_url = beaver_link["href"]
 
         # 4. Partition ul.dvd into Releases and Conclusion
         uls = soup.find_all("ul", class_="dvd")
@@ -111,6 +116,7 @@ class DVDCompareParser:
             "year": title_info["year"],
             "format_category": title_info["format_category"],
             "imdb_id": imdb_id,
+            "dvdbeaver_url": dvdbeaver_url,
             "releases": releases_data,
             "recommendation": rec_data,
             "cuts": cuts_data,

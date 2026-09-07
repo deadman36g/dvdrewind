@@ -22,22 +22,60 @@
 
     <!-- Format Sibling Switcher -->
     <div class="format-pills">
-      <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 0.25rem;">Formats:</span>
-      <span class="format-pill active">{{ title.format_category }} (Current)</span>
+      <span style="font-size: 0.85rem; color: var(--text-muted); margin-right: 0.25rem;">Available Formats:</span>
+      <span class="format-pill active">
+        <span>📀</span> {{ title.format_category }}
+        <span class="format-pill-count">({{ title.releases|length }} editions)</span>
+      </span>
       {% for s in title.format_siblings %}
       <a href="/film/{{ s.fid }}" class="format-pill">
-        {{ s.format_category }}
+        <span>💿</span> {{ s.format_category }}
+        {% if s.release_count %}
+        <span class="format-pill-count">({{ s.release_count }} editions)</span>
+        {% endif %}
       </a>
       {% endfor %}
+    </div>
 
-      <div style="margin-left: auto; display: flex; gap: 0.5rem;">
-        <a href="/archive/{{ title.fid }}" class="theme-toggle-btn" style="text-decoration: none;" target="_blank">
-          📄 View Archived Source
-        </a>
-        <a href="{{ title.source_url }}" class="theme-toggle-btn" style="text-decoration: none;" target="_blank" rel="noopener">
-          🌐 Live on DVDCompare
-        </a>
-      </div>
+    <!-- External Collector Resources & Links Bar -->
+    <div class="external-links-bar">
+      <span class="ext-links-label">External Links:</span>
+      
+      {% if title.imdb_id %}
+      <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-link-chip imdb-chip">
+        <span>🎬</span>
+        <span>IMDb</span>
+        <span class="chip-sub">({{ title.imdb_id }})</span>
+      </a>
+      {% endif %}
+
+      {% if title.dvdbeaver_url %}
+      <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-link-chip beaver-chip">
+        <span>🦫</span>
+        <span>DVDBeaver Review</span>
+        <span class="chip-sub">&amp; Screenshots</span>
+      </a>
+      {% endif %}
+
+      <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-link-chip bluray-chip">
+        <span>💿</span>
+        <span>Blu-ray.com</span>
+      </a>
+
+      <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-link-chip letterboxd-chip">
+        <span>🍿</span>
+        <span>Letterboxd</span>
+      </a>
+
+      <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-link-chip rewind-chip">
+        <span>🌐</span>
+        <span>DVDCompare (Live)</span>
+      </a>
+
+      <a href="/archive/{{ title.fid }}" target="_blank" class="ext-link-chip archive-chip">
+        <span>📄</span>
+        <span>Archived HTML</span>
+      </a>
     </div>
   </div>
 
@@ -45,7 +83,8 @@
   {% if title.recommendation and title.recommendation.overall_winner %}
   <section class="winner-hero">
     <div class="winner-header">
-      <span class="winner-badge">OVERALL WINNER</span>
+      <span style="font-size: 1.5rem;">🏆</span>
+      <span class="winner-badge">OVERALL RECOMMENDATION</span>
       <span class="winner-name">{{ title.recommendation.overall_winner }}</span>
     </div>
     <div class="winner-rationale">

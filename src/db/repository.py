@@ -32,9 +32,9 @@ class ArchiveRepository:
             self.conn.execute("""
                 INSERT INTO titles (
                     fid, raw_title, clean_title, aka_titles, year, format_category,
-                    imdb_id, source_url, added_by, added_date, updated_by, updated_date,
+                    imdb_id, dvdbeaver_url, source_url, added_by, added_date, updated_by, updated_date,
                     source_hash, is_missing, raw_html_path, scraped_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(fid) DO UPDATE SET
                     raw_title = excluded.raw_title,
                     clean_title = excluded.clean_title,
@@ -42,6 +42,7 @@ class ArchiveRepository:
                     year = excluded.year,
                     format_category = excluded.format_category,
                     imdb_id = excluded.imdb_id,
+                    dvdbeaver_url = excluded.dvdbeaver_url,
                     source_url = excluded.source_url,
                     added_by = excluded.added_by,
                     added_date = excluded.added_date,
@@ -59,6 +60,7 @@ class ArchiveRepository:
                 data.get("year"),
                 data.get("format_category", "Unknown"),
                 data.get("imdb_id"),
+                data.get("dvdbeaver_url"),
                 url,
                 data.get("added_by"),
                 data.get("added_date"),
@@ -302,13 +304,14 @@ class ArchiveRepository:
 
         # Find sibling formats (grouping by clean_title and year or IMDb ID)
         sibling_sql = """
-            SELECT fid, clean_title, format_category, year
-            FROM titles
-            WHERE id != ? AND is_missing = 0 AND (
-                (imdb_id IS NOT NULL AND imdb_id = ?)
-                OR (clean_title = ? AND year = ?)
+            SELECT t.fid, t.clean_title, t.format_category, t.year,
+                   (SELECT COUNT(*) FROM releases r WHERE r.title_id = t.id) as release_count
+            FROM titles t
+            WHERE t.id != ? AND t.is_missing = 0 AND (
+                (t.imdb_id IS NOT NULL AND t.imdb_id = ?)
+                OR (t.clean_title = ? AND t.year = ?)
             )
-            ORDER BY format_category ASC;
+            ORDER BY t.format_category ASC;
         """
         siblings = self.conn.execute(sibling_sql, (
             title_id,

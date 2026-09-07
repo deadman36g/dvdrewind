@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS titles (
     year INTEGER,
     format_category TEXT NOT NULL, -- e.g. '4K UHD', 'Blu-ray', 'DVD', 'HD DVD'
     imdb_id TEXT, -- e.g. 'tt0083658'
+    dvdbeaver_url TEXT, -- e.g. 'http://www.dvdbeaver.com/film/...'
     source_url TEXT NOT NULL,
     added_by TEXT,
     added_date TEXT,
