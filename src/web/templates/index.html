@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}DVDRewind - Modern Physical Media Comparisons & Archive{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Which physical release should I own?</h1>
+  <p>An extremely fast, modern, and offline-first interface for physical media comparisons.</p>
+  
+  <div class="hero-search">
+    <form action="/search" method="get">
+      <input type="text" id="hero-search-input" name="q" placeholder="Search by title, edition, director, or label..." autofocus>
+    </form>
+  </div>
+</section>
+
+<section class="format-grid">
+  <a href="/search?format=4K+UHD" class="format-card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="format-card-title">4K Ultra HD</span>
+      <span class="badge badge-4k">4K UHD</span>
+    </div>
+    <div class="format-card-desc">HDR10, Dolby Vision, Dolby Atmos, and native 2160p master comparisons.</div>
+  </a>
+
+  <a href="/search?format=Blu-ray" class="format-card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="format-card-title">Blu-ray</span>
+      <span class="badge badge-bluray">Blu-ray</span>
+    </div>
+    <div class="format-card-desc">High-definition 1080p transfers, lossless audio tracks, and exhaustive bonus features.</div>
+  </a>
+
+  <a href="/search?format=DVD" class="format-card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="format-card-title">DVD</span>
+      <span class="badge badge-dvd">DVD</span>
+    </div>
+    <div class="format-card-desc">Anamorphic vs non-anamorphic transfers, NTSC/PAL speedup, and regional differences.</div>
+  </a>
+</section>
+
+<section>
+  <div class="section-header">
+    <h2 class="section-title">Archived Comparisons</h2>
+    <span style="color: var(--text-muted); font-size: 0.9rem;">{{ comparisons|length }} titles in active test database</span>
+  </div>
+
+  <div class="comparisons-grid">
+    {% for c in comparisons %}
+    <a href="/film/{{ c.fid }}" class="comparison-card">
+      <div>
+        <div class="comparison-card-header">
+          <h3 class="comparison-title">{{ c.clean_title }}</h3>
+          <span class="badge badge-{{ '4k' if '4K' in c.format_category else ('bluray' if 'Blu-ray' in c.format_category else 'dvd') }}">
+            {{ c.format_category }}
+          </span>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+          {{ c.year or 'Year Unknown' }} &bull; {{ c.release_count }} physical editions
+        </div>
+        {% if c.aka_titles %}
+        <div class="comparison-aka">AKA: {{ c.aka_titles|join(', ') }}</div>
+        {% endif %}
+      </div>
+
+      {% if c.overall_winner %}
+      <div class="comparison-winner">
+        <strong>Winner:</strong> {{ c.overall_winner }}
+      </div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

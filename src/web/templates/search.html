@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Search: {{ query }} - DVDRewind{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+  <h1 style="font-size: 1.75rem; font-weight: 800; margin-bottom: 0.5rem;">
+    Search Results for <span style="color: var(--accent-blue);">"{{ query }}"</span>
+  </h1>
+  <p style="color: var(--text-secondary); font-size: 0.95rem;">
+    Found {{ results|length }} match{{ 'es' if results|length != 1 else '' }} in local FTS5 archive
+  </p>
+</div>
+
+{% if results %}
+<div class="comparisons-grid">
+  {% for r in results %}
+  <a href="/film/{{ r.fid }}" class="comparison-card">
+    <div>
+      <div class="comparison-card-header">
+        <h3 class="comparison-title">{{ r.clean_title }}</h3>
+        <span class="badge badge-{{ '4k' if '4K' in r.format_category else ('bluray' if 'Blu-ray' in r.format_category else 'dvd') }}">
+          {{ r.format_category }}
+        </span>
+      </div>
+      <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+        {{ r.year or 'N/A' }} &bull; {{ r.release_count }} physical editions
+      </div>
+      {% if r.aka_titles %}
+      <div class="comparison-aka">AKA: {{ r.aka_titles|join(', ') }}</div>
+      {% endif %}
+    </div>
+
+    {% if r.overall_winner %}
+    <div class="comparison-winner">
+      <strong>Verdict:</strong> {{ r.overall_winner }}
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div style="background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 3rem 1.5rem; text-align: center;">
+  <p style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">No comparisons matched your query</p>
+  <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Try searching for a title without punctuation or browse by format above.</p>
+  <a href="/" style="display: inline-block; padding: 0.5rem 1.25rem; background-color: var(--bg-tertiary); color: var(--text-primary); border-radius: var(--radius-md); font-weight: 700;">Return Home</a>
+</div>
+{% endif %}
+{% endblock %}

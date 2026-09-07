@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DVDRewind - Modern Physical Media Comparisons{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📀</text></svg>">
+</head>
+<body>
+  <header>
+    <div class="nav-container">
+      <div class="logo-area">
+        <a href="/" class="brand-title">
+          <span>📀 DVDRewind</span>
+          <span class="brand-badge">Archive</span>
+        </a>
+      </div>
+
+      <div class="nav-search">
+        <form action="/search" method="get">
+          <span class="nav-search-icon">🔍</span>
+          <input type="text" id="nav-search-input" name="q" placeholder="Search movies, formats, distributors... (Press / to focus)" autocomplete="off" value="{{ query or '' }}">
+        </form>
+        <div id="nav-search-dropdown" class="search-dropdown"></div>
+      </div>
+
+      <div class="nav-actions">
+        <a href="/search?format=4K+UHD" class="badge badge-4k" style="padding: 0.35rem 0.65rem;">4K UHD</a>
+        <a href="/search?format=Blu-ray" class="badge badge-bluray" style="padding: 0.35rem 0.65rem;">Blu-ray</a>
+        <a href="/search?format=DVD" class="badge badge-dvd" style="padding: 0.35rem 0.65rem;">DVD</a>
+        <button id="theme-toggle-btn" class="theme-toggle-btn">☀️ Light</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <div class="footer-container">
+      <div>
+        <p><strong>DVDRewind Private Archive</strong> &bull; Fast, offline-first physical media database.</p>
+        <p style="font-size: 0.8rem; margin-top: 0.25rem;">Data archived from Rewind / DVDCompare for private personal reference. Contributors retained.</p>
+      </div>
+      <div>
+        <p>Offline Database &bull; SQLite FTS5 Engine</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

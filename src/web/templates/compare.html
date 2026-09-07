@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Editions: {{ title.clean_title }} - DVDRewind{% endblock %}
+
+{% block content %}
+<div>
+  <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <a href="/film/{{ title.fid }}" style="font-size: 0.85rem; color: var(--text-muted);">&larr; Back to full comparison</a>
+      <h1 style="font-size: 1.85rem; font-weight: 800; margin-top: 0.25rem;">
+        Edition Comparison: {{ title.clean_title }} ({{ title.year or 'N/A' }})
+      </h1>
+      <p style="color: var(--text-secondary); font-size: 0.95rem;">
+        Comparing {{ editions|length }} selected releases side-by-side
+      </p>
+    </div>
+
+    <div>
+      <span class="badge badge-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
+        {{ title.format_category }}
+      </span>
+    </div>
+  </div>
+
+  <div class="compare-table-container">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th style="width: 180px;">Specification</th>
+          {% for e in editions %}
+          <th class="col-edition">
+            <span class="release-number">#{{ e.release_index }}</span>
+            <div style="margin-top: 0.35rem; font-size: 1rem; color: var(--text-primary);">
+              {{ e.header_raw }}
+            </div>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Country & Region -->
+        <tr>
+          <th>Territory & Region</th>
+          {% for e in editions %}
+          <td>
+            <strong>{{ e.country or 'Unknown' }}</strong>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
+              Region: {{ e.region or 'N/A' }}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- Distributor & Year -->
+        <tr>
+          <th>Distributor & Label</th>
+          {% for e in editions %}
+          <td>
+            {{ e.distributor or 'N/A' }}
+            {% if e.release_year %}
+            <span style="color: var(--text-muted); font-size: 0.85rem;">({{ e.release_year }})</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- Edition Name -->
+        <tr>
+          <th>Edition Name</th>
+          {% for e in editions %}
+          <td>{{ e.edition_name or 'Standard' }}</td>
+          {% endfor %}
+        </tr>
+
+        <!-- Video & Aspect Ratio -->
+        <tr>
+          <th>Video & Aspect Ratio</th>
+          {% for e in editions %}
+          <td>
+            {{ e.picture_format or 'N/A' }}
+            {% if e.aspect_ratio %}
+            <div style="font-size: 0.85rem; color: var(--text-muted);">{{ e.aspect_ratio }}</div>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- HDR Format -->
+        <tr>
+          <th>HDR Metadata</th>
+          {% for e in editions %}
+          <td>
+            {% if e.hdr_format %}
+            <span class="badge badge-4k">{{ e.hdr_format }}</span>
+            {% else %}
+            <span style="color: var(--text-muted); font-size: 0.85rem;">None (SDR)</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- Audio Tracks -->
+        <tr>
+          <th>Soundtracks</th>
+          {% for e in editions %}
+          <td>
+            {% if e.audio_tracks %}
+              <ul style="list-style: disc; margin-left: 1rem; font-size: 0.85rem;">
+                {% for a in e.audio_tracks %}
+                <li>{{ a.raw_text }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span style="color: var(--text-muted);">N/A</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- Subtitles -->
+        <tr>
+          <th>Subtitles</th>
+          {% for e in editions %}
+          <td>
+            <div style="font-size: 0.85rem; line-height: 1.4;">
+              {{ e.subtitles_raw or 'None' }}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- Packaging -->
+        <tr>
+          <th>Case & Packaging</th>
+          {% for e in editions %}
+          <td>{{ e.case_type or 'Standard Keep Case' }}</td>
+          {% endfor %}
+        </tr>
+
+        <!-- Bonus Features -->
+        <tr>
+          <th>Bonus Features ({{ editions|map(attribute='extras')|map('length')|join(' vs ') }})</th>
+          {% for e in editions %}
+          <td>
+            <strong style="font-size: 0.85rem;">Total: {{ e.extras|length }} items</strong>
+            <ul class="extras-list" style="margin-top: 0.5rem; max-height: 200px;">
+              {% for ex in e.extras %}
+              <li class="extra-item">
+                <span>{{ ex.title }}</span>
+                {% if ex.runtime %}<span class="extra-runtime">{{ ex.runtime }}</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </td>
+          {% endfor %}
+        </tr>
+
+        <!-- Notes -->
+        <tr>
+          <th>Technical Notes</th>
+          {% for e in editions %}
+          <td>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+              {{ e.notes_raw or 'No additional notes' }}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

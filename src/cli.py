@@ -212,8 +212,20 @@ def main():
     p_show.add_argument("fid", type=int, help="DVDCompare film ID")
     p_show.set_defaults(func=cmd_show)
 
+    # serve
+    p_serve = subparsers.add_parser("serve", help="Launch the local modern web interface")
+    p_serve.add_argument("--host", type=str, default="127.0.0.1", help="Host address (default: 127.0.0.1)")
+    p_serve.add_argument("--port", type=int, default=8088, help="Port (default: 8088)")
+    p_serve.set_defaults(func=lambda args: _run_web_server(args))
+
     args = parser.parse_args()
     args.func(args)
+
+def _run_web_server(args):
+    from aiohttp import web
+    from src.web.app import create_app
+    print(f"Starting DVDRewind web server at http://{args.host}:{args.port} ...")
+    web.run_app(create_app(), host=args.host, port=args.port)
 
 if __name__ == "__main__":
     main()
