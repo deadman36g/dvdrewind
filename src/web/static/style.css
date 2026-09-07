@@ -457,10 +457,10 @@ main {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .format-pill.active {
-  background-color: var(--accent-blue);
-  color: #000;
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+  background-color: rgba(56, 189, 248, 0.14);
+  color: var(--text-primary);
+  border: 1.5px solid var(--accent-blue);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
 }
 .format-pill:hover:not(.active) {
   border-color: var(--text-secondary);
@@ -469,9 +469,15 @@ main {
   transform: translateY(-1px);
 }
 .format-pill-count {
-  font-size: 0.75rem;
-  opacity: 0.8;
-  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.movie-hero-format-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.65rem;
+  vertical-align: middle;
 }
 
 /* External Resources & Collector Links Bar */
