@@ -480,75 +480,28 @@ main {
   vertical-align: middle;
 }
 
-/* External Resources & Collector Links Bar */
+/* External Resources Row (Icon-Only Buttons) */
 .external-links-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.85rem 1.25rem;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  margin: 1rem 0 1.5rem 0;
+  gap: 0.5rem;
+  margin: 0.85rem 0 1.35rem 0;
 }
-.ext-links-label {
-  font-size: 0.8rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-right: 0.25rem;
-}
-.ext-link-chip {
+.ext-link-icon-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-weight: 600;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
-  transition: all 0.2s;
-}
-.ext-link-chip:hover {
-  transform: translateY(-1px);
+  justify-content: center;
+  border-radius: 4px;
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
   text-decoration: none;
 }
-.chip-sub {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-.imdb-chip:hover {
-  border-color: #f5c518;
-  color: #f5c518;
-}
-.beaver-chip {
-  border-color: rgba(245, 158, 11, 0.4);
-  background-color: rgba(245, 158, 11, 0.1);
-  color: var(--accent-gold);
-}
-.beaver-chip:hover {
-  border-color: var(--accent-gold);
-  background-color: rgba(245, 158, 11, 0.2);
-}
-.bluray-chip:hover {
-  border-color: #38bdf8;
-  color: #38bdf8;
-}
-.letterboxd-chip:hover {
-  border-color: #00e054;
-  color: #00e054;
-}
-.rewind-chip:hover {
-  border-color: #a855f7;
-  color: #a855f7;
-}
-.archive-chip:hover {
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
+.ext-link-icon-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.15);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  text-decoration: none;
 }
 
 /* Winner Hero Card */

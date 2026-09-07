@@ -63,6 +63,55 @@
 </svg>
 {% endmacro %}
 
+{# ================= ICON-ONLY EXTERNAL RESOURCE BUTTONS ================= #}
+
+{% macro imdb_button(height=24) %}
+<svg height="{{ height }}" viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; border-radius: 4px; display: block;">
+  <rect width="48" height="24" rx="4" fill="#F5C518"/>
+  <text x="24" y="17.5" font-family="'Impact', 'Arial Black', -apple-system, sans-serif" font-size="16" font-weight="900" text-anchor="middle" fill="#000000" letter-spacing="-0.03em">IMDb</text>
+</svg>
+{% endmacro %}
+
+{% macro bluray_dot_com_button(height=24) %}
+<svg height="{{ height }}" viewBox="0 0 96 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; border-radius: 4px; display: block;">
+  <rect width="96" height="24" rx="4" fill="#0284C7"/>
+  <text x="48" y="16.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12.5" font-weight="900" font-style="italic" text-anchor="middle" fill="#FFFFFF">Blu-ray.com</text>
+</svg>
+{% endmacro %}
+
+{% macro beaver_button(height=24) %}
+<svg height="{{ height }}" viewBox="0 0 76 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; border-radius: 4px; display: block;">
+  <rect width="76" height="24" rx="4" fill="#78350F" stroke="#F59E0B" stroke-width="1.2"/>
+  <text x="38" y="16.5" font-family="'Impact', 'Arial Black', sans-serif" font-size="12.5" font-weight="900" text-anchor="middle" fill="#FEF08A" letter-spacing="0.06em">BEAVER</text>
+</svg>
+{% endmacro %}
+
+{% macro letterboxd_button(height=24) %}
+<svg height="{{ height }}" viewBox="0 0 42 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; border-radius: 4px; display: block;">
+  <rect width="42" height="24" rx="4" fill="#14181C" stroke="#2C3440" stroke-width="1.2"/>
+  <circle cx="12" cy="12" r="3.8" fill="#00E054"/>
+  <circle cx="21" cy="12" r="3.8" fill="#FF8000"/>
+  <circle cx="30" cy="12" r="3.8" fill="#40BCF4"/>
+</svg>
+{% endmacro %}
+
+{% macro rewind_button(height=24) %}
+<svg height="{{ height }}" viewBox="0 0 42 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; border-radius: 4px; display: block;">
+  <rect width="42" height="24" rx="4" fill="#2E1065" stroke="#8B5CF6" stroke-width="1.2"/>
+  <polygon points="18,6 9,12 18,18" fill="#A78BFA"/>
+  <polygon points="30,6 21,12 30,18" fill="#C4B5FD"/>
+</svg>
+{% endmacro %}
+
+{% macro archive_button(height=24) %}
+<svg height="{{ height }}" viewBox="0 0 42 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; border-radius: 4px; display: block;">
+  <rect width="42" height="24" rx="4" fill="#0F172A" stroke="#475569" stroke-width="1.2"/>
+  <path d="M14 5h9l5 5v8a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" fill="#1E293B" stroke="#94A3B8" stroke-width="1.2"/>
+  <line x1="16" y1="12" x2="24" y2="12" stroke="#38BDF8" stroke-width="1.2"/>
+  <line x1="16" y1="15" x2="21" y2="15" stroke="#38BDF8" stroke-width="1.2"/>
+</svg>
+{% endmacro %}
+
 {# ================= BOUTIQUE LABEL BADGES ================= #}
 
 {% macro criterion_badge() %}

@@ -47,7 +47,7 @@ class TestWebServer(AioHTTPTestCase):
         self.assertIn("Draw", text)
         self.assertIn("Cuts & Version Differences", text)
         self.assertIn("Available Formats:", text)
-        self.assertIn("External Links:", text)
+        self.assertIn("imdb.com", text)
 
     @unittest_run_loop
     async def test_compare_page(self):

@@ -97,42 +97,34 @@
         {% endfor %}
       </div>
 
-      <!-- External Collector Resources Bar with Official Logos -->
-      <div class="external-links-bar">
-        <span class="ext-links-label">External Links:</span>
-        
+      <!-- External Media Links (Icon-Only Buttons) -->
+      <div class="external-links-bar" role="navigation" aria-label="External Resources">
         {% if title.imdb_id %}
-        <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-link-chip imdb-chip" title="View title on IMDb">
-          {{ icons.imdb_logo(40, 18) }}
-          <span class="chip-sub">({{ title.imdb_id }})</span>
+        <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-link-icon-btn" title="IMDb ({{ title.imdb_id }})" aria-label="View on IMDb">
+          {{ icons.imdb_button(24) }}
         </a>
         {% endif %}
 
         {% if title.dvdbeaver_url %}
-        <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-link-chip beaver-chip" title="View DVDBeaver Review &amp; Screen Captures">
-          {{ icons.beaver_logo(18) }}
-          <span>DVDBeaver</span>
-          <span class="chip-sub">Review</span>
+        <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-link-icon-btn" title="DVDBeaver Review &amp; Screenshots" aria-label="DVDBeaver Review">
+          {{ icons.beaver_button(24) }}
         </a>
         {% endif %}
 
-        <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-link-chip bluray-chip" title="Search on Blu-ray.com">
-          {{ icons.bluray_dot_com_logo(18) }}
+        <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-link-icon-btn" title="Search on Blu-ray.com" aria-label="Search on Blu-ray.com">
+          {{ icons.bluray_dot_com_button(24) }}
         </a>
 
-        <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-link-chip letterboxd-chip" title="Search on Letterboxd">
-          {{ icons.letterboxd_logo(18) }}
-          <span>Letterboxd</span>
+        <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-link-icon-btn" title="Search on Letterboxd" aria-label="Search on Letterboxd">
+          {{ icons.letterboxd_button(24) }}
         </a>
 
-        <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-link-chip rewind-chip" title="View Source on DVDCompare (Live)">
-          {{ icons.rewind_logo(16) }}
-          <span>DVDCompare (Live)</span>
+        <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-link-icon-btn" title="DVDCompare / Rewind (Live Source)" aria-label="DVDCompare Source">
+          {{ icons.rewind_button(24) }}
         </a>
 
-        <a href="/archive/{{ title.fid }}" target="_blank" class="ext-link-chip archive-chip">
-          <span>📄</span>
-          <span>Archived HTML</span>
+        <a href="/archive/{{ title.fid }}" target="_blank" class="ext-link-icon-btn" title="View Original Archived HTML Snapshot" aria-label="Archived HTML Snapshot">
+          {{ icons.archive_button(24) }}
         </a>
       </div>
     </div>
