@@ -56,16 +56,16 @@
                 <span class="pill-label">{{ f.name }}</span>
                 <span class="pill-count">{{ f.count }}</span>
               </span>
-            {% elif f.fid %}
+            {% elif f.fid and f.count > 0 %}
               <a href="/film/{{ f.fid }}" class="format-pill format-pill-{{ key }}" title="Switch to {{ f.name }} Comparison ({{ f.count }} editions)">
                 <span class="pill-label">{{ f.name }}</span>
                 <span class="pill-count">{{ f.count }}</span>
               </a>
             {% else %}
-              <a href="/search?q={{ title.clean_title|urlencode }}&format={{ key }}" class="format-pill format-pill-empty format-pill-{{ key }}" title="No {{ f.name }} editions recorded yet">
+              <span class="format-pill format-pill-disabled format-pill-empty format-pill-{{ key }}" title="No {{ f.name }} comparison available (0 editions)" aria-disabled="true">
                 <span class="pill-label">{{ f.name }}</span>
                 <span class="pill-count">0</span>
-              </a>
+              </span>
             {% endif %}
           {% endfor %}
         </div>
