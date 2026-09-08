@@ -450,12 +450,30 @@
 {% endmacro %}
 
 {% macro rewind_button(size=38) %}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block; shape-rendering: geometricPrecision;" aria-label="DVDCompare">
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block; shape-rendering: geometricPrecision;" aria-label="DVDCompare / Rewind">
+  <defs>
+    <linearGradient id="rewind-chrome-plate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#E2E8F0"/>
+      <stop offset="50%" stop-color="#94A3B8"/>
+      <stop offset="75%" stop-color="#CBD5E1"/>
+      <stop offset="100%" stop-color="#64748B"/>
+    </linearGradient>
+    <linearGradient id="rewind-bevel-shadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0A0D14"/>
+    </linearGradient>
+  </defs>
+  <!-- Dark tile backing -->
   <rect width="38" height="38" rx="8" fill="#141820" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.2"/>
-  <!-- Textless: Circular film spool with dual fast-rewind transport chevrons -->
-  <circle cx="19" cy="19" r="11.5" fill="rgba(168, 85, 247, 0.12)" stroke="#A855F7" stroke-width="1.3"/>
-  <polygon points="17.5,13 9.5,19 17.5,25" fill="#C084FC"/>
-  <polygon points="26.5,13 18.5,19 26.5,25" fill="#C084FC"/>
+  <!-- Official Rewind Brushed Chrome Plate -->
+  <rect x="5.5" y="9" width="27" height="20" rx="4" fill="url(#rewind-chrome-plate)" stroke="#E2E8F0" stroke-width="0.8"/>
+  <!-- 3D Bevel Edge Depth -->
+  <polygon points="17.8,13.8 9.2,19 17.8,24.2" fill="#334155"/>
+  <polygon points="26.8,13.8 18.2,19 26.8,24.2" fill="#334155"/>
+  <!-- Recessed Dual Rewind Triangles -->
+  <polygon points="17,14.5 9.8,19 17,23.5" fill="url(#rewind-bevel-shadow)"/>
+  <polygon points="26,14.5 18.8,19 26,23.5" fill="url(#rewind-bevel-shadow)"/>
 </svg>
 {% endmacro %}
 
