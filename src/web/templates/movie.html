@@ -251,15 +251,27 @@
       <div class="filter-toolbar-container">
         <div class="filter-pills-row" id="filter-pills-row">
           <button type="button" class="filter-pill active" data-filter="all">All ({{ title.releases|length }})</button>
-          <button type="button" class="filter-pill" data-filter="us">🇺🇸 USA</button>
-          <button type="button" class="filter-pill" data-filter="uk">🇬🇧 UK</button>
-          <button type="button" class="filter-pill" data-filter="free">🌐 Region Free</button>
-          <button type="button" class="filter-pill" data-filter="uncut">✂️ Uncut</button>
+          <button type="button" class="filter-pill" data-filter="us" title="Filter to US / North America editions">
+            {{ icons.country_flag('United States', width=16, height=11) }}
+            <span>US</span>
+          </button>
+          <button type="button" class="filter-pill" data-filter="uk" title="Filter to UK editions">
+            {{ icons.country_flag('United Kingdom', width=16, height=11) }}
+            <span>UK</span>
+          </button>
+          <button type="button" class="filter-pill" data-filter="free" title="Filter to Region Free editions">
+            <span class="filter-pill-icon">🌐</span>
+            <span>Free</span>
+          </button>
+          <button type="button" class="filter-pill" data-filter="uncut" title="Filter to Uncut editions">
+            <span class="filter-pill-icon">✂️</span>
+            <span>Uncut</span>
+          </button>
         </div>
 
         <div class="table-quick-search-box">
           <span class="search-icon-inline">🔍</span>
-          <input type="text" id="editions-live-search" class="editions-search-input" placeholder="Quick filter by distributor, audio, extras..." autocomplete="off">
+          <input type="text" id="editions-live-search" class="editions-search-input" placeholder="Filter distributor, audio, extras..." autocomplete="off">
           <button type="button" id="search-clear-btn" class="search-clear-btn" style="display: none;">&times;</button>
         </div>
       </div>

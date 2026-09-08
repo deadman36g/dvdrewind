@@ -2372,28 +2372,45 @@ main {
 }
 
 .filter-pill {
-  padding: 0.32rem 0.8rem;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  padding: 0.32rem 0.75rem !important;
+  border-radius: 9999px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: var(--text-secondary) !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.18s ease !important;
+  line-height: 1 !important;
+}
+
+.filter-pill svg {
+  display: inline-block !important;
+  vertical-align: middle !important;
+  border-radius: 2px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+  flex-shrink: 0 !important;
+}
+
+.filter-pill-icon {
+  font-size: 0.82rem !important;
+  line-height: 1 !important;
 }
 
 .filter-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: var(--text-primary) !important;
 }
 
 .filter-pill.active {
-  background: rgba(0, 163, 224, 0.18);
-  border-color: #00A3E0;
-  color: #38BDF8;
-  box-shadow: 0 0 10px rgba(0, 163, 224, 0.25);
+  background: rgba(0, 163, 224, 0.18) !important;
+  border-color: #00A3E0 !important;
+  color: #38BDF8 !important;
+  box-shadow: 0 0 10px rgba(0, 163, 224, 0.25) !important;
 }
 
 .table-quick-search-box {
