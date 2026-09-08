@@ -3,11 +3,26 @@
 
 {% block title %}{{ title.clean_title }} ({{ title.year or 'N/A' }}) [{{ title.format_category }}] - DVDRewind{% endblock %}
 
+{% block backdrop %}
+{% if title.backdrop_url %}
+<div class="page-backdrop-canvas" style="background-image: url('{{ title.backdrop_url }}');">
+  <div class="page-backdrop-overlay"></div>
+</div>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <article class="movie-page">
-  <!-- Movie Hero: Compact Reference Header -->
-  <header class="movie-hero">
-    <!-- Poster Column -->
+  <!-- Cinematic Backdrop Banner with Gradient Vignette -->
+  {% if title.backdrop_url %}
+  <div class="cinematic-hero-banner" style="background-image: url('{{ title.backdrop_url }}');">
+    <div class="banner-gradient-overlay"></div>
+  </div>
+  {% endif %}
+
+  <!-- Movie Hero Stage: Overlapping Elevated Poster & Integrated Title Bar -->
+  <header class="movie-hero cinematic-hero-stage">
+    <!-- Poster Column: Overlapping, Elevated with Shadow -->
     <div class="movie-poster-pane">
       <div class="movie-poster-box" id="poster-wrapper">
         {% if title.poster_url %}
@@ -21,131 +36,210 @@
         </div>
         {% endif %}
       </div>
-      <button id="btn-fetch-poster" class="btn-poster-action" data-fid="{{ title.fid }}" data-imdb="{{ title.imdb_id or '' }}" data-title="{{ title.clean_title }}" data-year="{{ title.year or '' }}">
-        <span>🖼️</span> <span id="poster-btn-text">{{ 'Change Poster' if title.poster_url else 'Fetch Poster' }}</span>
-      </button>
     </div>
 
     <!-- Metadata & Details Column -->
     <div class="movie-meta-pane">
-      <div class="movie-title-row">
-        <h1 class="movie-title">{{ title.clean_title }}</h1>
-        <span class="movie-year">({{ title.year or 'N/A' }})</span>
-        <span class="format-badge-ref format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
-          {{ title.format_category }} Comparison
-        </span>
-      </div>
+      <!-- Title Bar Row with Integrated Format Switcher Pills -->
+      <div class="hero-title-bar">
+        <div class="movie-title-group">
+          <h1 class="movie-title">{{ title.display_title or title.clean_title }}</h1>
+          <span class="movie-year">({{ title.year or 'N/A' }})</span>
+        </div>
 
-      <div class="movie-credits-bar">
-        {% if title.director %}
-        <span class="credit-entry"><strong>Director:</strong> {{ title.director }}</span>
-        {% endif %}
-        {% if title.aka_titles %}
-        <span class="credit-entry"><strong>AKA:</strong> {{ title.aka_titles|join(' &bull; ') }}</span>
-        {% endif %}
-        <span class="credit-entry"><strong>Editions in Database:</strong> {{ title.releases|length }}</span>
-      </div>
-
-      {% if title.synopsis %}
-      <p class="movie-synopsis-para">
-        {{ title.synopsis }}
-      </p>
-      {% endif %}
-
-      <!-- Format Switcher Tabs -->
-      <div class="format-switcher-row">
-        <span class="format-switcher-label">Available Formats:</span>
-        <div class="format-tabs-list">
-          <span class="format-tab active" title="Currently viewing {{ title.format_category }} comparison">
-            <span>{{ title.format_category }}</span>
-            <span class="tab-count">({{ title.releases|length }})</span>
-          </span>
-          {% for s in title.format_siblings %}
-          <a href="/film/{{ s.fid }}" class="format-tab" title="Switch to {{ s.format_category }} comparison">
-            <span>{{ s.format_category }}</span>
-            {% if s.release_count %}<span class="tab-count">({{ s.release_count }})</span>{% endif %}
-          </a>
+        <!-- Integrated Format Switcher Pills -->
+        <div class="title-format-pills format-tabs-list">
+          {% for key, f in title.format_nav.items() %}
+            {% if f.active %}
+              <span class="format-pill active format-pill-{{ key }}" title="{{ f.name }} Comparison ({{ f.count }} editions)">
+                <span class="pill-dot"></span>
+                <span class="pill-label">{{ f.name }}</span>
+                <span class="pill-count">{{ f.count }}</span>
+              </span>
+            {% elif f.fid %}
+              <a href="/film/{{ f.fid }}" class="format-pill format-pill-{{ key }}" title="Switch to {{ f.name }} Comparison ({{ f.count }} editions)">
+                <span class="pill-label">{{ f.name }}</span>
+                <span class="pill-count">{{ f.count }}</span>
+              </a>
+            {% else %}
+              <a href="/search?q={{ title.clean_title|urlencode }}&format={{ key }}" class="format-pill format-pill-empty format-pill-{{ key }}" title="No {{ f.name }} editions recorded yet">
+                <span class="pill-label">{{ f.name }}</span>
+                <span class="pill-count">0</span>
+              </a>
+            {% endif %}
           {% endfor %}
         </div>
       </div>
 
-      <!-- Quick External Links (Icon-Only Buttons) -->
-      <div class="quick-links-row" role="navigation" aria-label="External Resources">
-        {% if title.imdb_id %}
-        <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-icon-btn" title="IMDb ({{ title.imdb_id }})" aria-label="View on IMDb">
-          {{ icons.imdb_button(22) }}
-        </a>
-        {% endif %}
+      <!-- Hero Sub-Bar: Credits and 32x32 External Resources Strip -->
+      <div class="hero-subbar">
+        <div class="movie-credits-bar">
+          {% if title.director %}
+          <span class="credit-pill"><span class="credit-icon">🎬</span> <strong>Director:</strong> {{ title.director }}</span>
+          {% endif %}
+          {% if title.aka_titles %}
+          <span class="credit-pill"><span class="credit-icon">🏷️</span> <strong>AKA:</strong> {{ title.aka_titles|join(' &bull; ') }}</span>
+          {% endif %}
+          <span class="credit-pill"><span class="credit-icon">📦</span> <strong>Physical Editions:</strong> {{ title.releases|length }}</span>
+          <span class="credit-pill credit-format-pill format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
+            {{ icons.optical_disc(title.format_category, size=15) }}
+            <strong>{{ title.format_category }}</strong>
+          </span>
+        </div>
 
-        {% if title.dvdbeaver_url %}
-        <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-icon-btn" title="DVDBeaver Review &amp; Screenshots" aria-label="DVDBeaver Review">
-          {{ icons.beaver_button(22) }}
-        </a>
-        {% endif %}
+        <!-- Sleek 32x32 External Resources Strip -->
+        <div class="hero-ext-strip" role="navigation" aria-label="External Resources">
+          {% if title.imdb_id %}
+          <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="IMDb ({{ title.imdb_id }})" aria-label="View on IMDb">
+            {{ icons.imdb_button() }}
+          </a>
+          {% endif %}
 
-        <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-icon-btn" title="Search on Blu-ray.com" aria-label="Search on Blu-ray.com">
-          {{ icons.bluray_dot_com_button(22) }}
-        </a>
+          {% if title.dvdbeaver_url %}
+          <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="DVDBeaver Review &amp; Screenshots" aria-label="DVDBeaver Review">
+            {{ icons.beaver_button() }}
+          </a>
+          {% endif %}
 
-        <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-icon-btn" title="Search on Letterboxd" aria-label="Search on Letterboxd">
-          {{ icons.letterboxd_button(22) }}
-        </a>
+          <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="Search on Blu-ray.com" aria-label="Search on Blu-ray.com">
+            {{ icons.bluray_dot_com_button() }}
+          </a>
 
-        <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-icon-btn" title="DVDCompare / Rewind (Live Source)" aria-label="DVDCompare Source">
-          {{ icons.rewind_button(22) }}
-        </a>
+          <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="Search on Letterboxd" aria-label="Search on Letterboxd">
+            {{ icons.letterboxd_button() }}
+          </a>
 
-        <a href="/archive/{{ title.fid }}" target="_blank" class="ext-icon-btn" title="Original Archived HTML Snapshot" aria-label="Archived HTML Snapshot">
-          {{ icons.archive_button(22) }}
-        </a>
+          <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="DVDCompare / Rewind (Live Source)" aria-label="DVDCompare Source">
+            {{ icons.rewind_button() }}
+          </a>
+
+          <a href="/archive/{{ title.fid }}" target="_blank" class="ext-icon-btn-sm" title="Original Archived HTML Snapshot" aria-label="Archived HTML Snapshot">
+            {{ icons.archive_button() }}
+          </a>
+        </div>
       </div>
+
+      <!-- Collapsible / Expandable Plot Synopsis -->
+      {% if title.synopsis %}
+      <div class="hero-synopsis-container" id="hero-synopsis-container">
+        <p class="hero-synopsis-text" id="hero-synopsis-text">{{ title.synopsis }}</p>
+        {% if title.synopsis|length > 130 %}
+        <button type="button" class="btn-synopsis-toggle" id="btn-synopsis-toggle" aria-expanded="false">Read more ▾</button>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </header>
 
-  <!-- DVDCompare Overall Verdict (Dignified Reference Callout) -->
-  {% if title.recommendation and title.recommendation.overall_winner %}
-  <section class="verdict-callout">
-    <div class="verdict-header">
-      <span class="verdict-star">⭐</span>
-      <span class="verdict-tag">DVDCOMPARE OVERALL VERDICT</span>
-      <span class="verdict-winner">{{ title.recommendation.overall_winner }}</span>
-    </div>
-    <div class="verdict-text">
-      {% if title.recommendation.recommendation_text %}
-        {{ title.recommendation.recommendation_text }}
-      {% else %}
-        All listed physical editions offer identical transfer presentation and extras. Winner declared as a Draw.
+  <!-- Section 2: Unified Horizontal Reference Banner (Verdict & Cuts Deck) -->
+  {% if title.recommendation or title.cuts %}
+    {% set all_uncut = true %}
+    {% set unique_runtimes = [] %}
+    {% if title.cuts %}
+      {% for c in title.cuts %}
+        {% if 'cut' in c.cut_status|lower and 'uncut' not in c.cut_status|lower and 'no cut' not in c.description|lower %}
+          {% set all_uncut = false %}
+        {% endif %}
+        {% if c.runtime_diff and c.runtime_diff not in unique_runtimes %}
+          {% set _ = unique_runtimes.append(c.runtime_diff) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    <section class="unified-reference-banner" aria-label="Reference Verdict and Censorship">
+      <div class="banner-main-row">
+        <!-- Left: Overall Verdict & Winner Badge -->
+        {% if title.recommendation and title.recommendation.overall_winner %}
+        <div class="banner-col banner-winner-col">
+          <div class="banner-eyebrow">
+            <span class="banner-star">⭐</span>
+            <span class="banner-eyebrow-text">DVDCOMPARE OVERALL VERDICT</span>
+          </div>
+          <div class="banner-winner-badge">
+            <span class="winner-trophy">🏆</span>
+            <span class="winner-name">{{ title.recommendation.overall_winner }}</span>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Center: Verdict Summary / Takeaway -->
+        <div class="banner-col banner-verdict-col">
+          <div class="banner-verdict-body">
+            {% if title.recommendation and title.recommendation.recommendation_text %}
+              {{ title.recommendation.recommendation_text }}
+            {% else %}
+              All listed physical editions offer identical transfer presentation and extras. Winner declared as a Draw.
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Right: Cuts Status & Runtime Breakdown -->
+        {% if title.cuts %}
+        <div class="banner-col banner-cuts-col">
+          <div class="banner-cuts-header">
+            <span class="cuts-icon">✂️</span>
+            <span class="cuts-title-text">Cuts &amp; Censorship Differences</span>
+          </div>
+          <div class="banner-cuts-pills-row">
+            {% if all_uncut %}
+              <span class="banner-pill-uncut">UNCUT</span>
+            {% else %}
+              <span class="banner-pill-cut">CUT</span>
+            {% endif %}
+
+            {% if unique_runtimes %}
+              <span class="banner-pill-runtime" title="Main reported runtime">⏱️ {{ unique_runtimes[0] }}</span>
+              {% if unique_runtimes|length > 1 %}
+                <span class="banner-pill-alt-runtime" title="Alternate edition runtimes: {{ unique_runtimes[1:]|join(', ') }}">+{{ unique_runtimes|length - 1 }} var</span>
+              {% endif %}
+            {% endif %}
+
+            <button type="button" class="btn-cuts-expand-toggle" id="btn-cuts-toggle" aria-expanded="false" title="Toggle detailed censorship breakdown">
+              <span class="toggle-text">Notes</span>
+              <span class="toggle-arrow">▾</span>
+            </button>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Collapsible Detailed Cuts Breakdown Drawer -->
+      {% if title.cuts %}
+      <div class="cuts-details-drawer" id="cuts-details-drawer" style="display: none;">
+        <div class="cuts-drawer-inner">
+          <table class="cuts-breakdown-table">
+            <thead>
+              <tr>
+                <th>Edition / Release</th>
+                <th>Status</th>
+                <th>Runtime</th>
+                <th>Censorship &amp; Presentation Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in title.cuts %}
+              <tr>
+                <td class="cuts-td-label"><strong>{{ c.release_label or c.edition_reference or 'Edition' }}</strong></td>
+                <td class="cuts-td-status">
+                  <span class="cuts-status-tag {% if 'cut' in c.cut_status|lower and 'uncut' not in c.cut_status|lower and 'no cut' not in c.description|lower %}tag-cut{% else %}tag-uncut{% endif %}">
+                    {{ c.cut_status or ('Uncut' if all_uncut else 'Cut') }}
+                  </span>
+                </td>
+                <td class="cuts-td-time">
+                  {% if c.runtime_diff %}<code>{{ c.runtime_diff }}</code>{% else %}&mdash;{% endif %}
+                </td>
+                <td class="cuts-td-desc">{{ c.description }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
       {% endif %}
-    </div>
-  </section>
+    </section>
   {% endif %}
 
-  <!-- Cuts & Censorship Notes -->
-  {% if title.cuts %}
-  <section class="cuts-callout">
-    <div class="cuts-header">
-      <span class="cuts-icon">✂️</span>
-      <span class="cuts-title">Cuts &amp; Censorship Differences</span>
-    </div>
-    <div class="cuts-table-wrapper">
-      <table class="cuts-table">
-        <tbody>
-          {% for c in title.cuts %}
-          <tr>
-            <td class="cut-edition-cell"><strong>{{ c.edition_reference }}</strong></td>
-            <td class="cut-desc-cell">{{ c.description }}</td>
-            <td class="cut-time-cell">
-              {% if c.runtime_diff %}<code>{{ c.runtime_diff }}</code>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-  {% endif %}
-
-  <!-- Editions Section: High-Density Table & Filters -->
+  <!-- Editions Section: High-Density Table with Filters & Accordion Drawers -->
   <section class="editions-section">
     <div class="section-toolbar">
       <div class="section-heading-group">
@@ -153,46 +247,25 @@
         <span class="section-desc">At-a-glance comparison table &bull; Select up to 4 editions to compare side-by-side</span>
       </div>
 
-      <div class="filter-toolbar">
-        <div class="filter-item">
-          <label for="filter-country">Country:</label>
-          <select id="filter-country" class="filter-select">
-            <option value="">All Countries</option>
-            {% set countries = [] %}
-            {% for r in title.releases %}
-              {% if r.country and r.country not in countries %}
-                {% set _ = countries.append(r.country) %}
-              {% endif %}
-            {% endfor %}
-            {% for c in countries|sort %}
-            <option value="{{ c }}">{{ c }}</option>
-            {% endfor %}
-          </select>
+      <!-- Quick-Filter Pill Tags & Live Search Filter -->
+      <div class="filter-toolbar-container">
+        <div class="filter-pills-row" id="filter-pills-row">
+          <button type="button" class="filter-pill active" data-filter="all">All ({{ title.releases|length }})</button>
+          <button type="button" class="filter-pill" data-filter="us">🇺🇸 USA</button>
+          <button type="button" class="filter-pill" data-filter="uk">🇬🇧 UK</button>
+          <button type="button" class="filter-pill" data-filter="free">🌐 Region Free</button>
+          <button type="button" class="filter-pill" data-filter="uncut">✂️ Uncut</button>
         </div>
 
-        <div class="filter-item">
-          <label for="filter-region">Region:</label>
-          <select id="filter-region" class="filter-select">
-            <option value="">All Regions</option>
-            {% set regions = [] %}
-            {% for r in title.releases %}
-              {% if r.region and r.region not in regions %}
-                {% set _ = regions.append(r.region) %}
-              {% endif %}
-            {% endfor %}
-            {% for reg in regions|sort %}
-            <option value="{{ reg }}">{{ reg }}</option>
-            {% endfor %}
-          </select>
+        <div class="table-quick-search-box">
+          <span class="search-icon-inline">🔍</span>
+          <input type="text" id="editions-live-search" class="editions-search-input" placeholder="Quick filter by distributor, audio, extras..." autocomplete="off">
+          <button type="button" id="search-clear-btn" class="search-clear-btn" style="display: none;">&times;</button>
         </div>
-
-        <span class="filter-status-text">
-          Showing <strong id="filtered-releases-count">{{ title.releases|length }}</strong> of {{ title.releases|length }}
-        </span>
       </div>
     </div>
 
-    <!-- 1. AT-A-GLANCE EDITIONS SUMMARY TABLE (Blu-ray.com / DVDCompare High Density) -->
+    <!-- 1. HIGH-DENSITY COMPARISON TABLE (Zebra Striped, Sticky Header) -->
     <div class="table-scroll-box">
       <table class="editions-summary-table" id="summary-table">
         <thead>
@@ -200,168 +273,201 @@
             <th class="th-num">#</th>
             <th class="th-cb" title="Select to compare">Compare</th>
             <th class="th-country">Country</th>
-            <th class="th-distributor">Distributor &amp; Release Title</th>
+            <th class="th-distributor">Distributor</th>
             <th class="th-year">Year</th>
             <th class="th-region">Region</th>
-            <th class="th-video">Video Aspect</th>
-            <th class="th-audio">Main Audio Track</th>
-            <th class="th-extras">Extras</th>
+            <th class="th-video">Video Presentation</th>
+            <th class="th-audio">Main Soundtrack</th>
+            <th class="th-extras">Special Features</th>
             <th class="th-action">Specs</th>
           </tr>
         </thead>
         <tbody>
           {% for r in title.releases %}
-          <tr class="summary-row release-card" data-country="{{ r.country or '' }}" data-region="{{ r.region or '' }}" id="row-{{ r.release_index }}">
+          {% set r_country = r.country or '' %}
+          {% set r_region = r.region or '' %}
+          {% set r_extras_str = r.extras|map(attribute='title')|join(' ')|lower %}
+          {% set has_comm = 'commentary' in r_extras_str or (r.commentaries_raw and r.commentaries_raw != 'None') %}
+          {% set has_doc = 'documentary' in r_extras_str or 'making of' in r_extras_str or 'featurette' in r_extras_str %}
+          {% set has_book = 'booklet' in r_extras_str or 'book' in (r.case_type or '')|lower or 'cards' in r_extras_str %}
+
+          <tr class="summary-row release-card" 
+              data-country="{{ r_country }}" 
+              data-region="{{ r_region }}" 
+              data-index="{{ r.release_index }}"
+              data-distributor="{{ r.distributor or '' }}"
+              id="row-{{ r.release_index }}">
             <td class="td-num">{{ r.release_index }}</td>
             <td class="td-cb">
-              <input type="checkbox" class="edition-compare-cb" data-index="{{ r.release_index }}" title="Select edition #{{ r.release_index }} for side-by-side comparison">
+              <input type="checkbox" class="edition-compare-cb" data-index="{{ r.release_index }}" data-header="{{ r.header_raw }}" data-country="{{ r.country or '' }}" title="Select edition #{{ r.release_index }} for side-by-side comparison">
             </td>
+            <!-- Country: Prominent Flag with Tooltip -->
             <td class="td-country">
-              <span class="flag-icon">{{ icons.country_flag(r.country) }}</span>
-              <span class="country-text">{{ r.country or 'N/A' }}</span>
+              <div class="country-cell" title="{{ r.country or 'N/A' }}">
+                <span class="flag-icon-prominent">{{ icons.country_flag(r.country) }}</span>
+                <span class="country-tooltip">{{ r.country or 'N/A' }}</span>
+              </div>
             </td>
+            <!-- Distributor: Centered Logo + Packaging -->
             <td class="td-distributor">
-              <a href="#spec-card-{{ r.release_index }}" class="distributor-title-link">
-                <strong>{{ r.distributor or 'Unknown Distributor' }}</strong>
-              </a>
-              {% if r.case_type %}
-              <span class="case-subtext">{{ r.case_type }}</span>
-              {% endif %}
+              <div class="distributor-prominent-entry">
+                {% if r.distributor %}
+                  <span class="distributor-logo-wrap" title="{{ r.distributor }}">
+                    {{ icons.boutique_logo_prominent(r.distributor, height=28) }}
+                  </span>
+                {% else %}
+                  <span class="generic-dist-icon" title="Unknown Distributor">🏢</span>
+                {% endif %}
+                {% if r.case_type %}
+                <span class="case-subtext">{{ r.case_type }}</span>
+                {% endif %}
+              </div>
             </td>
             <td class="td-year">{{ r.release_year or '—' }}</td>
+            <!-- Region: Clean Round Globe -->
             <td class="td-region">
-              <span class="ref-region-chip">{{ r.region or 'Free' }}</span>
+              {{ icons.globe_region(r.region, title.format_category, size=30) }}
             </td>
+            <!-- Video: Disc Icon & Framing Specs -->
             <td class="td-video">
-              <span>{{ r.picture_format or '' }} {{ r.aspect_ratio or '' }}</span>
-              {% if r.hdr_format %}<span class="hdr-tag">{{ r.hdr_format }}</span>{% endif %}
+              <div class="video-spec-cell">
+                {{ icons.optical_disc(title.format_category, size=24) }}
+                <div class="video-spec-info">
+                  <span class="video-format-text">{{ r.picture_format or '' }} {{ r.aspect_ratio or '' }}</span>
+                  {% if r.hdr_format %}<span class="hdr-tag">{{ r.hdr_format }}</span>{% endif %}
+                </div>
+              </div>
             </td>
+            <!-- Audio: Logos & Soundtracks -->
             <td class="td-audio">
-              {% if r.audio_tracks %}
-                <span class="audio-main-line">{{ r.audio_tracks[0].raw_text }}</span>
+              {% set ns = namespace(main_track=None) %}
+              {% for a in r.audio_tracks %}
+                {% if not ns.main_track and not a.raw_text.strip().endswith(':') and 'version:' not in a.raw_text|lower %}
+                  {% set ns.main_track = a %}
+                {% endif %}
+              {% endfor %}
+              {% set active_track = ns.main_track or (r.audio_tracks[0] if r.audio_tracks else None) %}
+              {% if active_track %}
+                {{ icons.audio_track_chip(active_track.raw_text) }}
                 {% if r.audio_tracks|length > 1 %}
-                  <span class="audio-more-count">+{{ r.audio_tracks|length - 1 }} more</span>
+                  <div class="audio-more-count">+{{ r.audio_tracks|length - 1 }} more tracks</div>
                 {% endif %}
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </td>
+            <!-- Extras: Smart Bonus Feature Chips & Total Count -->
             <td class="td-extras">
-              {% if r.extras %}
-                <span class="extras-count-text">{{ r.extras|length }} item{{ 's' if r.extras|length != 1 else '' }}</span>
-              {% else %}
-                <span class="text-muted">None</span>
-              {% endif %}
+              <div class="extras-chips-cell">
+                {% if has_comm %}
+                <span class="extra-chip chip-comm" title="Audio Commentary included">🎙️ Comm</span>
+                {% endif %}
+                {% if has_doc %}
+                <span class="extra-chip chip-doc" title="Documentary / Featurette included">🎬 Doc</span>
+                {% endif %}
+                {% if has_book %}
+                <span class="extra-chip chip-book" title="Collector's Booklet included">📖 Book</span>
+                {% endif %}
+                {% if r.extras %}
+                  <span class="extras-count-pill">{{ r.extras|length }} Items</span>
+                {% else %}
+                  <span class="text-muted" style="font-size: 0.8rem;">None</span>
+                {% endif %}
+              </div>
             </td>
+            <!-- Action: Slide-down Accordion Toggle -->
             <td class="td-action">
-              <a href="#spec-card-{{ r.release_index }}" class="btn-jump-specs">Specs &darr;</a>
+              <button type="button" class="btn-toggle-accordion" data-target="accordion-row-{{ r.release_index }}" title="Toggle detailed specs and extras checklist">
+                <span>Specs</span> <span class="accordion-arrow">&darr;</span>
+              </button>
+            </td>
+          </tr>
+
+          <!-- Slide-down Inline Accordion Row for Edition #{{ r.release_index }} -->
+          <tr class="edition-accordion-row" id="accordion-row-{{ r.release_index }}" style="display: none;">
+            <td colspan="10" class="accordion-td">
+              <div class="accordion-inner-panel">
+                <div class="accordion-header-bar">
+                  <div class="accordion-header-title">
+                    <span class="spec-num">#{{ r.release_index }}</span>
+                    <strong>{{ r.header_raw }}</strong>
+                    {% if r.distributor %}&bull; {{ r.distributor }}{% endif %}
+                    {% if r.release_year %}({{ r.release_year }}){% endif %}
+                  </div>
+                  <div class="accordion-header-badges">
+                    {{ icons.globe_region(r.region, title.format_category, size=24) }}
+                    {% if r.case_type %}<span class="case-subtext">{{ r.case_type }}</span>{% endif %}
+                  </div>
+                </div>
+
+                <div class="accordion-grid">
+                  <!-- Col 1: Audio & Subtitles Tracks -->
+                  <div class="accordion-col">
+                    <h4 class="accordion-col-title">🔊 Audio Tracks &amp; Subtitles</h4>
+                    <ul class="accordion-tracks-list">
+                      {% for a in r.audio_tracks %}
+                      <li class="track-entry">
+                        {{ icons.audio_track_badge(a.raw_text) }}
+                        <span>{{ a.raw_text }}</span>
+                      </li>
+                      {% else %}
+                      <li class="text-muted">No explicit audio tracks cataloged</li>
+                      {% endfor %}
+                    </ul>
+
+                    <h4 class="accordion-col-title" style="margin-top: 1rem;">💬 Subtitle Tracks</h4>
+                    <p class="accordion-subs-text">{{ r.subtitles_raw or 'No subtitles recorded' }}</p>
+                  </div>
+
+                  <!-- Col 2: Complete Bonus Features Checklist -->
+                  <div class="accordion-col accordion-col-extras">
+                    <h4 class="accordion-col-title">🎁 Special Features Checklist ({{ r.extras|length }})</h4>
+                    {% if r.extras %}
+                    <ul class="accordion-extras-list">
+                      {% for ex in r.extras %}
+                      <li class="extra-check-item">
+                        <span class="extra-bullet">✓</span>
+                        <span class="extra-title-text">{{ ex.title }}</span>
+                        {% if ex.runtime %}
+                        <span class="extra-runtime-tag">{{ ex.runtime }}</span>
+                        {% endif %}
+                      </li>
+                      {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">No bonus materials recorded for this release.</p>
+                    {% endif %}
+                  </div>
+
+                  <!-- Col 3: Technical Notes & Packaging -->
+                  <div class="accordion-col">
+                    <h4 class="accordion-col-title">📝 Technical Notes &amp; Packaging</h4>
+                    {% if r.notes_raw %}
+                    <p class="accordion-notes-text">{{ r.notes_raw }}</p>
+                    {% else %}
+                    <p class="text-muted">No technical anomalies or packaging notes reported.</p>
+                    {% endif %}
+
+                    {% if r.easter_eggs %}
+                    <div class="easter-egg-box">
+                      <span class="easter-egg-tag">🥚 EASTER EGG</span>
+                      <p>{{ r.easter_eggs }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if r.contributor %}
+                    <div class="contributor-tagline">
+                      Cataloged by: <strong>{{ r.contributor }}</strong>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-    </div>
-
-    <!-- 2. STRUCTURED SPECIFICATION SHEETS (Modernized DVDCompare Spec View) -->
-    <div class="detailed-specs-container">
-      <div class="specs-section-header">
-        <h3 class="specs-heading">Complete Technical Specifications &amp; Features</h3>
-      </div>
-
-      {% for r in title.releases %}
-      <div class="edition-spec-sheet release-card" id="spec-card-{{ r.release_index }}" data-country="{{ r.country or '' }}" data-region="{{ r.region or '' }}">
-        <!-- Header Bar -->
-        <div class="spec-sheet-header">
-          <div class="spec-header-left">
-            <span class="spec-num">#{{ r.release_index }}</span>
-            <span class="spec-flag">{{ icons.country_flag(r.country) }}</span>
-            <span class="spec-title-text">{{ r.header_raw }}</span>
-            <span class="ref-region-chip">{{ r.region or 'Free' }}</span>
-            {% if r.case_type %}<span class="case-subtext">{{ r.case_type }}</span>{% endif %}
-          </div>
-          <div class="spec-header-right">
-            <label class="spec-compare-label">
-              <input type="checkbox" class="edition-compare-cb" data-index="{{ r.release_index }}">
-              <span>Compare</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Spec Sheet Grid -->
-        <div class="spec-sheet-grid">
-          <!-- Left Column: Video, Audio, Subtitles -->
-          <div class="spec-sheet-col">
-            <div class="spec-item">
-              <span class="spec-field-name">Video Presentation</span>
-              <div class="spec-field-val">
-                <strong>{{ r.picture_format or 'N/A' }}</strong>
-                {% if r.aspect_ratio %} &bull; Aspect Ratio: <strong>{{ r.aspect_ratio }}</strong>{% endif %}
-                {% if r.tv_system and r.tv_system != 'None' %} &bull; TV Standard: <strong>{{ r.tv_system }}</strong>{% endif %}
-                {% if r.hdr_format %} &bull; HDR: <strong>{{ r.hdr_format }}</strong>{% endif %}
-              </div>
-            </div>
-
-            <div class="spec-item">
-              <span class="spec-field-name">Soundtracks ({{ r.audio_tracks|length }})</span>
-              <div class="spec-field-val">
-                {% if r.audio_tracks %}
-                <ul class="spec-bullet-list">
-                  {% for a in r.audio_tracks %}
-                  <li>{{ a.raw_text }}</li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <span class="text-muted">No audio tracks recorded</span>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="spec-item">
-              <span class="spec-field-name">Subtitles</span>
-              <div class="spec-field-val">
-                {{ r.subtitles_raw or 'None listed' }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Right Column: Extras, Notes, Provenance -->
-          <div class="spec-sheet-col">
-            <div class="spec-item">
-              <span class="spec-field-name">Extras &amp; Bonus Materials ({{ r.extras|length }})</span>
-              <div class="spec-field-val">
-                {% if r.extras %}
-                <ul class="spec-bullet-list extras-bullet-list">
-                  {% for e in r.extras %}
-                  <li>
-                    <span class="extra-name">{{ e.title }}</span>
-                    {% if e.runtime %}<span class="extra-time">({{ e.runtime }})</span>{% endif %}
-                  </li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <span class="text-muted">No supplemental bonus materials</span>
-                {% endif %}
-              </div>
-            </div>
-
-            {% if r.notes_raw %}
-            <div class="spec-item">
-              <span class="spec-field-name">Editorial Notes &amp; Packaging</span>
-              <div class="spec-field-val notes-body">
-                {{ r.notes_raw }}
-              </div>
-            </div>
-            {% endif %}
-
-            {% if r.contributor %}
-            <div class="spec-contributor-line">
-              Contributed by: <strong>{{ r.contributor }}</strong>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      {% endfor %}
     </div>
   </section>
 
@@ -387,10 +493,24 @@
     {% endif %}
   </footer>
 
-  <!-- Sticky Side-by-Side Compare Action Bar -->
-  <div id="compare-sticky-bar" class="compare-sticky-bar">
-    <span id="compare-count-text" class="compare-count-display">0 editions selected</span>
-    <button id="compare-action-btn" class="compare-btn" data-fid="{{ title.fid }}">Compare Side-by-Side</button>
-  </div>
+  <!-- Floating Bottom Compare Action Dock (Slides up when editions are selected) -->
+  <aside id="compare-floating-dock" class="compare-floating-dock" style="display: none;" aria-label="Comparison dock">
+    <div class="dock-left-content">
+      <div class="dock-badge-group">
+        <span class="dock-pulse-dot"></span>
+        <span class="dock-badge-title">COMPARE</span>
+      </div>
+      <span id="dock-count-display" class="dock-count-display">0 editions selected</span>
+      <div id="dock-thumbnails-preview" class="dock-thumbnails-preview"></div>
+    </div>
+
+    <div class="dock-right-actions">
+      <button type="button" id="dock-compare-btn" class="btn-dock-compare" data-fid="{{ title.fid }}" disabled>
+        <span>Compare Side-by-Side</span>
+        <span class="dock-btn-arrow">&rarr;</span>
+      </button>
+      <button type="button" id="dock-clear-btn" class="btn-dock-clear" title="Clear selection">Clear</button>
+    </div>
+  </aside>
 </article>
 {% endblock %}

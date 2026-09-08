@@ -1,11 +1,13 @@
-// DVDRewind Modern Client-side Application Logic
+// DVDRewind Modern Client-side Application Logic (10-Point Blueprint)
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   initSearch();
-  initFilters();
-  initCompareSelector();
-  initPosterManager();
+  initTableFilters();
+  initAccordions();
+  initCompareDock();
+  initSynopsisToggle();
+  initCutsToggle();
   initKeyboardShortcuts();
 });
 
@@ -72,175 +74,220 @@ function initSearch() {
 
 function renderSearchDropdown(results, container) {
   if (!results || results.length === 0) {
-    container.innerHTML = '<div style="padding: 0.75rem 1rem; color: var(--text-muted);">No comparisons found</div>';
+    container.innerHTML = '<div class="spotlight-empty">No matching film comparisons found</div>';
     container.style.display = "block";
     return;
   }
 
   container.innerHTML = results.map(r => `
-    <a href="/film/${r.fid}" class="search-dropdown-item">
-      <div>
-        <strong style="color: var(--text-primary);">${escapeHtml(r.clean_title)}</strong>
-        <span style="color: var(--text-muted); font-size: 0.85rem;">(${r.year || 'N/A'})</span>
-        ${r.overall_winner ? `<div style="font-size: 0.75rem; color: var(--accent-gold);">Winner: ${escapeHtml(r.overall_winner)}</div>` : ''}
+    <a href="/film/${r.fid}" class="spotlight-item">
+      <div class="spotlight-poster">
+        ${r.poster_url ? `<img src="${r.poster_url}" alt="" class="spotlight-thumb">` : `<span class="spotlight-icon">🎬</span>`}
       </div>
-      <span class="badge badge-${badgeClass(r.format_category)}">${escapeHtml(r.format_category)}</span>
+      <div class="spotlight-info">
+        <div class="spotlight-title-line">
+          <strong class="spotlight-title">${escapeHtml(r.clean_title)}</strong>
+          <span class="spotlight-year">(${r.year || 'N/A'})</span>
+        </div>
+        <div class="spotlight-meta-line">
+          ${r.overall_winner ? `<span class="spotlight-winner">★ Winner: ${escapeHtml(r.overall_winner)}</span>` : ''}
+          <span class="spotlight-count">${r.release_count || 1} edition${(r.release_count || 1) === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+      <span class="spotlight-badge badge-${badgeClass(r.format_category)}">${escapeHtml(r.format_category)}</span>
     </a>
   `).join("");
   container.style.display = "block";
 }
 
-// 3. Client-side Release Filtering
-function initFilters() {
-  const countrySelect = document.getElementById("filter-country");
-  const regionSelect = document.getElementById("filter-region");
-  const cutSelect = document.getElementById("filter-cut");
-  const releaseCards = document.querySelectorAll(".release-card");
+// 3. Interactive Filter Pills & Live Table Search (Point 5)
+function initTableFilters() {
+  const pillButtons = document.querySelectorAll(".filter-pill");
+  const searchInput = document.getElementById("editions-live-search");
+  const clearBtn = document.getElementById("search-clear-btn");
+  const summaryRows = document.querySelectorAll(".summary-row");
 
-  if (!countrySelect && !regionSelect && !cutSelect) return;
+  if (!summaryRows.length) return;
+
+  let activeFilter = "all";
+  let searchKeyword = "";
 
   function applyFilters() {
-    const country = countrySelect ? countrySelect.value : "";
-    const region = regionSelect ? regionSelect.value : "";
-    const cut = cutSelect ? cutSelect.value : "";
+    let visible = 0;
+    summaryRows.forEach(row => {
+      const idx = row.getAttribute("data-index");
+      const accordionRow = document.getElementById(`accordion-row-${idx}`);
+      const country = (row.getAttribute("data-country") || "").toLowerCase();
+      const region = (row.getAttribute("data-region") || "").toLowerCase();
+      const rowText = (row.textContent || "").toLowerCase();
 
-    let visibleCount = 0;
-    releaseCards.forEach(card => {
-      const cardCountry = card.getAttribute("data-country") || "";
-      const cardRegion = card.getAttribute("data-region") || "";
-      const cardCut = card.getAttribute("data-cut") || "";
+      // Check pill filter condition
+      let matchesPill = true;
+      if (activeFilter === "us") {
+        matchesPill = country.includes("united states") || country.includes("usa") || country.includes("america") || region.includes("r1") || region.includes("a");
+      } else if (activeFilter === "uk") {
+        matchesPill = country.includes("united kingdom") || country.includes("uk") || region.includes("r2") || region.includes("b");
+      } else if (activeFilter === "free") {
+        matchesPill = region.includes("free") || region.includes("all") || region.includes("abc") || region.includes("r0") || region.includes("uhd");
+      } else if (activeFilter === "uncut") {
+        matchesPill = !rowText.includes("cut") || rowText.includes("uncut") || rowText.includes("no cut");
+      }
 
-      const matchCountry = !country || cardCountry === country;
-      const matchRegion = !region || cardRegion.includes(region);
-      const matchCut = !cut || cardCut === cut;
+      // Check text search condition
+      let matchesSearch = true;
+      if (searchKeyword) {
+        matchesSearch = rowText.includes(searchKeyword);
+      }
 
-      if (matchCountry && matchRegion && matchCut) {
-        card.style.display = card.tagName === "TR" ? "" : "block";
-        if (card.tagName === "TR") visibleCount++;
+      if (matchesPill && matchesSearch) {
+        row.style.display = "";
+        visible++;
       } else {
-        card.style.display = "none";
+        row.style.display = "none";
+        if (accordionRow) accordionRow.style.display = "none";
       }
     });
 
     const countElem = document.getElementById("filtered-releases-count");
-    if (countElem) {
-      countElem.textContent = visibleCount;
-    }
+    if (countElem) countElem.textContent = visible;
   }
 
-  [countrySelect, regionSelect, cutSelect].forEach(select => {
-    if (select) select.addEventListener("change", applyFilters);
+  pillButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      pillButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeFilter = btn.getAttribute("data-filter") || "all";
+      applyFilters();
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      searchKeyword = e.target.value.trim().toLowerCase();
+      if (clearBtn) clearBtn.style.display = searchKeyword ? "block" : "none";
+      applyFilters();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      if (searchInput) searchInput.value = "";
+      searchKeyword = "";
+      clearBtn.style.display = "none";
+      applyFilters();
+    });
+  }
+}
+
+// 4. Slide-Down Inline Accordions (Point 6)
+function initAccordions() {
+  const toggleButtons = document.querySelectorAll(".btn-toggle-accordion");
+  if (!toggleButtons.length) return;
+
+  toggleButtons.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetId = btn.getAttribute("data-target");
+      const targetRow = document.getElementById(targetId);
+      if (!targetRow) return;
+
+      const isVisible = targetRow.style.display !== "none";
+      if (isVisible) {
+        targetRow.style.display = "none";
+        btn.classList.remove("open");
+        const arrow = btn.querySelector(".accordion-arrow");
+        if (arrow) arrow.innerHTML = "&darr;";
+      } else {
+        targetRow.style.display = "table-row";
+        btn.classList.add("open");
+        const arrow = btn.querySelector(".accordion-arrow");
+        if (arrow) arrow.innerHTML = "&uarr;";
+      }
+    });
   });
 }
 
-// 4. Edition Comparison Selector (2 to 4 editions)
-function initCompareSelector() {
+// 5. Floating Bottom Compare Action Dock (Point 4)
+function initCompareDock() {
   const checkboxes = document.querySelectorAll(".edition-compare-cb");
-  const stickyBar = document.getElementById("compare-sticky-bar");
-  const compareCountText = document.getElementById("compare-count-text");
-  const compareBtn = document.getElementById("compare-action-btn");
+  const floatingDock = document.getElementById("compare-floating-dock");
+  const countDisplay = document.getElementById("dock-count-display");
+  const compareBtn = document.getElementById("dock-compare-btn");
+  const clearBtn = document.getElementById("dock-clear-btn");
+  const thumbnailsPreview = document.getElementById("dock-thumbnails-preview");
 
-  if (!checkboxes.length || !stickyBar) return;
+  if (!checkboxes.length || !floatingDock) return;
 
-  let selectedIndices = [];
+  let selected = []; // Array of { index, header, country }
+
+  function updateDock() {
+    if (selected.length > 0) {
+      floatingDock.style.display = "flex";
+      requestAnimationFrame(() => floatingDock.classList.add("dock-visible"));
+      countDisplay.textContent = `${selected.length} edition${selected.length === 1 ? '' : 's'} selected (up to 4)`;
+
+      thumbnailsPreview.innerHTML = selected.map(s => `
+        <span class="dock-thumb-chip" title="${escapeHtml(s.header)}">
+          #${s.index}
+        </span>
+      `).join("");
+
+      if (compareBtn) {
+        compareBtn.disabled = selected.length < 2;
+        const btnSpan = compareBtn.querySelector("span");
+        if (btnSpan) {
+          btnSpan.textContent = selected.length < 2 ? "Select 1 more to compare" : `Compare ${selected.length} Editions`;
+        }
+      }
+    } else {
+      floatingDock.classList.remove("dock-visible");
+      setTimeout(() => {
+        if (selected.length === 0) floatingDock.style.display = "none";
+      }, 200);
+    }
+  }
 
   checkboxes.forEach(cb => {
     cb.addEventListener("change", () => {
       const idx = cb.getAttribute("data-index");
+      const header = cb.getAttribute("data-header") || `Edition #${idx}`;
+      const country = cb.getAttribute("data-country") || "";
+
       if (cb.checked) {
-        if (selectedIndices.length >= 4) {
+        if (selected.length >= 4) {
           cb.checked = false;
           alert("You can compare up to 4 editions simultaneously.");
           return;
         }
-        if (!selectedIndices.includes(idx)) selectedIndices.push(idx);
+        if (!selected.some(s => s.index === idx)) {
+          selected.push({ index: idx, header, country });
+        }
       } else {
-        selectedIndices = selectedIndices.filter(i => i !== idx);
+        selected = selected.filter(s => s.index !== idx);
       }
 
-      // Synchronize all checkboxes for this edition (table row and spec card)
-      document.querySelectorAll(`.edition-compare-cb[data-index="${idx}"]`).forEach(other => {
-        other.checked = cb.checked;
-      });
-
-      if (selectedIndices.length >= 2) {
-        stickyBar.style.display = "flex";
-        compareCountText.textContent = `${selectedIndices.length} editions selected`;
-      } else if (selectedIndices.length === 1) {
-        stickyBar.style.display = "flex";
-        compareCountText.textContent = "Select 1 more to compare";
-      } else {
-        stickyBar.style.display = "none";
-      }
+      updateDock();
     });
   });
 
   if (compareBtn) {
     compareBtn.addEventListener("click", () => {
-      if (selectedIndices.length >= 2) {
+      if (selected.length >= 2) {
         const fid = compareBtn.getAttribute("data-fid");
-        window.location.href = `/compare?fid=${fid}&indices=${selectedIndices.join(",")}`;
+        const indices = selected.map(s => s.index).join(",");
+        window.location.href = `/compare?fid=${fid}&indices=${indices}`;
       }
     });
   }
-}
 
-// 5. Poster Management (TMDB & Custom URL)
-function initPosterManager() {
-  const btn = document.getElementById("btn-fetch-poster");
-  if (!btn) return;
-
-  btn.addEventListener("click", async () => {
-    const fid = btn.getAttribute("data-fid");
-    const imdb = btn.getAttribute("data-imdb");
-    const title = btn.getAttribute("data-title");
-
-    const input = prompt(
-      `Fetch poster for "${title}" from TMDB:\n\n` +
-      `Enter your TMDB API Key (or paste a direct image URL):\n` +
-      `(Leave blank if you've already configured TMDB_API_KEY in the server)`,
-      localStorage.getItem("tmdb_key") || ""
-    );
-
-    if (input === null) return; // User cancelled
-
-    const payload = {};
-    const trimmed = input.trim();
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      payload.poster_url = trimmed;
-    } else if (trimmed) {
-      payload.api_key = trimmed;
-      localStorage.setItem("tmdb_key", trimmed);
-    }
-
-    btn.disabled = true;
-    const originalText = document.getElementById("poster-btn-text").textContent;
-    document.getElementById("poster-btn-text").textContent = "Fetching...";
-
-    try {
-      const res = await fetch(`/api/poster/${fid}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-
-      if (res.ok && data.poster_url) {
-        const wrapper = document.getElementById("poster-wrapper");
-        wrapper.innerHTML = `<img src="${data.poster_url}" alt="${escapeHtml(title)} poster" class="movie-poster-img" id="main-poster-img">`;
-        document.getElementById("poster-btn-text").textContent = "Change Poster";
-      } else {
-        alert(data.error || "Could not fetch poster from TMDB. Please check your API key or paste a direct image URL.");
-        document.getElementById("poster-btn-text").textContent = originalText;
-      }
-    } catch (err) {
-      console.error("Poster error:", err);
-      alert("Network error updating poster.");
-      document.getElementById("poster-btn-text").textContent = originalText;
-    } finally {
-      btn.disabled = false;
-    }
-  });
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      checkboxes.forEach(cb => { cb.checked = false; });
+      selected = [];
+      updateDock();
+    });
+  }
 }
 
 // 5. Keyboard Shortcuts
@@ -276,3 +323,33 @@ function badgeClass(fmt) {
   if (f.includes("hd dvd")) return "hddvd";
   return "dvd";
 }
+
+function initSynopsisToggle() {
+  const toggleBtn = document.getElementById("btn-synopsis-toggle");
+  const container = document.getElementById("hero-synopsis-container");
+  if (!toggleBtn || !container) return;
+
+  toggleBtn.addEventListener("click", () => {
+    const isExpanded = container.classList.toggle("expanded");
+    toggleBtn.textContent = isExpanded ? "Show less ▴" : "Read more ▾";
+    toggleBtn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  });
+}
+
+function initCutsToggle() {
+  const toggleBtn = document.getElementById("btn-cuts-toggle");
+  const drawer = document.getElementById("cuts-details-drawer");
+  if (!toggleBtn || !drawer) return;
+
+  toggleBtn.addEventListener("click", () => {
+    const isHidden = drawer.style.display === "none" || !drawer.style.display;
+    drawer.style.display = isHidden ? "block" : "none";
+    toggleBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
+    const arrow = toggleBtn.querySelector(".toggle-arrow");
+    if (arrow) {
+      arrow.textContent = isHidden ? "▴" : "▾";
+    }
+  });
+}
+
+
