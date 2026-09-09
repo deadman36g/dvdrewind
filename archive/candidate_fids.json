@@ -1,0 +1,842 @@
+[
+  {
+    "fid": 403,
+    "format": "DVD",
+    "query": "Matrix",
+    "year": 1999,
+    "text": "Matrix (The)\t\t\t\t(1999)"
+  },
+  {
+    "fid": 46906,
+    "format": "4K UHD",
+    "query": "Matrix",
+    "year": 1999,
+    "text": "Matrix (The) (Blu-ray 4K)\t\t\t\t(1999)"
+  },
+  {
+    "fid": 13689,
+    "format": "Blu-ray",
+    "query": "Matrix",
+    "year": 1999,
+    "text": "Matrix (The) (Blu-ray)\t\t\t\t(1999)"
+  },
+  {
+    "fid": 11093,
+    "format": "DVD",
+    "query": "Matrix",
+    "year": 1999,
+    "text": "Matrix (The) (HD DVD)\t\t\t\t(1999)"
+  },
+  {
+    "fid": 507,
+    "format": "DVD",
+    "query": "Jurassic Park",
+    "year": 1993,
+    "text": "Jurassic Park\t\t\t\t(1993)"
+  },
+  {
+    "fid": 46965,
+    "format": "4K UHD",
+    "query": "Jurassic Park",
+    "year": 1993,
+    "text": "Jurassic Park (Blu-ray 4K)\t\t\t\t(1993)"
+  },
+  {
+    "fid": 19652,
+    "format": "Blu-ray",
+    "query": "Jurassic Park",
+    "year": 1993,
+    "text": "Jurassic Park (Blu-ray)\t\t\t\t(1993)"
+  },
+  {
+    "fid": 1912,
+    "format": "DVD",
+    "query": "Back to the Future",
+    "year": 1985,
+    "text": "Back To The Future\t\t\t\t(1985)"
+  },
+  {
+    "fid": 55539,
+    "format": "4K UHD",
+    "query": "Back to the Future",
+    "year": 1985,
+    "text": "Back to the Future (Blu-ray 4K)\t\t\t\t(1985)"
+  },
+  {
+    "fid": 16875,
+    "format": "Blu-ray",
+    "query": "Back to the Future",
+    "year": 1985,
+    "text": "Back to the Future (Blu-ray)\t\t\t\t(1985)"
+  },
+  {
+    "fid": 698,
+    "format": "DVD",
+    "query": "Die Hard",
+    "year": 1988,
+    "text": "Die Hard\t\t\t\t(1988)"
+  },
+  {
+    "fid": 46821,
+    "format": "4K UHD",
+    "query": "Die Hard",
+    "year": 1988,
+    "text": "Die Hard (Blu-ray 4K)\t\t\t\t(1988)"
+  },
+  {
+    "fid": 11970,
+    "format": "Blu-ray",
+    "query": "Die Hard",
+    "year": 1988,
+    "text": "Die Hard (Blu-ray)\t\t\t\t(1988)"
+  },
+  {
+    "fid": 21571,
+    "format": "DVD",
+    "query": "Terminator",
+    "year": 1984,
+    "text": "Exterminator 2\t\t\t\t(1984)"
+  },
+  {
+    "fid": 39101,
+    "format": "Blu-ray",
+    "query": "Terminator",
+    "year": 1984,
+    "text": "Exterminator 2 (Blu-ray)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 982,
+    "format": "DVD",
+    "query": "Terminator",
+    "year": 1984,
+    "text": "Terminator (The)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 70159,
+    "format": "4K UHD",
+    "query": "Terminator",
+    "year": 1984,
+    "text": "Terminator (The) (Blu-ray 4K)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 9453,
+    "format": "Blu-ray",
+    "query": "Terminator",
+    "year": 1984,
+    "text": "Terminator (The) (Blu-ray)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 50562,
+    "format": "DVD",
+    "query": "Blade Runner 2049",
+    "year": 2017,
+    "text": "Blade Runner 2049\t\t\t\t(2017)"
+  },
+  {
+    "fid": 45157,
+    "format": "4K UHD",
+    "query": "Blade Runner 2049",
+    "year": 2017,
+    "text": "Blade Runner 2049 (Blu-ray 4K)\t\t\t\t(2017)"
+  },
+  {
+    "fid": 45156,
+    "format": "Blu-ray",
+    "query": "Blade Runner 2049",
+    "year": 2017,
+    "text": "Blade Runner 2049 (Blu-ray)\t\t\t\t(2017)"
+  },
+  {
+    "fid": 38446,
+    "format": "DVD",
+    "query": "Interstellar",
+    "year": 2014,
+    "text": "Interstellar \t\t\t\t(2014)"
+  },
+  {
+    "fid": 44892,
+    "format": "4K UHD",
+    "query": "Interstellar",
+    "year": 2014,
+    "text": "Interstellar (Blu-ray 4K)\t\t\t\t(2014)"
+  },
+  {
+    "fid": 31230,
+    "format": "Blu-ray",
+    "query": "Interstellar",
+    "year": 2014,
+    "text": "Interstellar (Blu-ray)\t\t\t\t(2014)"
+  },
+  {
+    "fid": 17396,
+    "format": "DVD",
+    "query": "Inception",
+    "year": 2010,
+    "text": "Inception\t\t\t\t(2010)"
+  },
+  {
+    "fid": 45025,
+    "format": "4K UHD",
+    "query": "Inception",
+    "year": 2010,
+    "text": "Inception (Blu-ray 4K)\t\t\t\t(2010)"
+  },
+  {
+    "fid": 17107,
+    "format": "Blu-ray",
+    "query": "Inception",
+    "year": 2010,
+    "text": "Inception (Blu-ray)\t\t\t\t(2010)"
+  },
+  {
+    "fid": 66397,
+    "format": "4K UHD",
+    "query": "Oppenheimer",
+    "year": 2023,
+    "text": "Oppenheimer (Blu-ray 4K)\t\t\t\t(2023)"
+  },
+  {
+    "fid": 66398,
+    "format": "Blu-ray",
+    "query": "Oppenheimer",
+    "year": 2023,
+    "text": "Oppenheimer (Blu-ray)\t\t\t\t(2023)"
+  },
+  {
+    "fid": 535,
+    "format": "DVD",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Heat\t\t\t\t(1995)"
+  },
+  {
+    "fid": 61896,
+    "format": "4K UHD",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Heat (Blu-ray 4K)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 15278,
+    "format": "Blu-ray",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Heat (Blu-ray)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 36840,
+    "format": "DVD",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Heatseeker\t\t\t\t(1995)"
+  },
+  {
+    "fid": 30645,
+    "format": "DVD",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Mystery Science Theater 3000: Season 6 (TV)\t\t\t\t(1994-1995)"
+  },
+  {
+    "fid": 74232,
+    "format": "Blu-ray",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Rafureshia AKA Slut Wife: While Husband's Away AKA Wife in Heat: While Husband Is Away AKA Sukebe-zuma: Otto no rusu ni (Blu-ray)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 1769,
+    "format": "DVD",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Thunderbolt AKA Pi li huo AKA Dead Heat\t\t\t\t(1995)"
+  },
+  {
+    "fid": 75309,
+    "format": "4K UHD",
+    "query": "Heat",
+    "year": 1995,
+    "text": "Thunderbolt AKA Pi li huo AKA Dead Heat (Blu-ray 4K)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 573,
+    "format": "DVD",
+    "query": "Gladiator",
+    "year": 2000,
+    "text": "Gladiator\t\t\t\t(2000)"
+  },
+  {
+    "fid": 46574,
+    "format": "4K UHD",
+    "query": "Gladiator",
+    "year": 2000,
+    "text": "Gladiator (Blu-ray 4K)\t\t\t\t(2000)"
+  },
+  {
+    "fid": 15057,
+    "format": "Blu-ray",
+    "query": "Gladiator",
+    "year": 2000,
+    "text": "Gladiator (Blu-ray)\t\t\t\t(2000)"
+  },
+  {
+    "fid": 33608,
+    "format": "DVD",
+    "query": "Mad Max: Fury Road",
+    "year": 2015,
+    "text": "Mad Max: Fury Road \t\t\t\t(2015)"
+  },
+  {
+    "fid": 36473,
+    "format": "4K UHD",
+    "query": "Mad Max: Fury Road",
+    "year": 2015,
+    "text": "Mad Max: Fury Road (Blu-ray 4K)\t\t\t\t(2015)"
+  },
+  {
+    "fid": 33155,
+    "format": "Blu-ray",
+    "query": "Mad Max: Fury Road",
+    "year": 2015,
+    "text": "Mad Max: Fury Road (Blu-ray)\t\t\t\t(2015)"
+  },
+  {
+    "fid": 1368,
+    "format": "DVD",
+    "query": "Mad Max",
+    "year": 1979,
+    "text": "Mad Max\t\t\t\t(1979)"
+  },
+  {
+    "fid": 55753,
+    "format": "4K UHD",
+    "query": "Mad Max",
+    "year": 1979,
+    "text": "Mad Max (Blu-ray 4K)\t\t\t\t(1979)"
+  },
+  {
+    "fid": 17087,
+    "format": "Blu-ray",
+    "query": "Mad Max",
+    "year": 1979,
+    "text": "Mad Max (Blu-ray)\t\t\t\t(1979)"
+  },
+  {
+    "fid": 6278,
+    "format": "DVD",
+    "query": "Godfather",
+    "year": 1972,
+    "text": "Godfather (The)\t\t\t\t(1972)"
+  },
+  {
+    "fid": 60484,
+    "format": "4K UHD",
+    "query": "Godfather",
+    "year": 1972,
+    "text": "Godfather (The) (Blu-ray 4K)\t\t\t\t(1972)"
+  },
+  {
+    "fid": 14907,
+    "format": "Blu-ray",
+    "query": "Godfather",
+    "year": 1972,
+    "text": "Godfather (The) (Blu-ray)\t\t\t\t(1972)"
+  },
+  {
+    "fid": 366,
+    "format": "DVD",
+    "query": "Pulp Fiction",
+    "year": 1994,
+    "text": "Pulp Fiction\t\t\t\t(1994)"
+  },
+  {
+    "fid": 62989,
+    "format": "4K UHD",
+    "query": "Pulp Fiction",
+    "year": 1994,
+    "text": "Pulp Fiction (Blu-ray 4K)\t\t\t\t(1994)"
+  },
+  {
+    "fid": 19114,
+    "format": "Blu-ray",
+    "query": "Pulp Fiction",
+    "year": 1994,
+    "text": "Pulp Fiction (Blu-ray)\t\t\t\t(1994)"
+  },
+  {
+    "fid": 583,
+    "format": "DVD",
+    "query": "Goodfellas",
+    "year": 1990,
+    "text": "GoodFellas\t\t\t\t(1990)"
+  },
+  {
+    "fid": 40033,
+    "format": "4K UHD",
+    "query": "Goodfellas",
+    "year": 1990,
+    "text": "GoodFellas (Blu-ray 4K)\t\t\t\t(1990)"
+  },
+  {
+    "fid": 10456,
+    "format": "Blu-ray",
+    "query": "Goodfellas",
+    "year": 1990,
+    "text": "GoodFellas (Blu-ray)\t\t\t\t(1990)"
+  },
+  {
+    "fid": 9322,
+    "format": "DVD",
+    "query": "Goodfellas",
+    "year": 1990,
+    "text": "GoodFellas (HD DVD)\t\t\t\t(1990)"
+  },
+  {
+    "fid": 606,
+    "format": "DVD",
+    "query": "Fight Club",
+    "year": 1999,
+    "text": "Fight Club\t\t\t\t(1999)"
+  },
+  {
+    "fid": 75188,
+    "format": "4K UHD",
+    "query": "Fight Club",
+    "year": 1999,
+    "text": "Fight Club (Blu-ray 4K)\t\t\t\t(1999)"
+  },
+  {
+    "fid": 16286,
+    "format": "Blu-ray",
+    "query": "Fight Club",
+    "year": 1999,
+    "text": "Fight Club (Blu-ray)\t\t\t\t(1999)"
+  },
+  {
+    "fid": 210,
+    "format": "DVD",
+    "query": "Se7en",
+    "year": 1995,
+    "text": "Se7en AKA Seven\t\t\t\t(1995)"
+  },
+  {
+    "fid": 70572,
+    "format": "4K UHD",
+    "query": "Se7en",
+    "year": 1995,
+    "text": "Se7en AKA Seven (Blu-ray 4K)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 14136,
+    "format": "Blu-ray",
+    "query": "Se7en",
+    "year": 1995,
+    "text": "Se7en AKA Seven (Blu-ray)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 15827,
+    "format": "DVD",
+    "query": "Taxi Driver",
+    "year": 1976,
+    "text": "Adventures of a Taxi Driver\t\t\t\t(1976)"
+  },
+  {
+    "fid": 60491,
+    "format": "Blu-ray",
+    "query": "Taxi Driver",
+    "year": 1976,
+    "text": "Adventures of a Taxi Driver (Blu-ray)\t\t\t\t(1976)"
+  },
+  {
+    "fid": 156,
+    "format": "DVD",
+    "query": "Taxi Driver",
+    "year": 1976,
+    "text": "Taxi Driver\t\t\t\t(1976)"
+  },
+  {
+    "fid": 58867,
+    "format": "4K UHD",
+    "query": "Taxi Driver",
+    "year": 1976,
+    "text": "Taxi Driver (Blu-ray 4K)\t\t\t\t(1976)"
+  },
+  {
+    "fid": 17797,
+    "format": "Blu-ray",
+    "query": "Taxi Driver",
+    "year": 1976,
+    "text": "Taxi Driver (Blu-ray)\t\t\t\t(1976)"
+  },
+  {
+    "fid": 199,
+    "format": "DVD",
+    "query": "Scarface",
+    "year": 1983,
+    "text": "Scarface\t\t\t\t(1983)"
+  },
+  {
+    "fid": 51872,
+    "format": "4K UHD",
+    "query": "Scarface",
+    "year": 1983,
+    "text": "Scarface (Blu-ray 4K)\t\t\t\t(1983)"
+  },
+  {
+    "fid": 18900,
+    "format": "Blu-ray",
+    "query": "Scarface",
+    "year": 1983,
+    "text": "Scarface (Blu-ray)\t\t\t\t(1983)"
+  },
+  {
+    "fid": 244,
+    "format": "DVD",
+    "query": "Casino",
+    "year": 1995,
+    "text": "Casino\t\t\t\t(1995)"
+  },
+  {
+    "fid": 51539,
+    "format": "4K UHD",
+    "query": "Casino",
+    "year": 1995,
+    "text": "Casino (Blu-ray 4K)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 14803,
+    "format": "Blu-ray",
+    "query": "Casino",
+    "year": 1995,
+    "text": "Casino (Blu-ray)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 10247,
+    "format": "DVD",
+    "query": "Casino",
+    "year": 1995,
+    "text": "Casino (HD DVD)\t\t\t\t(1995)"
+  },
+  {
+    "fid": 1823,
+    "format": "DVD",
+    "query": "Fargo",
+    "year": 1996,
+    "text": "Fargo\t\t\t\t(1996)"
+  },
+  {
+    "fid": 66272,
+    "format": "4K UHD",
+    "query": "Fargo",
+    "year": 1996,
+    "text": "Fargo (Blu-ray 4K)\t\t\t\t(1996)"
+  },
+  {
+    "fid": 17713,
+    "format": "Blu-ray",
+    "query": "Fargo",
+    "year": 1996,
+    "text": "Fargo (Blu-ray)\t\t\t\t(1996)"
+  },
+  {
+    "fid": 84,
+    "format": "DVD",
+    "query": "Big Lebowski",
+    "year": 1998,
+    "text": "Big Lebowski (The)\t\t\t\t(1998)"
+  },
+  {
+    "fid": 48521,
+    "format": "4K UHD",
+    "query": "Big Lebowski",
+    "year": 1998,
+    "text": "Big Lebowski (The) (Blu-ray 4K)\t\t\t\t(1998)"
+  },
+  {
+    "fid": 19438,
+    "format": "Blu-ray",
+    "query": "Big Lebowski",
+    "year": 1998,
+    "text": "Big Lebowski (The) (Blu-ray)\t\t\t\t(1998)"
+  },
+  {
+    "fid": 11454,
+    "format": "DVD",
+    "query": "Big Lebowski",
+    "year": 1998,
+    "text": "Big Lebowski (The) (HD DVD)\t\t\t\t(1998)"
+  },
+  {
+    "fid": 12474,
+    "format": "DVD",
+    "query": "No Country for Old Men",
+    "year": 2007,
+    "text": "No Country for Old Men\t\t\t\t(2007)"
+  },
+  {
+    "fid": 70339,
+    "format": "4K UHD",
+    "query": "No Country for Old Men",
+    "year": 2007,
+    "text": "No Country for Old Men (Blu-ray 4K)\t\t\t\t(2007)"
+  },
+  {
+    "fid": 12472,
+    "format": "Blu-ray",
+    "query": "No Country for Old Men",
+    "year": 2007,
+    "text": "No Country for Old Men (Blu-ray)\t\t\t\t(2007)"
+  },
+  {
+    "fid": 749,
+    "format": "DVD",
+    "query": "Silence of the Lambs",
+    "year": 1991,
+    "text": "Silence of the Lambs (The)\t\t\t\t(1991)"
+  },
+  {
+    "fid": 58612,
+    "format": "4K UHD",
+    "query": "Silence of the Lambs",
+    "year": 1991,
+    "text": "Silence of the Lambs (The) (Blu-ray 4K)\t\t\t\t(1991)"
+  },
+  {
+    "fid": 14263,
+    "format": "Blu-ray",
+    "query": "Silence of the Lambs",
+    "year": 1991,
+    "text": "Silence of the Lambs (The) (Blu-ray)\t\t\t\t(1991)"
+  },
+  {
+    "fid": 61,
+    "format": "DVD",
+    "query": "Apocalypse Now",
+    "year": 1979,
+    "text": "Apocalypse Now AKA Apocalypse Now Redux\t\t\t\t(1979)"
+  },
+  {
+    "fid": 51435,
+    "format": "4K UHD",
+    "query": "Apocalypse Now",
+    "year": 1979,
+    "text": "Apocalypse Now AKA Apocalypse Now Redux (Blu-ray 4K)\t\t\t\t(1979)"
+  },
+  {
+    "fid": 16945,
+    "format": "Blu-ray",
+    "query": "Apocalypse Now",
+    "year": 1979,
+    "text": "Apocalypse Now AKA Apocalypse Now Redux (Blu-ray)\t\t\t\t(1979)"
+  },
+  {
+    "fid": 72740,
+    "format": "DVD",
+    "query": "Exorcist",
+    "year": 1973,
+    "text": "Devil's Due AKA Exorcist Devil AKA Giving the Devil His Due\t\t\t\t(1973)"
+  },
+  {
+    "fid": 663,
+    "format": "DVD",
+    "query": "Exorcist",
+    "year": 1973,
+    "text": "Exorcist (The)\t\t\t\t(1973)"
+  },
+  {
+    "fid": 65673,
+    "format": "4K UHD",
+    "query": "Exorcist",
+    "year": 1973,
+    "text": "Exorcist (The) (Blu-ray 4K)\t\t\t\t(1973)"
+  },
+  {
+    "fid": 16845,
+    "format": "Blu-ray",
+    "query": "Exorcist",
+    "year": 1973,
+    "text": "Exorcist (The) (Blu-ray)\t\t\t\t(1973)"
+  },
+  {
+    "fid": 949,
+    "format": "DVD",
+    "query": "Evil Dead",
+    "year": 1981,
+    "text": "Evil Dead (The) AKA Sam Raimi's The Evil Dead AKA Book of the Dead\t\t\t\t(1981)"
+  },
+  {
+    "fid": 48501,
+    "format": "4K UHD",
+    "query": "Evil Dead",
+    "year": 1981,
+    "text": "Evil Dead (The) AKA Sam Raimi's The Evil Dead AKA Book of the Dead (Blu-ray 4K)\t\t\t\t(1981)"
+  },
+  {
+    "fid": 16692,
+    "format": "Blu-ray",
+    "query": "Evil Dead",
+    "year": 1981,
+    "text": "Evil Dead (The) AKA Sam Raimi's The Evil Dead AKA Book of the Dead (Blu-ray)\t\t\t\t(1981)"
+  },
+  {
+    "fid": 657,
+    "format": "DVD",
+    "query": "Evil Dead II",
+    "year": 1987,
+    "text": "Evil Dead II AKA Evil Dead 2: Dead by Dawn\t\t\t\t(1987)"
+  },
+  {
+    "fid": 48607,
+    "format": "4K UHD",
+    "query": "Evil Dead II",
+    "year": 1987,
+    "text": "Evil Dead II AKA Evil Dead 2: Dead by Dawn (Blu-ray 4K)\t\t\t\t(1987)"
+  },
+  {
+    "fid": 11795,
+    "format": "Blu-ray",
+    "query": "Evil Dead II",
+    "year": 1987,
+    "text": "Evil Dead II AKA Evil Dead 2: Dead by Dawn (Blu-ray)\t\t\t\t(1987)"
+  },
+  {
+    "fid": 1398,
+    "format": "DVD",
+    "query": "Army of Darkness",
+    "year": 1992,
+    "text": "Army of Darkness AKA Evil Dead 3 AKA Army of Darkness: Evil Dead 3\t\t\t\t(1992)"
+  },
+  {
+    "fid": 62458,
+    "format": "4K UHD",
+    "query": "Army of Darkness",
+    "year": 1992,
+    "text": "Army of Darkness AKA Evil Dead 3 AKA Army of Darkness: Evil Dead 3 (Blu-ray 4K)\t\t\t\t(1992)"
+  },
+  {
+    "fid": 13572,
+    "format": "Blu-ray",
+    "query": "Army of Darkness",
+    "year": 1992,
+    "text": "Army of Darkness AKA Evil Dead 3 AKA Army of Darkness: Evil Dead 3 (Blu-ray)\t\t\t\t(1992)"
+  },
+  {
+    "fid": 10093,
+    "format": "DVD",
+    "query": "Army of Darkness",
+    "year": 1992,
+    "text": "Army of Darkness AKA Evil Dead 3 AKA Army of Darkness: Evil Dead 3 (HD DVD)\t\t\t\t(1992)"
+  },
+  {
+    "fid": 759,
+    "format": "DVD",
+    "query": "Nightmare on Elm Street",
+    "year": 1984,
+    "text": "Nightmare on Elm Street (A)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 69842,
+    "format": "4K UHD",
+    "query": "Nightmare on Elm Street",
+    "year": 1984,
+    "text": "Nightmare on Elm Street (A) (Blu-ray 4K)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 15974,
+    "format": "Blu-ray",
+    "query": "Nightmare on Elm Street",
+    "year": 1984,
+    "text": "Nightmare on Elm Street (A) (Blu-ray)\t\t\t\t(1984)"
+  },
+  {
+    "fid": 1715,
+    "format": "DVD",
+    "query": "Friday the 13th",
+    "year": 1980,
+    "text": "Friday the 13th\t\t\t\t(1980)"
+  },
+  {
+    "fid": 62304,
+    "format": "4K UHD",
+    "query": "Friday the 13th",
+    "year": 1980,
+    "text": "Friday the 13th (Blu-ray 4K)\t\t\t\t(1980)"
+  },
+  {
+    "fid": 13916,
+    "format": "Blu-ray",
+    "query": "Friday the 13th",
+    "year": 1980,
+    "text": "Friday the 13th (Blu-ray)\t\t\t\t(1980)"
+  },
+  {
+    "fid": 236,
+    "format": "DVD",
+    "query": "Carrie",
+    "year": 1976,
+    "text": "Carrie\t\t\t\t(1976)"
+  },
+  {
+    "fid": 62975,
+    "format": "4K UHD",
+    "query": "Carrie",
+    "year": 1976,
+    "text": "Carrie (Blu-ray 4K)\t\t\t\t(1976)"
+  },
+  {
+    "fid": 13770,
+    "format": "Blu-ray",
+    "query": "Carrie",
+    "year": 1976,
+    "text": "Carrie (Blu-ray)\t\t\t\t(1976)"
+  },
+  {
+    "fid": 2361,
+    "format": "DVD",
+    "query": "Poltergeist",
+    "year": 1982,
+    "text": "Poltergeist\t\t\t\t(1982)"
+  },
+  {
+    "fid": 62296,
+    "format": "4K UHD",
+    "query": "Poltergeist",
+    "year": 1982,
+    "text": "Poltergeist (Blu-ray 4K)\t\t\t\t(1982)"
+  },
+  {
+    "fid": 18088,
+    "format": "Blu-ray",
+    "query": "Poltergeist",
+    "year": 1982,
+    "text": "Poltergeist (Blu-ray)\t\t\t\t(1982)"
+  },
+  {
+    "fid": 14840,
+    "format": "DVD",
+    "query": "Fly",
+    "year": 1986,
+    "text": "Boy Who Could Fly (The)\t\t\t\t(1986)"
+  },
+  {
+    "fid": 44861,
+    "format": "DVD",
+    "query": "Fly",
+    "year": 1986,
+    "text": "Butterfly's Dream AKA Perhosen uni\t\t\t\t(1986)"
+  },
+  {
+    "fid": 1148,
+    "format": "DVD",
+    "query": "Fly",
+    "year": 1986,
+    "text": "Fly (The)\t\t\t\t(1986)"
+  },
+  {
+    "fid": 12194,
+    "format": "Blu-ray",
+    "query": "Fly",
+    "year": 1986,
+    "text": "Fly (The) (Blu-ray)\t\t\t\t(1986)"
+  }
+]

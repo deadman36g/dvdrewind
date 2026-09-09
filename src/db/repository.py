@@ -1,7 +1,30 @@
 import json
+import re
 import sqlite3
 from typing import Any, Dict, List, Optional
 from src.db.migrations import get_connection
+
+def format_display_title(clean_title: str) -> str:
+    if not clean_title:
+        return ""
+    m = re.match(r"^(.*?)(?:,\s*|\s+\()(The|A|An)\)?$", clean_title.strip(), re.IGNORECASE)
+    if m:
+        return f"{m.group(2)} {m.group(1)}".strip()
+    return clean_title.strip()
+
+def deduplicate_text(text: str) -> str:
+    if not text:
+        return ""
+    t = text.strip()
+    half = len(t) // 2
+    for offset in range(-25, 26):
+        mid = half + offset
+        if 0 < mid < len(t):
+            left = t[:mid].strip()
+            right = t[mid:].strip()
+            if left == right:
+                return left
+    return t
 
 class ArchiveRepository:
     def __init__(self, db_conn: Optional[sqlite3.Connection] = None):
@@ -233,7 +256,7 @@ class ArchiveRepository:
 
         sql = """
             SELECT 
-                t.id, t.fid, t.clean_title, t.year, t.format_category, t.aka_titles,
+                t.id, t.fid, t.clean_title, t.year, t.format_category, t.aka_titles, t.poster_url,
                 r.overall_winner,
                 (SELECT COUNT(*) FROM releases rel WHERE rel.title_id = t.id) as release_count
             FROM titles_fts fts
@@ -249,10 +272,12 @@ class ArchiveRepository:
             results.append({
                 "id": r["id"],
                 "fid": r["fid"],
-                "clean_title": r["clean_title"],
+                "clean_title": format_display_title(r["clean_title"]),
+                "raw_clean_title": r["clean_title"],
                 "year": r["year"],
                 "format_category": r["format_category"],
                 "aka_titles": json.loads(r["aka_titles"]) if r["aka_titles"] else [],
+                "poster_url": r["poster_url"],
                 "overall_winner": r["overall_winner"],
                 "release_count": r["release_count"],
             })
@@ -270,10 +295,17 @@ class ArchiveRepository:
         title_id = title_row["id"]
         title_data = dict(title_row)
         title_data["aka_titles"] = json.loads(title_data["aka_titles"]) if title_data["aka_titles"] else []
+        title_data["display_title"] = format_display_title(title_data["clean_title"])
 
         # Recommendation
         rec_row = self.conn.execute("SELECT * FROM recommendations WHERE title_id = ?", (title_id,)).fetchone()
-        title_data["recommendation"] = dict(rec_row) if rec_row else None
+        if rec_row:
+            rec_dict = dict(rec_row)
+            if rec_dict.get("recommendation_text"):
+                rec_dict["recommendation_text"] = deduplicate_text(rec_dict["recommendation_text"])
+            title_data["recommendation"] = rec_dict
+        else:
+            title_data["recommendation"] = None
 
         # Cuts
         cuts_rows = self.conn.execute("SELECT * FROM cuts WHERE title_id = ?", (title_id,)).fetchall()

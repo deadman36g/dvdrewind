@@ -16,26 +16,32 @@
 <div class="comparisons-grid">
   {% for r in results %}
   <a href="/film/{{ r.fid }}" class="comparison-card">
-    <div>
-      <div class="comparison-card-header">
-        <h3 class="comparison-title">{{ r.clean_title }}</h3>
-        <span class="badge badge-{{ '4k' if '4K' in r.format_category else ('bluray' if 'Blu-ray' in r.format_category else 'dvd') }}">
-          {{ r.format_category }}
-        </span>
-      </div>
-      <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
-        {{ r.year or 'N/A' }} &bull; {{ r.release_count }} physical editions
-      </div>
-      {% if r.aka_titles %}
-      <div class="comparison-aka">AKA: {{ r.aka_titles|join(', ') }}</div>
+    <div class="card-poster-thumb">
+      {% if r.poster_url %}
+        <img src="{{ r.poster_url }}" alt="{{ r.clean_title }} poster" loading="lazy">
+      {% else %}
+        <div class="card-poster-placeholder">📀</div>
       {% endif %}
     </div>
+    <div class="card-content-pane">
+      <div>
+        <div class="comparison-card-header">
+          <h3 class="comparison-title">{{ r.clean_title }}</h3>
+          <span class="badge badge-{{ '4k' if '4K' in r.format_category else ('bluray' if 'Blu-ray' in r.format_category else 'dvd') }}">
+            {{ r.format_category }}
+          </span>
+        </div>
+        <div class="card-meta-line">
+          {{ r.year or 'N/A' }} &bull; {{ r.release_count }} physical editions
+        </div>
+      </div>
 
-    {% if r.overall_winner %}
-    <div class="comparison-winner">
-      <strong>Verdict:</strong> {{ r.overall_winner }}
+      {% if r.overall_winner %}
+      <div class="comparison-winner">
+        <strong>Verdict:</strong> {{ r.overall_winner }}
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
   </a>
   {% endfor %}
 </div>

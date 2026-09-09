@@ -3,19 +3,15 @@
 
 {% block title %}{{ title.clean_title }} ({{ title.year or 'N/A' }}) [{{ title.format_category }}] - DVDRewind{% endblock %}
 
-{% block backdrop %}
-{% if title.backdrop_url %}
-<div class="page-backdrop-canvas" style="background-image: url('{{ title.backdrop_url }}');">
-  <div class="page-backdrop-overlay"></div>
-</div>
-{% endif %}
-{% endblock %}
-
 {% block content %}
 <article class="movie-page">
   <!-- Cinematic Backdrop Banner with Gradient Vignette -->
   {% if title.backdrop_url %}
   <div class="cinematic-hero-banner" style="background-image: url('{{ title.backdrop_url }}');">
+    <div class="banner-gradient-overlay"></div>
+  </div>
+  {% else %}
+  <div class="cinematic-hero-banner default-hero-banner">
     <div class="banner-gradient-overlay"></div>
   </div>
   {% endif %}
@@ -94,6 +90,10 @@
             {{ icons.imdb_button() }}
           </a>
           {% endif %}
+
+          <button type="button" class="ext-icon-btn-sm btn-fix-poster" id="btn-fix-poster" title="Fix / Change Poster (Loads top 10 from TMDB)" aria-label="Fix Movie Poster" data-fid="{{ title.fid }}" data-title="{{ title.clean_title|e }}" data-year="{{ title.year or '' }}" data-poster="{{ title.poster_url or '' }}" data-imdb="{{ title.imdb_id or '' }}" onclick="openPosterModal({{ title.fid }}, '{{ title.clean_title|replace("'", "\\'") }}', '{{ title.year or '' }}', '{{ title.poster_url or '' }}', '{{ title.imdb_id or '' }}')">
+            {{ icons.tmdb_poster_button() }}
+          </button>
 
           {% if title.dvdbeaver_url %}
           <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="DVDBeaver Review &amp; Screenshots" aria-label="DVDBeaver Review">
@@ -270,8 +270,7 @@
         </div>
 
         <div class="table-quick-search-box">
-          <span class="search-icon-inline">🔍</span>
-          <input type="text" id="editions-live-search" class="editions-search-input" placeholder="Filter distributor, audio, extras..." autocomplete="off">
+          <input type="text" id="editions-live-search" class="editions-search-input" placeholder="Filter distributor, case, audio, extras..." autocomplete="off">
           <button type="button" id="search-clear-btn" class="search-clear-btn" style="display: none;">&times;</button>
         </div>
       </div>
@@ -290,7 +289,6 @@
             <th class="th-region">Region</th>
             <th class="th-video">Video Presentation</th>
             <th class="th-audio">Main Soundtrack</th>
-            <th class="th-extras">Special Features</th>
             <th class="th-action">Specs</th>
           </tr>
         </thead>
@@ -308,6 +306,7 @@
               data-region="{{ r_region }}" 
               data-index="{{ r.release_index }}"
               data-distributor="{{ r.distributor or '' }}"
+              data-case="{{ (r.case_type or '')|lower }}"
               id="row-{{ r.release_index }}">
             <td class="td-num">{{ r.release_index }}</td>
             <td class="td-cb">
@@ -320,7 +319,7 @@
                 <span class="country-tooltip">{{ r.country or 'N/A' }}</span>
               </div>
             </td>
-            <!-- Distributor: Centered Logo + Packaging -->
+            <!-- Distributor: Centered Prominent Boutique Logo -->
             <td class="td-distributor">
               <div class="distributor-prominent-entry">
                 {% if r.distributor %}
@@ -329,9 +328,6 @@
                   </span>
                 {% else %}
                   <span class="generic-dist-icon" title="Unknown Distributor">🏢</span>
-                {% endif %}
-                {% if r.case_type %}
-                <span class="case-subtext">{{ r.case_type }}</span>
                 {% endif %}
               </div>
             </td>
@@ -361,31 +357,9 @@
               {% set active_track = ns.main_track or (r.audio_tracks[0] if r.audio_tracks else None) %}
               {% if active_track %}
                 {{ icons.audio_track_chip(active_track.raw_text) }}
-                {% if r.audio_tracks|length > 1 %}
-                  <div class="audio-more-count">+{{ r.audio_tracks|length - 1 }} more tracks</div>
-                {% endif %}
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
-            </td>
-            <!-- Extras: Smart Bonus Feature Chips & Total Count -->
-            <td class="td-extras">
-              <div class="extras-chips-cell">
-                {% if has_comm %}
-                <span class="extra-chip chip-comm" title="Audio Commentary included">🎙️ Comm</span>
-                {% endif %}
-                {% if has_doc %}
-                <span class="extra-chip chip-doc" title="Documentary / Featurette included">🎬 Doc</span>
-                {% endif %}
-                {% if has_book %}
-                <span class="extra-chip chip-book" title="Collector's Booklet included">📖 Book</span>
-                {% endif %}
-                {% if r.extras %}
-                  <span class="extras-count-pill">{{ r.extras|length }} Items</span>
-                {% else %}
-                  <span class="text-muted" style="font-size: 0.8rem;">None</span>
-                {% endif %}
-              </div>
             </td>
             <!-- Action: Slide-down Accordion Toggle -->
             <td class="td-action">
@@ -397,81 +371,160 @@
 
           <!-- Slide-down Inline Accordion Row for Edition #{{ r.release_index }} -->
           <tr class="edition-accordion-row" id="accordion-row-{{ r.release_index }}" style="display: none;">
-            <td colspan="10" class="accordion-td">
+            <td colspan="9" class="accordion-td">
               <div class="accordion-inner-panel">
                 <div class="accordion-header-bar">
                   <div class="accordion-header-title">
                     <span class="spec-num">#{{ r.release_index }}</span>
                     <strong>{{ r.header_raw }}</strong>
-                    {% if r.distributor %}&bull; {{ r.distributor }}{% endif %}
-                    {% if r.release_year %}({{ r.release_year }}){% endif %}
+                    {% if r.release_year and r.release_year|string not in r.header_raw %}
+                      <span class="text-muted">({{ r.release_year }})</span>
+                    {% endif %}
                   </div>
                   <div class="accordion-header-badges">
-                    {{ icons.globe_region(r.region, title.format_category, size=24) }}
-                    {% if r.case_type %}<span class="case-subtext">{{ r.case_type }}</span>{% endif %}
+                    {{ icons.globe_region(r.region, title.format_category, size=26) }}
                   </div>
                 </div>
 
                 <div class="accordion-grid">
-                  <!-- Col 1: Audio & Subtitles Tracks -->
-                  <div class="accordion-col">
-                    <h4 class="accordion-col-title">🔊 Audio Tracks &amp; Subtitles</h4>
-                    <ul class="accordion-tracks-list">
-                      {% for a in r.audio_tracks %}
-                      <li class="track-entry">
-                        {{ icons.audio_track_badge(a.raw_text) }}
-                        <span>{{ a.raw_text }}</span>
-                      </li>
+                  <!-- Card 1: Sound & Subtitles -->
+                  <div class="spec-card-box">
+                    <div class="spec-card-header">
+                      <div class="spec-card-title">
+                        <span class="spec-card-icon">🔊</span>
+                        <span>Sound &amp; Subtitles</span>
+                      </div>
+                      <span class="spec-card-counter">{{ r.audio_tracks|length }} audio</span>
+                    </div>
+
+                    <div class="spec-card-body">
+                      <div class="spec-subgroup">
+                        <div class="spec-subgroup-label">Audio Tracks</div>
+                        <ul class="accordion-tracks-list">
+                          {% for a in r.audio_tracks %}
+                          <li class="track-entry">
+                            {{ icons.audio_track_chip(a.raw_text) }}
+                          </li>
+                          {% else %}
+                          <li class="text-muted" style="padding: 0.25rem 0;">No explicit audio tracks cataloged</li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+
+                      <div class="spec-subgroup" style="margin-top: 1.1rem;">
+                        <div class="spec-subgroup-label">Subtitles</div>
+                        <div class="subs-box">
+                          {% if r.subtitle_tracks %}
+                            {% for s in r.subtitle_tracks %}
+                              {% if s.raw_text.strip().endswith(':') %}
+                                <div class="subs-version-header" style="{% if not loop.first %}margin-top: 0.4rem;{% endif %}">{{ s.raw_text }}</div>
+                              {% elif s.language|lower == 'none' %}
+                                <div class="subs-group-item">
+                                  <span class="sub-chip sub-chip-none">None</span>
+                                </div>
+                              {% else %}
+                                <div class="subs-group-item">
+                                  <span class="sub-chip">
+                                    {% if s.is_hoh %}<span class="sub-cc">CC</span>{% endif %}
+                                    <span>{{ s.language }}</span>
+                                  </span>
+                                </div>
+                              {% endif %}
+                            {% endfor %}
+                          {% elif r.subtitles_raw %}
+                            <p class="accordion-subs-text">{{ r.subtitles_raw }}</p>
+                          {% else %}
+                            <span class="text-muted">No subtitles recorded</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Card 2: Special Features Checklist -->
+                  <div class="spec-card-box">
+                    <div class="spec-card-header">
+                      <div class="spec-card-title">
+                        <span class="spec-card-icon">🎁</span>
+                        <span>Special Features</span>
+                      </div>
+                      <span class="spec-card-counter">{{ r.extras|length }} items</span>
+                    </div>
+
+                    <div class="spec-card-body">
+                      {% if r.extras %}
+                      <ul class="accordion-extras-list">
+                        {% for ex in r.extras %}
+                        {% set t = ex.title.lstrip('* -').strip() %}
+                        {% set t_lower = t|lower %}
+                        <li class="extra-check-item">
+                          {% if 'commentary' in t_lower %}
+                            <span class="extra-type-icon" title="Audio Commentary">🎙️</span>
+                          {% elif 'documentary' in t_lower or 'making of' in t_lower or 'featurette' in t_lower or 'retrospective' in t_lower %}
+                            <span class="extra-type-icon" title="Documentary / Featurette">🎬</span>
+                          {% elif 'interview' in t_lower or 'conversation' in t_lower or 'q&a' in t_lower or 'discussion' in t_lower %}
+                            <span class="extra-type-icon" title="Interview">🗣️</span>
+                          {% elif 'trailer' in t_lower or 'tv spot' in t_lower or 'teaser' in t_lower or 'promo' in t_lower %}
+                            <span class="extra-type-icon" title="Trailer / Promo">🎞️</span>
+                          {% elif 'gallery' in t_lower or 'stills' in t_lower or 'photo' in t_lower %}
+                            <span class="extra-type-icon" title="Image Gallery">🖼️</span>
+                          {% elif 'booklet' in t_lower or 'book' in t_lower or 'essay' in t_lower or 'comic' in t_lower or 'liner notes' in t_lower %}
+                            <span class="extra-type-icon" title="Booklet / Written Material">📖</span>
+                          {% elif 'version' in t_lower or 'cut' in t_lower or 'presentation' in t_lower %}
+                            <span class="extra-type-icon" title="Film Version / Cut">🎞️</span>
+                          {% else %}
+                            <span class="extra-bullet">✓</span>
+                          {% endif %}
+                          <span class="extra-title-text">{{ t }}</span>
+                          {% if ex.runtime %}
+                          <span class="extra-runtime-tag">{{ ex.runtime }}</span>
+                          {% endif %}
+                        </li>
+                        {% endfor %}
+                      </ul>
                       {% else %}
-                      <li class="text-muted">No explicit audio tracks cataloged</li>
-                      {% endfor %}
-                    </ul>
-
-                    <h4 class="accordion-col-title" style="margin-top: 1rem;">💬 Subtitle Tracks</h4>
-                    <p class="accordion-subs-text">{{ r.subtitles_raw or 'No subtitles recorded' }}</p>
+                      <p class="text-muted" style="padding: 0.5rem 0;">No bonus materials recorded for this release.</p>
+                      {% endif %}
+                    </div>
                   </div>
 
-                  <!-- Col 2: Complete Bonus Features Checklist -->
-                  <div class="accordion-col accordion-col-extras">
-                    <h4 class="accordion-col-title">🎁 Special Features Checklist ({{ r.extras|length }})</h4>
-                    {% if r.extras %}
-                    <ul class="accordion-extras-list">
-                      {% for ex in r.extras %}
-                      <li class="extra-check-item">
-                        <span class="extra-bullet">✓</span>
-                        <span class="extra-title-text">{{ ex.title }}</span>
-                        {% if ex.runtime %}
-                        <span class="extra-runtime-tag">{{ ex.runtime }}</span>
-                        {% endif %}
-                      </li>
-                      {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted">No bonus materials recorded for this release.</p>
-                    {% endif %}
-                  </div>
-
-                  <!-- Col 3: Technical Notes & Packaging -->
-                  <div class="accordion-col">
-                    <h4 class="accordion-col-title">📝 Technical Notes &amp; Packaging</h4>
-                    {% if r.notes_raw %}
-                    <p class="accordion-notes-text">{{ r.notes_raw }}</p>
-                    {% else %}
-                    <p class="text-muted">No technical anomalies or packaging notes reported.</p>
-                    {% endif %}
-
-                    {% if r.easter_eggs %}
-                    <div class="easter-egg-box">
-                      <span class="easter-egg-tag">🥚 EASTER EGG</span>
-                      <p>{{ r.easter_eggs }}</p>
+                  <!-- Card 3: Technical Notes & Packaging -->
+                  <div class="spec-card-box">
+                    <div class="spec-card-header">
+                      <div class="spec-card-title">
+                        <span class="spec-card-icon">📝</span>
+                        <span>Technical Notes</span>
+                      </div>
+                      {% if '2k' in (r.notes_raw or '')|lower %}
+                        <span class="spec-card-counter">2K Scan</span>
+                      {% elif '4k' in (r.notes_raw or '')|lower %}
+                        <span class="spec-card-counter">4K Scan</span>
+                      {% endif %}
                     </div>
-                    {% endif %}
 
-                    {% if r.contributor %}
-                    <div class="contributor-tagline">
-                      Cataloged by: <strong>{{ r.contributor }}</strong>
+                    <div class="spec-card-body">
+                      {% if r.notes_raw %}
+                      <div class="notes-quote-box">
+                        <p class="notes-quote-text">{{ r.notes_raw }}</p>
+                      </div>
+                      {% else %}
+                      <p class="text-muted" style="padding: 0.5rem 0;">No technical anomalies or notes reported.</p>
+                      {% endif %}
+
+                      {% if r.easter_eggs %}
+                      <div class="easter-egg-box">
+                        <span class="easter-egg-tag">🥚 EASTER EGG</span>
+                        <p>{{ r.easter_eggs }}</p>
+                      </div>
+                      {% endif %}
+
+                      {% if r.contributor %}
+                      <div class="contributor-tagline">
+                        <span class="contrib-icon">🛡️</span>
+                        <span>Archived by <strong>{{ r.contributor }}</strong></span>
+                      </div>
+                      {% endif %}
                     </div>
-                    {% endif %}
                   </div>
                 </div>
               </div>

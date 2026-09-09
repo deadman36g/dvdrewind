@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initSynopsisToggle();
   initCutsToggle();
   initKeyboardShortcuts();
+  initFixPosterButtons();
 });
 
 // 1. Dark/Light Theme Switcher
@@ -119,6 +120,8 @@ function initTableFilters() {
       const accordionRow = document.getElementById(`accordion-row-${idx}`);
       const country = (row.getAttribute("data-country") || "").toLowerCase();
       const region = (row.getAttribute("data-region") || "").toLowerCase();
+      const caseType = (row.getAttribute("data-case") || "").toLowerCase();
+      const dist = (row.getAttribute("data-distributor") || "").toLowerCase();
       const rowText = (row.textContent || "").toLowerCase();
 
       // Check pill filter condition
@@ -136,7 +139,10 @@ function initTableFilters() {
       // Check text search condition
       let matchesSearch = true;
       if (searchKeyword) {
-        matchesSearch = rowText.includes(searchKeyword);
+        matchesSearch = rowText.includes(searchKeyword) || 
+                        caseType.includes(searchKeyword) || 
+                        dist.includes(searchKeyword) ||
+                        country.includes(searchKeyword);
       }
 
       if (matchesPill && matchesSearch) {
@@ -351,5 +357,303 @@ function initCutsToggle() {
     }
   });
 }
+
+// ========================================================
+// 10. FIX POSTER MODAL LOGIC
+// ========================================================
+let pmCurrentFid = null;
+let pmCurrentImdbId = null;
+let pmSelectedUrl = null;
+let pmSelectedFile = null;
+
+function initFixPosterButtons() {
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-fix-poster");
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const fid = btn.dataset.fid || btn.getAttribute("data-fid");
+      const title = btn.dataset.title || btn.getAttribute("data-title") || "";
+      const year = btn.dataset.year || btn.getAttribute("data-year") || "";
+      const poster = btn.dataset.poster || btn.getAttribute("data-poster") || "";
+      const imdb = btn.dataset.imdb || btn.getAttribute("data-imdb") || "";
+      if (fid) {
+        openPosterModal(fid, title, year, poster, imdb);
+      }
+    }
+  });
+}
+
+function openPosterModal(fid, title, year, currentUrl, imdbId) {
+  pmCurrentFid = fid;
+  pmCurrentImdbId = imdbId || null;
+  pmSelectedUrl = null;
+  pmSelectedFile = null;
+
+  const modal = document.getElementById("poster-modal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("pm-title");
+  const subtitleEl = document.getElementById("pm-subtitle");
+  const searchInput = document.getElementById("pm-search-input");
+  const urlInput = document.getElementById("pm-url-input");
+  const fileInput = document.getElementById("pm-file-input");
+  const saveBtn = document.getElementById("btn-save-poster");
+  const feedback = document.getElementById("pm-feedback");
+
+  if (titleEl) titleEl.textContent = `Fix Poster — ${title} ${year ? '(' + year + ')' : ''}`;
+  if (subtitleEl) subtitleEl.textContent = `Choose a poster for FID ${fid}. It will be cached offline in your archive.`;
+  if (searchInput) searchInput.value = `${title} ${year || ''}`.trim();
+  if (urlInput) urlInput.value = "";
+  if (fileInput) fileInput.value = "";
+  if (saveBtn) saveBtn.disabled = true;
+  if (feedback) {
+    feedback.className = "pm-feedback";
+    feedback.style.display = "none";
+    feedback.textContent = "";
+  }
+
+  updatePosterPreview(currentUrl || "");
+  switchPosterTab("search");
+
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+
+  // Automatically trigger online search for candidates
+  searchPosterCandidates();
+}
+
+function closePosterModal() {
+  const modal = document.getElementById("poster-modal");
+  if (modal) modal.style.display = "none";
+  document.body.style.overflow = "";
+}
+
+function updatePosterPreview(url) {
+  const img = document.getElementById("pm-preview-img");
+  const empty = document.getElementById("pm-preview-empty");
+  if (!img || !empty) return;
+
+  if (url) {
+    img.src = url;
+    img.style.display = "block";
+    empty.style.display = "none";
+  } else {
+    img.style.display = "none";
+    empty.style.display = "block";
+  }
+}
+
+function switchPosterTab(tabName) {
+  const tabs = ["search", "url", "upload"];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`tab-btn-${t}`);
+    const pane = document.getElementById(`pm-tab-${t}`);
+    if (btn) btn.classList.toggle("active", t === tabName);
+    if (pane) pane.style.display = (t === tabName) ? "flex" : "none";
+  });
+}
+
+async function searchPosterCandidates() {
+  const searchInput = document.getElementById("pm-search-input");
+  const statusEl = document.getElementById("pm-candidates-status");
+  const gridEl = document.getElementById("pm-candidates-grid");
+  if (!searchInput || !gridEl) return;
+
+  const query = searchInput.value.trim();
+  if (!query) return;
+
+  if (statusEl) {
+    statusEl.textContent = `Loading top official posters from TMDB...`;
+    statusEl.style.display = "block";
+  }
+  gridEl.innerHTML = "";
+
+  try {
+    const res = await fetch(`/api/poster/search?query=${encodeURIComponent(query)}&fid=${pmCurrentFid || ''}&imdb_id=${encodeURIComponent(pmCurrentImdbId || '')}`);
+    if (!res.ok) throw new Error("Search failed");
+    const data = await res.json();
+    const candidates = data.candidates || [];
+
+    if (candidates.length === 0) {
+      if (statusEl) statusEl.textContent = "No online poster candidates found. Try a different query or paste an image URL.";
+      return;
+    }
+
+    if (statusEl) statusEl.textContent = `Loaded top official posters from TMDB. Click one to select & apply:`;
+
+    gridEl.innerHTML = candidates.map((c, idx) => `
+      <div class="pm-candidate-card" onclick="selectCandidatePoster('${escapeHtml(c.url)}', this)" title="Click to apply this poster">
+        <img src="${escapeHtml(c.thumb || c.url)}" alt="${escapeHtml(c.title)}" loading="lazy" onerror="this.parentElement.style.display='none'">
+        <div class="pm-candidate-info" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</div>
+      </div>
+    `).join("");
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "Error searching online candidates. You can still paste an image URL or upload a file.";
+  }
+}
+
+async function selectCandidatePoster(url, cardEl) {
+  document.querySelectorAll(".pm-candidate-card").forEach(c => c.classList.remove("selected"));
+  if (cardEl) cardEl.classList.add("selected");
+
+  pmSelectedUrl = url;
+  pmSelectedFile = null;
+  updatePosterPreview(url);
+
+  const saveBtn = document.getElementById("btn-save-poster");
+  if (saveBtn) saveBtn.disabled = true;
+
+  // Immediately save and apply this poster upon click
+  await saveChosenPoster();
+}
+
+function previewCustomUrl() {
+  const urlInput = document.getElementById("pm-url-input");
+  if (!urlInput) return;
+  const url = urlInput.value.trim();
+  if (!url) return;
+
+  pmSelectedUrl = url;
+  pmSelectedFile = null;
+  updatePosterPreview(url);
+
+  const saveBtn = document.getElementById("btn-save-poster");
+  if (saveBtn) saveBtn.disabled = false;
+}
+
+function handlePosterFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  pmSelectedFile = file;
+  pmSelectedUrl = null;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    updatePosterPreview(e.target.result);
+    const saveBtn = document.getElementById("btn-save-poster");
+    if (saveBtn) saveBtn.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveChosenPoster() {
+  if (!pmCurrentFid) return;
+  const saveBtn = document.getElementById("btn-save-poster");
+  const feedback = document.getElementById("pm-feedback");
+
+  if (saveBtn) saveBtn.disabled = true;
+  if (feedback) {
+    feedback.className = "pm-feedback";
+    feedback.style.display = "block";
+    feedback.textContent = "Downloading & caching poster in local archive...";
+  }
+
+  try {
+    let res;
+    if (pmSelectedFile) {
+      const formData = new FormData();
+      formData.append("poster_file", pmSelectedFile);
+      res = await fetch(`/api/poster/${pmCurrentFid}`, {
+        method: "POST",
+        body: formData
+      });
+    } else if (pmSelectedUrl) {
+      res = await fetch(`/api/poster/${pmCurrentFid}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poster_url: pmSelectedUrl })
+      });
+    } else {
+      throw new Error("No poster selected");
+    }
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Failed to save poster");
+    }
+
+    if (feedback) {
+      feedback.className = "pm-feedback success";
+      feedback.textContent = "Poster updated and cached successfully!";
+    }
+
+    // Update main poster image on current page dynamically
+    const mainImg = document.getElementById("main-poster-img");
+    const placeholder = document.getElementById("poster-placeholder");
+    const wrapper = document.getElementById("poster-wrapper");
+    const newPosterUrl = data.poster_url + (data.poster_url.includes("?") ? "&" : "?") + "t=" + Date.now();
+
+    if (mainImg) {
+      mainImg.src = newPosterUrl;
+    } else if (wrapper) {
+      if (placeholder) placeholder.remove();
+      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img">`;
+    }
+
+    setTimeout(() => {
+      closePosterModal();
+    }, 800);
+  } catch (err) {
+    if (feedback) {
+      feedback.className = "pm-feedback error";
+      feedback.textContent = "Error: " + err.message;
+    }
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function autoDetectPoster() {
+  if (!pmCurrentFid) return;
+  const feedback = document.getElementById("pm-feedback");
+  if (feedback) {
+    feedback.className = "pm-feedback";
+    feedback.style.display = "block";
+    feedback.textContent = "Auto-detecting best poster from TMDB & Wikipedia...";
+  }
+
+  try {
+    const res = await fetch(`/api/poster/${pmCurrentFid}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Could not auto-detect poster");
+    }
+
+    if (feedback) {
+      feedback.className = "pm-feedback success";
+      feedback.textContent = "Auto-detected poster saved!";
+    }
+
+    const mainImg = document.getElementById("main-poster-img");
+    const wrapper = document.getElementById("poster-wrapper");
+    const newPosterUrl = data.poster_url + "?t=" + Date.now();
+    if (mainImg) {
+      mainImg.src = newPosterUrl;
+    } else if (wrapper) {
+      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img">`;
+    }
+
+    setTimeout(() => {
+      closePosterModal();
+    }, 800);
+  } catch (err) {
+    if (feedback) {
+      feedback.className = "pm-feedback error";
+      feedback.textContent = "Auto-detect failed: " + err.message;
+    }
+  }
+}
+
+// Close modal on Escape
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closePosterModal();
+  }
+});
 
 

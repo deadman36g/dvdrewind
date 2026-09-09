@@ -4,179 +4,281 @@
 {% block title %}Compare Editions: {{ title.clean_title }} - DVDRewind{% endblock %}
 
 {% block content %}
-<div>
-  <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 1rem;">
-    <div>
-      <a href="/film/{{ title.fid }}" style="font-size: 0.85rem; color: var(--text-muted);">&larr; Back to full comparison</a>
-      <h1 style="font-size: 1.85rem; font-weight: 800; margin-top: 0.25rem;">
-        Edition Comparison: {{ title.clean_title }} ({{ title.year or 'N/A' }})
-      </h1>
-      <p style="color: var(--text-secondary); font-size: 0.95rem;">
-        Comparing {{ editions|length }} selected releases side-by-side
-      </p>
-    </div>
+<div class="compare-page-wrapper">
+  <!-- Cinematic Hero Banner (Single, Clean) -->
+  <div class="compare-hero-banner" {% if title.backdrop_url %}style="--compare-hero-bg: url('{{ title.backdrop_url }}');"{% endif %}>
+    <div class="compare-hero-overlay"></div>
+    <div class="compare-hero-content">
+      <div class="compare-hero-nav">
+        <a href="/film/{{ title.fid }}" class="btn-back-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to {{ title.display_title or title.clean_title }}
+        </a>
+      </div>
 
-    <div>
-      <span class="badge badge-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
-        {{ title.format_category }}
-      </span>
+      <div class="compare-hero-main">
+        <div class="compare-title-block">
+          <div class="compare-eyebrow">
+            {{ icons.format_badge_with_logo(title.format_category) }}
+            <span class="compare-count-pill">{{ editions|length }} of {{ all_releases|length }} Releases Selected</span>
+          </div>
+          <h1 class="compare-title">
+            Edition Comparison: {{ title.display_title or title.clean_title }}
+            <span class="compare-year">({{ title.year or 'N/A' }})</span>
+          </h1>
+          <p class="compare-subtitle">
+            Comparing {{ editions|length }} selected releases side-by-side &bull; Direct technical matrix and Git-style bonus features diff.
+          </p>
+        </div>
+
+        <!-- Interactive Comparison Toolbar -->
+        <div class="compare-toolbar">
+          <div class="filter-toggle-group">
+            <button type="button" class="btn-toggle-diff active" id="btn-show-all" onclick="toggleDiffFilter('all')">
+              Show All Specs
+            </button>
+            <button type="button" class="btn-toggle-diff" id="btn-show-diffs" onclick="toggleDiffFilter('diffs')">
+              Differences Only
+            </button>
+          </div>
+
+          {% if editions|length < 4 and all_releases|length > editions|length %}
+          <div class="add-edition-dropdown-wrapper">
+            <select class="add-edition-select" onchange="if(this.value) window.location.href=this.value;">
+              <option value="">+ Add Edition to Compare...</option>
+              {% for r in all_releases %}
+                {% if r.release_index not in selected_indices %}
+                  {% set new_indices = selected_indices + [r.release_index] %}
+                  <option value="/compare?fid={{ title.fid }}&indices={{ new_indices|join(',') }}">
+                    #{{ r.release_index }} - {{ r.clean_header or r.header_raw }} ({{ r.country or 'Intl' }})
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- Comparison Matrix Table -->
   <div class="compare-table-container">
-    <table class="compare-table">
+    <table class="compare-table" id="compare-matrix">
       <thead>
         <tr>
-          <th style="width: 180px;">Specification</th>
+          <th class="col-spec-label-header">
+            Specification
+          </th>
           {% for e in editions %}
-          <th class="col-edition">
-            <span class="release-number">#{{ e.release_index }}</span>
-            <div style="margin-top: 0.35rem; font-size: 1rem; color: var(--text-primary);">
-              {{ e.header_raw }}
-              {{ icons.boutique_badge(e.distributor) }}
+          <th class="col-edition sticky-col-header">
+            <div class="compare-col-compact">
+              <div class="col-compact-top">
+                <div class="col-compact-meta">
+                  <span class="col-num-badge">#{{ e.release_index }}</span>
+                  <span class="col-flag" title="{{ e.country or 'International' }}">{{ icons.country_flag(e.country, width=15, height=11) }}</span>
+                  {% if e.release_year %}
+                    <span class="col-year">({{ e.release_year }})</span>
+                  {% endif %}
+                </div>
+                <div class="col-compact-tools">
+                  {{ icons.globe_region(e.region, title.format_category, size=18) }}
+                  {% if editions|length > 2 %}
+                    {% set remaining = [] %}
+                    {% for o in editions %}
+                      {% if o.release_index != e.release_index %}
+                        {% set _ = remaining.append(o.release_index) %}
+                      {% endif %}
+                    {% endfor %}
+                    <a href="/compare?fid={{ title.fid }}&indices={{ remaining|join(',') }}" 
+                       class="btn-remove-edition" title="Remove edition #{{ e.release_index }} from comparison">
+                      &times;
+                    </a>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-compact-name" title="{{ e.header_raw }}">
+                {{ e.clean_header or e.header_raw }}
+              </div>
             </div>
           </th>
           {% endfor %}
         </tr>
       </thead>
       <tbody>
-        <!-- Country & Region -->
-        <tr>
-          <th>🌐 Territory &amp; Region</th>
+        <!-- 1. Video -->
+        <tr class="spec-row {% if diffs.video %}row-differs{% else %}row-matches{% endif %}">
+          <th class="row-label-cell">
+            Video
+          </th>
           {% for e in editions %}
-          <td>
-            <div style="display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start;">
-              {{ icons.country_badge(e.country) }}
-              {{ icons.region_badge(e.region, title.format_category) }}
-            </div>
-          </td>
-          {% endfor %}
-        </tr>
-
-        <!-- Distributor & Label -->
-        <tr>
-          <th>🏷️ Distributor &amp; Packaging</th>
-          {% for e in editions %}
-          <td>
-            <div style="font-weight: 700; color: var(--text-primary);">
-              {{ e.distributor or 'N/A' }}
-              {% if e.release_year %}
-              <span style="color: var(--text-muted); font-size: 0.85rem;">({{ e.release_year }})</span>
+          <td class="spec-val-cell">
+            <div class="clean-spec-text">
+              <strong class="clean-video-format">{{ e.picture_format or '1080p AVC' }}</strong>
+              {% if e.aspect_ratio %}
+                <span class="clean-spec-aspect">&bull; {{ e.aspect_ratio }}</span>
+              {% endif %}
+              {% if e.hdr_format %}
+                <span class="hdr-tag">{{ e.hdr_format }}</span>
               {% endif %}
             </div>
-            <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-              {{ icons.boutique_badge(e.distributor) }}
-              {{ icons.case_badge(e.case_type) }}
-            </div>
           </td>
           {% endfor %}
         </tr>
 
-        <!-- Edition Name -->
-        <tr>
-          <th>Edition Name</th>
+        <!-- 2. Audio -->
+        <tr class="spec-row {% if diffs.audio %}row-differs{% else %}row-matches{% endif %}">
+          <th class="row-label-cell">
+            Audio
+          </th>
           {% for e in editions %}
-          <td>{{ e.edition_name or 'Standard' }}</td>
-          {% endfor %}
-        </tr>
-
-        <!-- Video & Aspect Ratio -->
-        <tr>
-          <th>🎞️ Video &amp; Framing</th>
-          {% for e in editions %}
-          <td>
-            <div>{{ e.picture_format or 'N/A' }}</div>
-            <div style="margin-top: 0.3rem;">
-              {{ icons.aspect_badge(e.aspect_ratio) }}
-            </div>
-          </td>
-          {% endfor %}
-        </tr>
-
-        <!-- HDR Format -->
-        <tr>
-          <th>HDR Metadata</th>
-          {% for e in editions %}
-          <td>
-            {% if e.hdr_format %}
-            {{ icons.hdr_badge(e.hdr_format) }}
-            {% else %}
-            <span style="color: var(--text-muted); font-size: 0.85rem;">SDR (Standard Dynamic Range)</span>
-            {% endif %}
-          </td>
-          {% endfor %}
-        </tr>
-
-        <!-- Audio Tracks -->
-        <tr>
-          <th>🔊 Soundtracks</th>
-          {% for e in editions %}
-          <td>
-            <div style="margin-bottom: 0.35rem;">
-              {{ icons.audio_summary_badges(e.audio_tracks) }}
-            </div>
+          <td class="spec-val-cell">
             {% if e.audio_tracks %}
-              <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.82rem; line-height: 1.6;">
+              <div class="clean-audio-stack">
                 {% for a in e.audio_tracks %}
-                <li class="audio-track-item">
-                  {{ icons.audio_track_badge(a.raw_text) }}
-                  <span>{{ a.raw_text }}</span>
-                </li>
+                  {% set txt = a.raw_text.strip() %}
+                  {% if txt.endswith(':') %}
+                    <div class="clean-track-version">{{ txt }}</div>
+                  {% else %}
+                    <div class="clean-track-line">
+                      <span class="clean-bullet">&bull;</span>
+                      <span>{{ txt }}</span>
+                    </div>
+                  {% endif %}
                 {% endfor %}
-              </ul>
+              </div>
             {% else %}
-              <span style="color: var(--text-muted);">N/A</span>
+              <span class="text-muted" style="font-size: 0.82rem;">None cataloged</span>
             {% endif %}
           </td>
           {% endfor %}
         </tr>
 
-        <!-- Subtitles -->
-        <tr>
-          <th>Subtitles</th>
+        <!-- 3. Subtitles -->
+        <tr class="spec-row {% if diffs.subtitles %}row-differs{% else %}row-matches{% endif %}">
+          <th class="row-label-cell">
+            Subtitles
+          </th>
           {% for e in editions %}
-          <td>
-            <div style="font-size: 0.85rem; line-height: 1.4;">
-              {{ e.subtitles_raw or 'None' }}
+          <td class="spec-val-cell">
+            <div class="clean-subs-stack">
+              {% if e.subtitle_tracks %}
+                {% for s in e.subtitle_tracks %}
+                  {% set lang = (s.raw_text or s.language).strip() %}
+                  {% if lang.endswith(':') %}
+                    <div class="clean-track-version" style="{% if not loop.first %}margin-top: 0.35rem;{% endif %}">{{ lang }}</div>
+                  {% elif lang|lower == 'none' or 'none' in lang|lower %}
+                    <div class="clean-sub-line"><span class="text-muted">None</span></div>
+                  {% else %}
+                    {% set clean_lang = s.language.strip() %}
+                    {% if clean_lang.lower().startswith('and ') %}
+                      {% set clean_lang = clean_lang[4:].strip() %}
+                    {% elif clean_lang.lower().startswith('& ') %}
+                      {% set clean_lang = clean_lang[2:].strip() %}
+                    {% endif %}
+                    <div class="clean-sub-line">
+                      {% if s.is_hoh %}<span class="sub-cc">CC</span>{% endif %}
+                      <span>{{ clean_lang }}</span>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              {% elif e.subtitles_raw and e.subtitles_raw|lower != 'none' %}
+                <div class="clean-sub-line">{{ e.subtitles_raw }}</div>
+              {% else %}
+                <div class="clean-sub-line"><span class="text-muted">None</span></div>
+              {% endif %}
             </div>
           </td>
           {% endfor %}
         </tr>
 
-        <!-- Packaging -->
-        <tr>
-          <th>Case & Packaging</th>
+        <!-- 4. Bonus Features -->
+        <tr class="spec-row {% if diffs.extras %}row-differs{% else %}row-matches{% endif %}">
+          <th class="row-label-cell">
+            Bonus Features
+          </th>
           {% for e in editions %}
-          <td>{{ e.case_type or 'Standard Keep Case' }}</td>
-          {% endfor %}
-        </tr>
+          <td class="spec-val-cell diff-features-cell">
+            {% set excl_count = e.extras|selectattr('is_exclusive')|list|length %}
+            {% set missing_count = e.missing_extras|length %}
 
-        <!-- Bonus Features -->
-        <tr>
-          <th>Bonus Features ({{ editions|map(attribute='extras')|map('length')|join(' vs ') }})</th>
-          {% for e in editions %}
-          <td>
-            <strong style="font-size: 0.85rem;">Total: {{ e.extras|length }} items</strong>
-            <ul class="extras-list" style="margin-top: 0.5rem; max-height: 200px;">
+            <div class="clean-diff-summary">
+              <strong>{{ e.extras|length }} items</strong>
+              {% if excl_count > 0 %}
+                <span class="diff-pill-excl">+{{ excl_count }} exclusive</span>
+              {% endif %}
+              {% if missing_count > 0 %}
+                <span class="diff-pill-missing">-{{ missing_count }} missing</span>
+              {% endif %}
+            </div>
+
+            <!-- Extras List -->
+            <ul class="extras-diff-list">
               {% for ex in e.extras %}
-              <li class="extra-item">
-                <span>{{ ex.title }}</span>
-                {% if ex.runtime %}<span class="extra-runtime">{{ ex.runtime }}</span>{% endif %}
-              </li>
+                {% set t_clean = ex.clean_title or ex.title %}
+                {% set t_lower = t_clean|lower %}
+                <li class="extra-item {% if ex.is_exclusive %}diff-added item-excl{% else %}diff-shared item-shared{% endif %}">
+                  <span class="extra-cat-icon">
+                    {% if 'commentary' in t_lower %}🎙️
+                    {% elif 'documentary' in t_lower or 'featurette' in t_lower or 'making of' in t_lower or 'interview' in t_lower %}🎬
+                    {% elif 'trailer' in t_lower or 'teaser' in t_lower or 'spot' in t_lower %}🎞️
+                    {% elif 'booklet' in t_lower or 'essay' in t_lower or 'comic' in t_lower or 'gallery' in t_lower %}📖
+                    {% else %}✨
+                    {% endif %}
+                  </span>
+                  <span class="extra-title-diff">{{ t_clean }}</span>
+                  {% if ex.runtime %}
+                    <span class="extra-runtime-badge">{{ ex.runtime }}</span>
+                  {% endif %}
+                  {% if ex.is_exclusive %}
+                    <span class="badge-git-exclusive">+ Exclusive</span>
+                  {% endif %}
+                </li>
               {% endfor %}
+
+              <!-- Missing items (Collapsible) -->
+              {% if missing_count > 0 %}
+                <li class="missing-extras-header item-missing">
+                  <button type="button" class="btn-toggle-missing" onclick="toggleMissingAccordion(this)">
+                    <span class="missing-label">{{ missing_count }} missing from this edition</span>
+                    <span class="toggle-icon">▾</span>
+                  </button>
+                </li>
+                <div class="missing-items-drawer" style="display: none;">
+                  {% for m in e.missing_extras %}
+                    {% set m_clean = m.lstrip('* -').strip() %}
+                    <li class="extra-item diff-missing item-missing">
+                      <span class="diff-symbol">-</span>
+                      <span class="extra-title-diff text-strikethrough">{{ m_clean }}</span>
+                    </li>
+                  {% endfor %}
+                </div>
+              {% endif %}
             </ul>
           </td>
           {% endfor %}
         </tr>
 
-        <!-- Notes -->
-        <tr>
-          <th>Technical Notes</th>
+        <!-- 5. Notes -->
+        <tr class="spec-row {% if diffs.notes %}row-differs{% else %}row-matches{% endif %}">
+          <th class="row-label-cell">
+            Notes
+          </th>
           {% for e in editions %}
-          <td>
-            <div style="font-size: 0.85rem; color: var(--text-secondary);">
-              {{ e.notes_raw or 'No additional notes' }}
-            </div>
+          <td class="spec-val-cell">
+            {% if e.notes_raw %}
+              <div class="notes-quote-box">
+                <p class="notes-quote-text" style="margin: 0;">{{ e.notes_raw }}</p>
+              </div>
+            {% else %}
+              <p class="text-muted" style="font-size: 0.82rem; margin: 0;">No additional notes reported.</p>
+            {% endif %}
+            {% if e.easter_eggs %}
+              <div class="easter-egg-box" style="margin-top: 0.6rem;">
+                <span class="easter-egg-tag">🥚 EASTER EGG</span>
+                <p style="margin: 0.25rem 0 0 0;">{{ e.easter_eggs }}</p>
+              </div>
+            {% endif %}
           </td>
           {% endfor %}
         </tr>
@@ -184,4 +286,64 @@
     </table>
   </div>
 </div>
+
+<script>
+function toggleDiffFilter(mode) {
+  const btnAll = document.getElementById('btn-show-all');
+  const btnDiffs = document.getElementById('btn-show-diffs');
+  const matchRows = document.querySelectorAll('.row-matches');
+
+  if (mode === 'diffs') {
+    btnDiffs.classList.add('active');
+    btnAll.classList.remove('active');
+    matchRows.forEach(row => row.classList.add('diff-hidden-row'));
+  } else {
+    btnAll.classList.add('active');
+    btnDiffs.classList.remove('active');
+    matchRows.forEach(row => row.classList.remove('diff-hidden-row'));
+  }
+}
+
+function filterColumnExtras(btn, filterClass) {
+  const container = btn.closest('.diff-features-cell');
+  const buttons = container.querySelectorAll('.btn-filter-chip');
+  buttons.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const items = container.querySelectorAll('.extras-diff-list > .extra-item, .extras-diff-list > .missing-extras-header, .missing-items-drawer > .extra-item');
+  items.forEach(item => {
+    if (filterClass === 'all') {
+      item.style.display = '';
+    } else if (item.classList.contains(filterClass)) {
+      item.style.display = '';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+
+  const drawer = container.querySelector('.missing-items-drawer');
+  if (drawer) {
+    if (filterClass === 'item-missing') {
+      drawer.style.display = 'block';
+      const icon = container.querySelector('.btn-toggle-missing .toggle-icon');
+      if (icon) icon.textContent = '▴';
+    }
+  }
+}
+
+function toggleMissingAccordion(btn) {
+  const container = btn.closest('.diff-features-cell');
+  const drawer = container.querySelector('.missing-items-drawer');
+  const icon = btn.querySelector('.toggle-icon');
+  if (!drawer) return;
+
+  if (drawer.style.display === 'none' || drawer.style.display === '') {
+    drawer.style.display = 'block';
+    if (icon) icon.textContent = '▴';
+  } else {
+    drawer.style.display = 'none';
+    if (icon) icon.textContent = '▾';
+  }
+}
+</script>
 {% endblock %}

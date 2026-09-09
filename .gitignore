@@ -1,7 +1,30 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
 .pytest_cache/
-*.db-journal
-*.db-wal
-*.db-shm
+
+# SQLite Database & Runtime Scrapes (Keep repo lean and fast)
+archive/raw/
+archive/posters/
+archive/backdrops/
+archive/*.db
+archive/*.db-journal
+archive/*.db-wal
+archive/*.db-shm
+archive/sync_status.json
+archive/populate_progress.json
+archive/*.html
+
+# Logs & Temporary Media
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+src/web/static/screenshot_*.png
+src/web/static/preview_*.png

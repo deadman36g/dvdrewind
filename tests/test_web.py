@@ -18,7 +18,7 @@ class TestWebServer(AioHTTPTestCase):
         self.assertEqual(resp.status, 200)
         text = await resp.text()
         self.assertIn("DVDRewind", text)
-        self.assertIn("Which physical release should I own?", text)
+        self.assertIn("4K Ultra HD", text)
 
     @unittest_run_loop
     async def test_search_page(self):
@@ -46,7 +46,7 @@ class TestWebServer(AioHTTPTestCase):
         self.assertIn("OVERALL VERDICT", text)
         self.assertIn("Draw", text)
         self.assertIn("Cuts &amp; Censorship Differences", text)
-        self.assertIn("Available Formats:", text)
+        self.assertIn("format-tabs-list", text)
         self.assertIn("imdb.com", text)
 
     @unittest_run_loop
@@ -75,6 +75,21 @@ class TestWebServer(AioHTTPTestCase):
     async def test_movie_not_found(self):
         resp = await self.client.request("GET", "/film/999999")
         self.assertEqual(resp.status, 404)
+
+    @unittest_run_loop
+    async def test_movie_page_has_fix_poster_button(self):
+        resp = await self.client.request("GET", "/film/43651")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertIn("btn-fix-poster", text)
+        self.assertIn("poster-modal", text)
+
+    @unittest_run_loop
+    async def test_api_poster_search(self):
+        resp = await self.client.request("GET", "/api/poster/search?query=Alien+1979")
+        self.assertEqual(resp.status, 200)
+        data = await resp.json()
+        self.assertIn("candidates", data)
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,17 +3,6 @@
 {% block title %}DVDRewind - Modern Physical Media Comparisons & Archive{% endblock %}
 
 {% block content %}
-<section class="hero">
-  <h1>Which physical release should I own?</h1>
-  <p>An extremely fast, modern, and offline-first interface for physical media comparisons.</p>
-  
-  <div class="hero-search">
-    <form action="/search" method="get">
-      <input type="text" id="hero-search-input" name="q" placeholder="Search by title, edition, director, or label..." autofocus>
-    </form>
-  </div>
-</section>
-
 <section class="format-grid">
   <a href="/search?format=4K+UHD" class="format-card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -41,36 +30,160 @@
 </section>
 
 <section>
-  <div class="section-header">
-    <h2 class="section-title">Archived Comparisons</h2>
-    <span style="color: var(--text-muted); font-size: 0.9rem;">{{ comparisons|length }} titles in active test database</span>
+  <!-- Shelf Category Filter Pills -->
+  <div class="shelf-filter-bar">
+    <button class="shelf-filter-btn active" id="btn-shuffle" onclick="shuffleShelves(this)">🎲 Shuffle Mix</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('all', this)">📚 Show All ({{ shelves|length }})</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('showcase', this)">🌟 Highlights & 4K</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('director', this)">🎬 Directors</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('franchise', this)">👽 Franchises</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('label', this)">💿 Boutique Labels</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('genre', this)">🍿 Genres</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('decade', this)">📼 Decades</button>
   </div>
 
-  <div class="comparisons-grid">
-    {% for c in comparisons %}
-    <a href="/film/{{ c.fid }}" class="comparison-card">
-      <div>
-        <div class="comparison-card-header">
-          <h3 class="comparison-title">{{ c.clean_title }}</h3>
-          <span class="badge badge-{{ '4k' if '4K' in c.format_category else ('bluray' if 'Blu-ray' in c.format_category else 'dvd') }}">
-            {{ c.format_category }}
-          </span>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
+    <span id="shelf-status-text" style="color: var(--text-muted); font-size: 0.9rem;">
+      <strong style="color: #FCD34D;">⭐ {{ total_reviews }} Total Reviews</strong> &bull; <strong style="color: #F8FAFC;">{{ total_titles }}</strong> Film Comparisons
+    </span>
+  </div>
+
+  <div class="shelves-container">
+    {% for shelf in shelves %}
+    <div class="shelf-section" data-category="{{ shelf.category }}" id="shelf-{{ shelf.id }}">
+      <div class="shelf-header">
+        <div class="shelf-title-group">
+          <h2 class="shelf-title">{{ shelf.title }}</h2>
+          <span class="shelf-badge">{{ shelf.count }} titles</span>
         </div>
-        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
-          {{ c.year or 'Year Unknown' }} &bull; {{ c.release_count }} physical editions
+        <div class="shelf-nav-controls">
+          <button class="shelf-nav-btn" onclick="scrollShelf('track-{{ shelf.id }}', -1)" title="Scroll Left">&#x2039;</button>
+          <button class="shelf-nav-btn" onclick="scrollShelf('track-{{ shelf.id }}', 1)" title="Scroll Right">&#x203A;</button>
         </div>
-        {% if c.aka_titles %}
-        <div class="comparison-aka">AKA: {{ c.aka_titles|join(', ') }}</div>
-        {% endif %}
       </div>
 
-      {% if c.overall_winner %}
-      <div class="comparison-winner">
-        <strong>Winner:</strong> {{ c.overall_winner }}
+      <div class="shelf-track-wrapper">
+        <div class="shelf-track" id="track-{{ shelf.id }}">
+          {% for item in shelf.titles %}
+          <a href="/film/{{ item.fid }}" class="shelf-card" title="{{ item.clean_title }} ({{ item.format_category }})">
+            <div class="shelf-card-poster">
+              {% if item.poster_url %}
+                <img src="{{ item.poster_url }}" alt="{{ item.clean_title }} poster" loading="lazy">
+              {% else %}
+                <div style="display:flex; height:100%; align-items:center; justify-content:center; font-size:2.5rem; color:#475569;">📀</div>
+              {% endif %}
+            </div>
+            <div class="shelf-card-info">
+              <div>
+                <div class="shelf-card-title">{{ item.clean_title }}</div>
+                <div class="shelf-card-meta">{{ item.year or '—' }} &bull; {{ item.release_count }} editions{% if item.format_count and item.format_count > 1 %} ({{ item.format_count }} fmts){% endif %}</div>
+              </div>
+            </div>
+          </a>
+          {% endfor %}
+        </div>
       </div>
-      {% endif %}
-    </a>
+    </div>
     {% endfor %}
   </div>
 </section>
+
+<script>
+function scrollShelf(trackId, direction) {
+  const track = document.getElementById(trackId);
+  if (!track) return;
+  const scrollAmount = 560; // scroll ~3 cards at a time
+  track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+}
+
+function shuffleShelves(btn) {
+  if (btn) {
+    document.querySelectorAll('.shelf-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  const allShelves = Array.from(document.querySelectorAll('.shelf-section'));
+  allShelves.forEach(s => s.style.display = 'none');
+
+  // Group shelves by category
+  const byCat = {};
+  allShelves.forEach(s => {
+    const cat = s.getAttribute('data-category') || 'other';
+    if (!byCat[cat]) byCat[cat] = [];
+    byCat[cat].push(s);
+  });
+
+  const pickRandom = (arr, count) => {
+    const shuffled = [...arr].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+  };
+
+  // Pick exactly 6 distinct non-repetitive shelves across categories
+  const chosen = [];
+  const usedIds = new Set();
+
+  const tryAdd = (cat) => {
+    if (byCat[cat]) {
+      const candidates = byCat[cat].filter(s => !usedIds.has(s.id));
+      if (candidates.length) {
+        const picked = pickRandom(candidates, 1)[0];
+        chosen.push(picked);
+        usedIds.add(picked.id);
+      }
+    }
+  };
+
+  // Pick categories in randomized order
+  const categories = ['showcase', 'director', 'label', 'genre', 'decade', 'franchise'].sort(() => 0.5 - Math.random());
+  categories.forEach(cat => tryAdd(cat));
+
+  // If any category was empty, fill up to exactly 6 from remaining shelves
+  if (chosen.length < 6) {
+    const remaining = allShelves.filter(s => !usedIds.has(s.id));
+    const extra = pickRandom(remaining, 6 - chosen.length);
+    chosen.push(...extra);
+  }
+
+  // Shuffle final order so the top shelf varies across all categories
+  const finalOrder = pickRandom(chosen, 6);
+
+  const container = document.querySelector('.shelves-container');
+  finalOrder.forEach(shelf => {
+    shelf.style.display = 'flex';
+    container.appendChild(shelf);
+  });
+
+  const statusEl = document.getElementById('shelf-status-text');
+  if (statusEl) {
+    statusEl.innerHTML = `<strong style="color: #FCD34D;">⭐ {{ total_reviews }} Total Reviews</strong> &bull; <strong style="color: #F8FAFC;">{{ total_titles }}</strong> Film Comparisons`;
+  }
+}
+
+function filterShelves(category, btn) {
+  document.querySelectorAll('.shelf-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const shelves = document.querySelectorAll('.shelf-section');
+  let visibleCount = 0;
+  shelves.forEach(shelf => {
+    if (category === 'all' || shelf.getAttribute('data-category') === category) {
+      shelf.style.display = 'flex';
+      visibleCount++;
+    } else {
+      shelf.style.display = 'none';
+    }
+  });
+
+  const statusEl = document.getElementById('shelf-status-text');
+  if (statusEl) {
+    const label = btn.innerText.replace(/[0-9()]/g, '').trim();
+    statusEl.innerHTML = `Showing all <strong style="color: #38BDF8;">${visibleCount} shelves</strong> in <strong>${label}</strong> &bull; Click <strong>🎲 Shuffle Mix</strong> to return to randomized view`;
+  }
+}
+
+// Randomize automatically on every page refresh!
+document.addEventListener('DOMContentLoaded', () => {
+  shuffleShelves(document.getElementById('btn-shuffle'));
+});
+</script>
 {% endblock %}
