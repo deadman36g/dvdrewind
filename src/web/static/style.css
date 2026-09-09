@@ -111,9 +111,9 @@ header {
 }
 
 .brand-logo-img.wide-logo {
-  height: 40px;
+  height: 44px;
   width: auto;
-  max-width: 360px;
+  max-width: 380px;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 .brand-title:hover .brand-logo-img.wide-logo {
