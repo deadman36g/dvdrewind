@@ -65,18 +65,37 @@
       <div class="shelf-track-wrapper">
         <div class="shelf-track" id="track-{{ shelf.id }}">
           {% for item in shelf.titles %}
-          <a href="/film/{{ item.fid }}" class="shelf-card" title="{{ item.clean_title }} ({{ item.format_category }})">
+          <a href="/film/{{ item.fid }}" class="shelf-card" title="{{ item.clean_title }} ({{ item.year or '' }})">
             <div class="shelf-card-poster">
               {% if item.poster_url %}
                 <img src="{{ item.poster_url }}" alt="{{ item.clean_title }} poster" loading="lazy">
               {% else %}
-                <div style="display:flex; height:100%; align-items:center; justify-content:center; font-size:2.5rem; color:#475569;">📀</div>
+                <div class="shelf-card-placeholder">
+                  <span class="placeholder-icon">🎬</span>
+                  <span class="placeholder-title">{{ item.clean_title }}</span>
+                </div>
               {% endif %}
-            </div>
-            <div class="shelf-card-info">
-              <div>
-                <div class="shelf-card-title">{{ item.clean_title }}</div>
-                <div class="shelf-card-meta">{{ item.year or '—' }} &bull; {{ item.release_count }} editions{% if item.format_count and item.format_count > 1 %} ({{ item.format_count }} fmts){% endif %}</div>
+
+              <!-- Toast-Style Graphic Overlay on Hover -->
+              <div class="shelf-card-toast">
+                <div class="toast-title">{{ item.clean_title }}</div>
+                <div class="toast-sub">
+                  <span class="toast-year">{{ item.year or '—' }}</span>
+                  {% if item.director %}
+                  <span class="toast-bullet">&bull;</span>
+                  <span class="toast-director">{{ item.director }}</span>
+                  {% endif %}
+                </div>
+                <div class="toast-meta-bar">
+                  <span class="toast-editions-pill">{{ item.release_count }} {{ 'edition' if item.release_count == 1 else 'editions' }}</span>
+                  {% if item.formats %}
+                  <div class="toast-formats-strip">
+                    {% for f in item.formats %}
+                    <span class="toast-fmt-pill fmt-{{ '4k' if '4k' in f.category|lower else ('bd' if 'blu-ray' in f.category|lower else 'dvd') }}">{{ '4K' if '4k' in f.category|lower else ('BD' if 'blu-ray' in f.category|lower else 'DVD') }}</span>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
               </div>
             </div>
           </a>
