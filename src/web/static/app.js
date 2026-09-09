@@ -368,7 +368,7 @@ let pmSelectedFile = null;
 
 function initFixPosterButtons() {
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".btn-fix-poster, .btn-change-poster-main, #btn-fix-poster, #btn-change-poster-main, .poster-clickable");
+    const btn = e.target.closest(".btn-fix-poster, #btn-fix-poster");
     if (btn) {
       e.preventDefault();
       e.stopPropagation();
@@ -650,7 +650,7 @@ async function saveChosenPoster() {
       mainImg.src = newPosterUrl;
     } else if (wrapper) {
       if (placeholder) placeholder.remove();
-      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img"><div class="poster-hover-overlay"><span class="poster-hover-overlay-pill">🖼️ Change Poster</span></div>`;
+      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img">`;
     }
 
     // Update all elements holding data-poster
@@ -709,7 +709,7 @@ async function autoDetectPoster() {
       mainImg.src = newPosterUrl;
     } else if (wrapper) {
       if (placeholder) placeholder.remove();
-      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img"><div class="poster-hover-overlay"><span class="poster-hover-overlay-pill">🖼️ Change Poster</span></div>`;
+      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img">`;
     }
 
     document.querySelectorAll(`[data-fid="${pmCurrentFid}"]`).forEach(el => {
