@@ -1,0 +1,14 @@
+services:
+  dvdrewind:
+    build: .
+    container_name: dvdrewind
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      # Map host directory for persistent SQLite database, posters & archives
+      - ./archive:/app/archive
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Optional TMDB API key override (default built-in key works out of the box)
+      # - TMDB_API_KEY=your_api_key_here
