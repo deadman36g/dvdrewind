@@ -270,7 +270,10 @@ async def handle_api_poster(request: web.Request) -> web.Response:
         if not title:
             return web.json_response({"error": "Title not found"}, status=404)
 
-        cache_key = title.get("imdb_id") or f"custom_{fid}"
+        import time
+        timestamp = int(time.time())
+        base_key = title.get("imdb_id") or f"fid_{fid}"
+        cache_key = f"{base_key}_{timestamp}"
 
         # 1. Handle Multipart File Upload
         if request.content_type.startswith("multipart/"):

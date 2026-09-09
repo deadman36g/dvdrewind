@@ -368,7 +368,7 @@ let pmSelectedFile = null;
 
 function initFixPosterButtons() {
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".btn-fix-poster");
+    const btn = e.target.closest(".btn-fix-poster, .btn-change-poster-main, #btn-fix-poster, #btn-change-poster-main, .poster-clickable");
     if (btn) {
       e.preventDefault();
       e.stopPropagation();
@@ -401,12 +401,15 @@ function openPosterModal(fid, title, year, currentUrl, imdbId) {
   const saveBtn = document.getElementById("btn-save-poster");
   const feedback = document.getElementById("pm-feedback");
 
-  if (titleEl) titleEl.textContent = `Fix Poster — ${title} ${year ? '(' + year + ')' : ''}`;
-  if (subtitleEl) subtitleEl.textContent = `Choose a poster for FID ${fid}. It will be cached offline in your archive.`;
+  if (titleEl) titleEl.textContent = `Change Poster — ${title} ${year ? '(' + year + ')' : ''}`;
+  if (subtitleEl) subtitleEl.textContent = `Choose a poster for FID ${fid}. It will be cached permanently in your offline archive.`;
   if (searchInput) searchInput.value = `${title} ${year || ''}`.trim();
   if (urlInput) urlInput.value = "";
   if (fileInput) fileInput.value = "";
-  if (saveBtn) saveBtn.disabled = true;
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Poster";
+  }
   if (feedback) {
     feedback.className = "pm-feedback";
     feedback.style.display = "none";
@@ -458,6 +461,7 @@ async function searchPosterCandidates() {
   const searchInput = document.getElementById("pm-search-input");
   const statusEl = document.getElementById("pm-candidates-status");
   const gridEl = document.getElementById("pm-candidates-grid");
+  const saveBtn = document.getElementById("btn-save-poster");
   if (!searchInput || !gridEl) return;
 
   const query = searchInput.value.trim();
@@ -476,24 +480,38 @@ async function searchPosterCandidates() {
     const candidates = data.candidates || [];
 
     if (candidates.length === 0) {
-      if (statusEl) statusEl.textContent = "No online poster candidates found. Try a different query or paste an image URL.";
+      if (statusEl) statusEl.textContent = "No online poster candidates found. Try a different query, paste an image URL, or upload from disk.";
       return;
     }
 
-    if (statusEl) statusEl.textContent = `Loaded top official posters from TMDB. Click one to select & apply:`;
+    if (statusEl) statusEl.textContent = `Loaded top official posters from TMDB. Click to select, then click 'Save Poster':`;
 
     gridEl.innerHTML = candidates.map((c, idx) => `
-      <div class="pm-candidate-card" onclick="selectCandidatePoster('${escapeHtml(c.url)}', this)" title="Click to apply this poster">
+      <div class="pm-candidate-card ${idx === 0 ? 'selected' : ''}" 
+           data-url="${escapeHtml(c.url)}" 
+           onclick="selectCandidatePoster('${escapeHtml(c.url)}', this)" 
+           ondblclick="selectAndSaveCandidate('${escapeHtml(c.url)}', this)"
+           title="Click to preview & select, or double-click to save immediately">
         <img src="${escapeHtml(c.thumb || c.url)}" alt="${escapeHtml(c.title)}" loading="lazy" onerror="this.parentElement.style.display='none'">
         <div class="pm-candidate-info" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</div>
       </div>
     `).join("");
+
+    // Default select first candidate
+    if (candidates.length > 0 && !pmSelectedUrl) {
+      pmSelectedUrl = candidates[0].url;
+      updatePosterPreview(candidates[0].url);
+    }
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Selected Poster";
+    }
   } catch (err) {
     if (statusEl) statusEl.textContent = "Error searching online candidates. You can still paste an image URL or upload a file.";
   }
 }
 
-async function selectCandidatePoster(url, cardEl) {
+function selectCandidatePoster(url, cardEl) {
   document.querySelectorAll(".pm-candidate-card").forEach(c => c.classList.remove("selected"));
   if (cardEl) cardEl.classList.add("selected");
 
@@ -502,9 +520,21 @@ async function selectCandidatePoster(url, cardEl) {
   updatePosterPreview(url);
 
   const saveBtn = document.getElementById("btn-save-poster");
-  if (saveBtn) saveBtn.disabled = true;
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Selected Poster";
+  }
 
-  // Immediately save and apply this poster upon click
+  const feedback = document.getElementById("pm-feedback");
+  if (feedback) {
+    feedback.className = "pm-feedback";
+    feedback.style.display = "block";
+    feedback.textContent = "Poster selected! Click 'Save Selected Poster' to apply (or double-click card).";
+  }
+}
+
+async function selectAndSaveCandidate(url, cardEl) {
+  selectCandidatePoster(url, cardEl);
   await saveChosenPoster();
 }
 
@@ -519,7 +549,10 @@ function previewCustomUrl() {
   updatePosterPreview(url);
 
   const saveBtn = document.getElementById("btn-save-poster");
-  if (saveBtn) saveBtn.disabled = false;
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Poster";
+  }
 }
 
 function handlePosterFileSelect(event) {
@@ -533,7 +566,10 @@ function handlePosterFileSelect(event) {
   reader.onload = (e) => {
     updatePosterPreview(e.target.result);
     const saveBtn = document.getElementById("btn-save-poster");
-    if (saveBtn) saveBtn.disabled = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Uploaded Poster";
+    }
   };
   reader.readAsDataURL(file);
 }
@@ -543,7 +579,34 @@ async function saveChosenPoster() {
   const saveBtn = document.getElementById("btn-save-poster");
   const feedback = document.getElementById("pm-feedback");
 
-  if (saveBtn) saveBtn.disabled = true;
+  // Check URL tab value if user typed directly
+  const urlInput = document.getElementById("pm-url-input");
+  const tabUrl = document.getElementById("pm-tab-url");
+  if (tabUrl && tabUrl.style.display !== "none" && urlInput && urlInput.value.trim()) {
+    pmSelectedUrl = urlInput.value.trim();
+  }
+
+  // Fallback to currently selected or first candidate card
+  if (!pmSelectedUrl && !pmSelectedFile) {
+    const selCard = document.querySelector(".pm-candidate-card.selected") || document.querySelector(".pm-candidate-card");
+    if (selCard && selCard.dataset.url) {
+      pmSelectedUrl = selCard.dataset.url;
+    }
+  }
+
+  if (!pmSelectedUrl && !pmSelectedFile) {
+    if (feedback) {
+      feedback.className = "pm-feedback error";
+      feedback.style.display = "block";
+      feedback.textContent = "Please select a poster, paste an image URL, or choose a file first.";
+    }
+    return;
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+  }
   if (feedback) {
     feedback.className = "pm-feedback";
     feedback.style.display = "block";
@@ -565,8 +628,6 @@ async function saveChosenPoster() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ poster_url: pmSelectedUrl })
       });
-    } else {
-      throw new Error("No poster selected");
     }
 
     const data = await res.json();
@@ -576,7 +637,7 @@ async function saveChosenPoster() {
 
     if (feedback) {
       feedback.className = "pm-feedback success";
-      feedback.textContent = "Poster updated and cached successfully!";
+      feedback.textContent = "✓ Poster updated and cached successfully!";
     }
 
     // Update main poster image on current page dynamically
@@ -589,23 +650,33 @@ async function saveChosenPoster() {
       mainImg.src = newPosterUrl;
     } else if (wrapper) {
       if (placeholder) placeholder.remove();
-      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img">`;
+      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img"><div class="poster-hover-overlay"><span class="poster-hover-overlay-pill">🖼️ Change Poster</span></div>`;
     }
+
+    // Update all elements holding data-poster
+    document.querySelectorAll(`[data-fid="${pmCurrentFid}"]`).forEach(el => {
+      el.setAttribute("data-poster", data.poster_url);
+    });
 
     setTimeout(() => {
       closePosterModal();
-    }, 800);
+    }, 700);
   } catch (err) {
     if (feedback) {
       feedback.className = "pm-feedback error";
       feedback.textContent = "Error: " + err.message;
     }
-    if (saveBtn) saveBtn.disabled = false;
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Poster";
+    }
   }
 }
 
 async function autoDetectPoster() {
   if (!pmCurrentFid) return;
+  const saveBtn = document.getElementById("btn-save-poster");
   const feedback = document.getElementById("pm-feedback");
   if (feedback) {
     feedback.className = "pm-feedback";
@@ -626,21 +697,28 @@ async function autoDetectPoster() {
 
     if (feedback) {
       feedback.className = "pm-feedback success";
-      feedback.textContent = "Auto-detected poster saved!";
+      feedback.textContent = "✓ Auto-detected poster saved!";
     }
 
     const mainImg = document.getElementById("main-poster-img");
+    const placeholder = document.getElementById("poster-placeholder");
     const wrapper = document.getElementById("poster-wrapper");
-    const newPosterUrl = data.poster_url + "?t=" + Date.now();
+    const newPosterUrl = data.poster_url + (data.poster_url.includes("?") ? "&" : "?") + "t=" + Date.now();
+
     if (mainImg) {
       mainImg.src = newPosterUrl;
     } else if (wrapper) {
-      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img">`;
+      if (placeholder) placeholder.remove();
+      wrapper.innerHTML = `<img src="${newPosterUrl}" alt="Poster" class="movie-poster-img" id="main-poster-img"><div class="poster-hover-overlay"><span class="poster-hover-overlay-pill">🖼️ Change Poster</span></div>`;
     }
+
+    document.querySelectorAll(`[data-fid="${pmCurrentFid}"]`).forEach(el => {
+      el.setAttribute("data-poster", data.poster_url);
+    });
 
     setTimeout(() => {
       closePosterModal();
-    }, 800);
+    }, 700);
   } catch (err) {
     if (feedback) {
       feedback.className = "pm-feedback error";

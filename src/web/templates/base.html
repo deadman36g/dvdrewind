@@ -86,7 +86,7 @@
           <div id="pm-tab-url" class="pm-tab-pane" style="display: none;">
             <label class="pm-input-label" for="pm-url-input">Direct Image Address (JPG, PNG, WebP):</label>
             <div class="pm-search-bar">
-              <input type="text" id="pm-url-input" placeholder="https://..." onkeydown="if(event.key==='Enter'){event.preventDefault();previewCustomUrl();}">
+              <input type="text" id="pm-url-input" placeholder="https://..." onkeydown="if(event.key==='Enter'){event.preventDefault();previewCustomUrl();}" oninput="previewCustomUrl()" onpaste="setTimeout(previewCustomUrl, 50)">
               <button type="button" class="btn-pm-action" onclick="previewCustomUrl()">Load</button>
             </div>
             <p class="pm-help-text">Paste any high-resolution image URL from IMDb, Letterboxd, Blu-ray.com, Amazon, or Google Images.</p>
@@ -107,7 +107,7 @@
         <button type="button" class="btn-pm-secondary" onclick="autoDetectPoster()">Auto-Detect</button>
         <div style="display: flex; gap: 0.5rem;">
           <button type="button" class="btn-pm-cancel" onclick="closePosterModal()">Cancel</button>
-          <button type="button" class="btn-pm-primary" id="btn-save-poster" onclick="saveChosenPoster()" disabled>Save Poster</button>
+          <button type="button" class="btn-pm-primary" id="btn-save-poster" onclick="saveChosenPoster()">Save Poster</button>
         </div>
       </div>
     </div>
@@ -209,7 +209,7 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=2.2"></script>
-  <script src="/static/js/archive_control.js?v=2.2"></script>
+  <script src="/static/app.js?v=2.3"></script>
+  <script src="/static/js/archive_control.js?v=2.3"></script>
 </body>
 </html>

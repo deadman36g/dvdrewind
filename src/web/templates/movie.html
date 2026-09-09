@@ -20,7 +20,13 @@
   <header class="movie-hero cinematic-hero-stage">
     <!-- Poster Column: Overlapping, Elevated with Shadow -->
     <div class="movie-poster-pane">
-      <div class="movie-poster-box" id="poster-wrapper">
+      <div class="movie-poster-box poster-clickable btn-fix-poster" id="poster-wrapper"
+           data-fid="{{ title.fid }}"
+           data-title="{{ title.clean_title|e }}"
+           data-year="{{ title.year or '' }}"
+           data-poster="{{ title.poster_url or '' }}"
+           data-imdb="{{ title.imdb_id or '' }}"
+           title="Click to Change Poster">
         {% if title.poster_url %}
         <img src="{{ title.poster_url }}" alt="{{ title.clean_title }} poster" class="movie-poster-img" id="main-poster-img">
         {% else %}
@@ -31,7 +37,22 @@
           <div class="placeholder-format">{{ title.format_category }}</div>
         </div>
         {% endif %}
+        <div class="poster-hover-overlay">
+          <span class="poster-hover-overlay-pill">🖼️ Change Poster</span>
+        </div>
       </div>
+
+      <!-- Prominent, Dedicated Change Poster Button Under Poster -->
+      <button type="button" class="btn-change-poster-main btn-fix-poster" id="btn-change-poster-main"
+              data-fid="{{ title.fid }}"
+              data-title="{{ title.clean_title|e }}"
+              data-year="{{ title.year or '' }}"
+              data-poster="{{ title.poster_url or '' }}"
+              data-imdb="{{ title.imdb_id or '' }}"
+              title="Change Movie Poster (Choose from TMDB Top 10, Custom URL, or Upload)">
+        <span class="btn-change-icon">🖼️</span>
+        <span>Change Poster</span>
+      </button>
     </div>
 
     <!-- Metadata & Details Column -->
@@ -91,7 +112,14 @@
           </a>
           {% endif %}
 
-          <button type="button" class="ext-icon-btn-sm btn-fix-poster" id="btn-fix-poster" title="Fix / Change Poster (Loads top 10 from TMDB)" aria-label="Fix Movie Poster" data-fid="{{ title.fid }}" data-title="{{ title.clean_title|e }}" data-year="{{ title.year or '' }}" data-poster="{{ title.poster_url or '' }}" data-imdb="{{ title.imdb_id or '' }}" onclick="openPosterModal({{ title.fid }}, '{{ title.clean_title|replace("'", "\\'") }}', '{{ title.year or '' }}', '{{ title.poster_url or '' }}', '{{ title.imdb_id or '' }}')">
+          <button type="button" class="ext-icon-btn-sm btn-fix-poster" id="btn-fix-poster"
+                  title="Change Poster (Loads official TMDB gallery)"
+                  aria-label="Change Movie Poster"
+                  data-fid="{{ title.fid }}"
+                  data-title="{{ title.clean_title|e }}"
+                  data-year="{{ title.year or '' }}"
+                  data-poster="{{ title.poster_url or '' }}"
+                  data-imdb="{{ title.imdb_id or '' }}">
             {{ icons.tmdb_poster_button() }}
           </button>
 

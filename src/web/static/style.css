@@ -5342,29 +5342,85 @@ main {
    FIX POSTER MODAL & CONTROLS
    ======================================================== */
 
-.btn-fix-poster {
+/* Clickable Movie Poster Box & Hover Overlay */
+.poster-clickable {
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.poster-hover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 15, 26, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 10;
+}
+.movie-poster-box:hover .poster-hover-overlay {
+  opacity: 1;
+}
+.poster-hover-overlay-pill {
+  background: #0284C7;
+  color: #FFFFFF;
+  padding: 0.45rem 0.85rem;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+  transform: translateY(4px);
+  transition: transform 0.2s ease;
+}
+.movie-poster-box:hover .poster-hover-overlay-pill {
+  transform: translateY(0);
+}
+
+/* Dedicated Change Poster Button Under Poster Card */
+.btn-change-poster-main {
   width: 100%;
-  margin-top: 0.65rem;
-  background: rgba(30, 41, 59, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #CBD5E1;
-  border-radius: 6px;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.8rem;
+  margin-top: 0.75rem;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38BDF8;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  transition: all 0.18s ease;
+  gap: 0.5rem;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   letter-spacing: 0.02em;
 }
-.btn-fix-poster:hover {
-  background: rgba(56, 189, 248, 0.15);
+.btn-change-poster-main:hover {
+  background: #0284C7;
   border-color: #38BDF8;
-  color: #38BDF8;
-  transform: translateY(-1px);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
+}
+.btn-change-poster-main:active {
+  transform: translateY(0);
+}
+.btn-change-icon {
+  font-size: 1rem;
+}
+
+/* External Strip Icon button preservation */
+.hero-ext-strip .ext-icon-btn-sm.btn-fix-poster {
+  width: 38px !important;
+  height: 38px !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .poster-modal-backdrop {
