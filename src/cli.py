@@ -82,7 +82,8 @@ def cmd_import_fixtures(args):
     print(f"Importing {len(manifest)} fixtures into database...")
     imported, missing = 0, 0
     for item in manifest:
-        fixture_file = FIXTURES_DIR.parent.parent / item["fixture_path"]
+        rel_path = item["fixture_path"].replace("\\", "/")
+        fixture_file = FIXTURES_DIR.parent.parent / rel_path
         fid = item["fid"]
         sha256 = item["sha256"]
         with open(fixture_file, "rb") as fp:
