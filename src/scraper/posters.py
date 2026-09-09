@@ -8,6 +8,10 @@ from src.config import ARCHIVE_DIR, DEFAULT_USER_AGENT
 
 POSTERS_DIR = ARCHIVE_DIR / "posters"
 POSTERS_DIR.mkdir(parents=True, exist_ok=True)
+BACKDROPS_DIR = ARCHIVE_DIR / "backdrops"
+BACKDROPS_DIR.mkdir(parents=True, exist_ok=True)
+METADATA_DIR = ARCHIVE_DIR / "metadata"
+METADATA_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = ARCHIVE_DIR / "config.json"
 
 def get_saved_tmdb_key() -> Optional[str]:
@@ -323,4 +327,108 @@ def search_poster_candidates(query: str, year: Optional[int] = None, imdb_id: Op
             print(f"Wikipedia candidate search error: {e}")
 
     return candidates
+
+
+def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: Optional[int] = None) -> dict:
+    """
+    Retrieves enriched movie metadata (overview, runtime, genres, tagline, backdrop_url)
+    from local cache or fetches on-demand from TMDB.
+    """
+    cache_key = imdb_id or f"meta_{abs(hash(clean_title))}"
+    cache_file = METADATA_DIR / f"{cache_key}.json"
+
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Verify backdrop file exists if referenced
+                if data.get("backdrop_url"):
+                    bd_fname = Path(data["backdrop_url"]).name
+                    if not (BACKDROPS_DIR / bd_fname).exists():
+                        data["backdrop_url"] = None
+                return data
+        except Exception:
+            pass
+
+    key = get_saved_tmdb_key()
+    if not key:
+        return {}
+
+    headers = {"User-Agent": DEFAULT_USER_AGENT}
+    movie_id = None
+
+    # 1. Look up by IMDb ID
+    if imdb_id and imdb_id.startswith("tt"):
+        try:
+            find_url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={key}&external_source=imdb_id"
+            resp = requests.get(find_url, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                mr = resp.json().get("movie_results", [])
+                if mr:
+                    movie_id = mr[0].get("id")
+        except Exception as e:
+            print(f"Metadata TMDB find error: {e}")
+
+    # 2. Look up by title + year
+    if not movie_id and clean_title:
+        try:
+            norm_q = normalize_title_for_search(clean_title)
+            params = {"api_key": key, "query": norm_q}
+            if year:
+                params["year"] = str(year)
+            s_resp = requests.get("https://api.themoviedb.org/3/search/movie", params=params, headers=headers, timeout=5)
+            if s_resp.status_code == 200:
+                res = s_resp.json().get("results", [])
+                if res:
+                    movie_id = res[0].get("id")
+        except Exception as e:
+            print(f"Metadata TMDB search error: {e}")
+
+    if not movie_id:
+        return {}
+
+    # 3. Fetch comprehensive details
+    try:
+        det_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={key}"
+        det_resp = requests.get(det_url, headers=headers, timeout=6)
+        if det_resp.status_code != 200:
+            return {}
+        details = det_resp.json()
+
+        bd_path = details.get("backdrop_path")
+        bd_url = None
+        if bd_path:
+            bd_file = BACKDROPS_DIR / f"{cache_key}.jpg"
+            if not bd_file.exists():
+                try:
+                    img_resp = requests.get(f"https://image.tmdb.org/t/p/w1280{bd_path}", headers=headers, timeout=10)
+                    if img_resp.status_code == 200:
+                        with open(bd_file, "wb") as f:
+                            f.write(img_resp.content)
+                        bd_url = f"/static/backdrops/{cache_key}.jpg"
+                except Exception as e:
+                    print(f"Backdrop download error: {e}")
+            else:
+                bd_url = f"/static/backdrops/{cache_key}.jpg"
+
+        meta = {
+            "overview": details.get("overview") or "",
+            "runtime": details.get("runtime"),
+            "genres": [g["name"] for g in details.get("genres", []) if "name" in g],
+            "tagline": details.get("tagline") or "",
+            "backdrop_url": bd_url,
+            "vote_average": details.get("vote_average")
+        }
+
+        try:
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2)
+        except Exception:
+            pass
+
+        return meta
+    except Exception as e:
+        print(f"TMDB details fetch error: {e}")
+        return {}
+
 

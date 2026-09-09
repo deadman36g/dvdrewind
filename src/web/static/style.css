@@ -2282,10 +2282,11 @@ main {
   flex: 1;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: space-between !important;
+  justify-content: flex-start !important;
   align-items: flex-start !important;
   text-align: left !important;
-  gap: 1rem;
+  gap: 0.75rem !important;
+  min-width: 0;
 }
 
 .hero-header-group {
@@ -4408,6 +4409,14 @@ main {
   padding: 1.5rem 1.85rem !important;
 }
 
+.cinematic-hero-stage.no-backdrop {
+  margin-top: 1.5rem !important;
+}
+
+.cinematic-hero-stage.no-backdrop .movie-poster-pane {
+  margin-top: 0 !important;
+}
+
 /* Overlapping Poster Elevation */
 .cinematic-hero-stage .movie-poster-pane {
   margin-top: -25px;
@@ -4473,6 +4482,79 @@ main {
   letter-spacing: 0.012em !important;
   margin: 0 !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Film Narrative Overview / Synopsis */
+.movie-overview-wrapper {
+  max-width: 980px !important;
+  margin: 0 0 0.45rem 0 !important;
+}
+
+.movie-overview-text {
+  font-size: 0.94rem !important;
+  line-height: 1.6 !important;
+  color: #CBD5E1 !important;
+  margin: 0 !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="light"] .movie-overview-text {
+  color: #334155 !important;
+}
+
+/* Quick Specs & Collector Highlights Bar */
+.movie-specs-shelf {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.45rem 0.6rem !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin: 0.2rem 0 0.45rem 0 !important;
+}
+
+.spec-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  padding: 0.3rem 0.68rem !important;
+  border-radius: 7px !important;
+  font-size: 0.82rem !important;
+  font-weight: 500 !important;
+  color: #E2E8F0 !important;
+  background: rgba(30, 41, 59, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(8px) !important;
+  letter-spacing: 0.01em !important;
+}
+
+[data-theme="light"] .spec-pill {
+  color: #1E293B !important;
+  background: rgba(241, 245, 249, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.spec-tech-pill {
+  background: rgba(14, 165, 233, 0.14) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  color: #38BDF8 !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="light"] .spec-tech-pill {
+  background: rgba(2, 132, 199, 0.1) !important;
+  border-color: rgba(2, 132, 199, 0.3) !important;
+  color: #0284C7 !important;
+}
+
+.hero-ext-footer {
+  margin-top: 0.35rem !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
 }
 
 /* Integrated Format Switcher Pills (Plex / Apple TV style) */

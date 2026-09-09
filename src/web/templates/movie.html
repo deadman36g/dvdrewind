@@ -10,14 +10,10 @@
   <div class="cinematic-hero-banner" style="background-image: url('{{ title.backdrop_url }}');">
     <div class="banner-gradient-overlay"></div>
   </div>
-  {% else %}
-  <div class="cinematic-hero-banner default-hero-banner">
-    <div class="banner-gradient-overlay"></div>
-  </div>
   {% endif %}
 
   <!-- Movie Hero Stage: Overlapping Elevated Poster & Integrated Title Bar -->
-  <header class="movie-hero cinematic-hero-stage">
+  <header class="movie-hero cinematic-hero-stage {{ 'has-backdrop' if title.backdrop_url else 'no-backdrop' }}">
     <!-- Poster Column: Overlapping, Elevated with Shadow -->
     <div class="movie-poster-pane">
       <div class="movie-poster-box" id="poster-wrapper">
@@ -67,37 +63,66 @@
         </div>
       </div>
 
-      <!-- Official Movie Tagline Right Below Title -->
-      {% if title.synopsis %}
+      <!-- Tagline -->
+      {% if title.tagline %}
+      <div class="movie-tagline-wrapper">
+        <p class="movie-tagline-text">&ldquo;{{ title.tagline }}&rdquo;</p>
+      </div>
+      {% elif title.synopsis and title.synopsis|length < 90 %}
       <div class="movie-tagline-wrapper">
         <p class="movie-tagline-text">&ldquo;{{ title.synopsis }}&rdquo;</p>
       </div>
       {% endif %}
 
-      <!-- Hero Sub-Bar: Credits and 32x32 External Resources Strip -->
-      <div class="hero-subbar">
-        <div class="movie-credits-bar">
-          {% if title.director %}
-          <span class="credit-pill"><span class="credit-icon">🎬</span> <strong>Director:</strong> {{ title.director }}</span>
-          {% endif %}
-          {% if title.aka_titles %}
-          <span class="credit-pill"><span class="credit-icon">🏷️</span> <strong>AKA:</strong> {{ title.aka_titles|join(' • ') }}</span>
-          {% endif %}
-          <span class="credit-pill"><span class="credit-icon">📦</span> <strong>Physical Editions:</strong> {{ title.releases|length }}</span>
-          {% if title.is_all_formats %}
-          <span class="credit-pill credit-format-pill format-all">
-            <span class="credit-icon">✨</span>
-            <strong>All Formats (4K &bull; BD &bull; DVD)</strong>
-          </span>
-          {% else %}
-          <span class="credit-pill credit-format-pill format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
-            {{ icons.optical_disc(title.format_category, size=15) }}
-            <strong>{{ title.format_category }}</strong>
-          </span>
-          {% endif %}
-        </div>
+      <!-- Film Narrative Overview / Synopsis -->
+      {% if title.overview %}
+      <div class="movie-overview-wrapper">
+        <p class="movie-overview-text">{{ title.overview }}</p>
+      </div>
+      {% elif title.synopsis and title.synopsis|length >= 90 %}
+      <div class="movie-overview-wrapper">
+        <p class="movie-overview-text">{{ title.synopsis }}</p>
+      </div>
+      {% endif %}
 
-        <!-- Sleek 32x32 External Resources Strip -->
+      <!-- Quick Specs & Collector Highlights Bar -->
+      <div class="movie-specs-shelf">
+        {% if title.runtime %}
+        <span class="spec-pill" title="Film Runtime"><span class="spec-icon">⏱️</span> <strong>{{ title.runtime }} min</strong></span>
+        {% endif %}
+        {% if title.genres %}
+        <span class="spec-pill" title="Film Genres"><span class="spec-icon">🎭</span> {{ title.genres|join(' • ') }}</span>
+        {% endif %}
+        {% if title.director %}
+        <span class="spec-pill" title="Director"><span class="spec-icon">🎬</span> <strong>Director:</strong> {{ title.director }}</span>
+        {% endif %}
+        {% if title.distributors_summary %}
+        <span class="spec-pill" title="Distributors in Archive"><span class="spec-icon">🏢</span> {{ title.distributors_summary|join(' • ') }}</span>
+        {% endif %}
+        <span class="spec-pill" title="Total Physical Releases in this comparison">
+          <span class="spec-icon">📦</span> <strong>{{ title.releases|length }}</strong> {{ 'Editions' if title.releases|length != 1 else 'Edition' }}
+        </span>
+        {% if title.is_all_formats %}
+        <span class="spec-pill credit-format-pill format-all">
+          <span class="credit-icon">✨</span>
+          <strong>All Formats</strong>
+        </span>
+        {% else %}
+        <span class="spec-pill credit-format-pill format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
+          {{ icons.optical_disc(title.format_category, size=15) }}
+          <strong>{{ title.format_category }}</strong>
+        </span>
+        {% endif %}
+        {% for a in title.audio_highlights or [] %}
+        <span class="spec-pill spec-tech-pill" title="Audio Track Highlight">🔊 {{ a }}</span>
+        {% endfor %}
+        {% for v in title.video_highlights or [] %}
+        <span class="spec-pill spec-tech-pill" title="Video Master Highlight">📺 {{ v }}</span>
+        {% endfor %}
+      </div>
+
+      <!-- External Resources & Tools Strip -->
+      <div class="hero-ext-footer">
         <div class="hero-ext-strip" role="navigation" aria-label="External Resources">
           {% if title.imdb_id %}
           <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="IMDb ({{ title.imdb_id }})" aria-label="View on IMDb">

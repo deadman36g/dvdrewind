@@ -154,16 +154,65 @@ async def handle_movie(request: web.Request) -> web.Response:
         title["format_nav"] = format_nav
         title["is_all_formats"] = is_all
 
-        # Resolve fanart / backdrop image
-        from src.config import ARCHIVE_DIR
-        backdrops_dir = ARCHIVE_DIR / "backdrops"
-        backdrop_url = None
-        imdb_id = title.get("imdb_id")
-        if imdb_id and (backdrops_dir / f"{imdb_id}.jpg").exists():
-            backdrop_url = f"/static/backdrops/{imdb_id}.jpg"
-        elif (backdrops_dir / f"{fid}.jpg").exists():
-            backdrop_url = f"/static/backdrops/{fid}.jpg"
-        title["backdrop_url"] = backdrop_url
+        # Enrich movie metadata (plot overview, runtime, genres, tagline, backdrop)
+        from src.scraper.posters import get_or_fetch_movie_metadata
+        enriched = get_or_fetch_movie_metadata(title.get("imdb_id"), title.get("clean_title"), title.get("year"))
+        if enriched:
+            for k in ("overview", "runtime", "genres", "tagline"):
+                if enriched.get(k) and not title.get(k):
+                    title[k] = enriched[k]
+                elif enriched.get(k) and k in ("overview", "runtime", "genres"):
+                    title[k] = enriched[k]
+            if enriched.get("backdrop_url"):
+                title["backdrop_url"] = enriched["backdrop_url"]
+
+        # Collect distinct distributors across releases
+        dists = []
+        for r in title.get("releases", []):
+            d = r.get("distributor")
+            if d and d not in dists:
+                dists.append(d)
+        title["distributors_summary"] = dists[:3]
+
+        # Check for audio highlights
+        audio_highlights = set()
+        for r in title.get("releases", []):
+            for a in r.get("audio_tracks", []):
+                txt = (a.get("raw_text") or "").lower()
+                if "atmos" in txt:
+                    audio_highlights.add("Dolby Atmos")
+                elif "truehd" in txt:
+                    audio_highlights.add("Dolby TrueHD")
+                elif "dts:x" in txt:
+                    audio_highlights.add("DTS:X")
+                elif "dts-hd master" in txt or "dts-hd ma" in txt:
+                    audio_highlights.add("DTS-HD MA")
+                elif "5.1" in txt:
+                    audio_highlights.add("5.1 Surround")
+        title["audio_highlights"] = sorted(list(audio_highlights))[:3]
+
+        # Check for video presentation highlights
+        video_highlights = set()
+        for r in title.get("releases", []):
+            notes = (r.get("notes_raw") or "").lower()
+            hdr = (r.get("hdr_type") or "").lower()
+            if "dolby vision" in notes or "dolby vision" in hdr:
+                video_highlights.add("Dolby Vision")
+            if "hdr10+" in notes or "hdr10+" in hdr:
+                video_highlights.add("HDR10+")
+            elif "hdr10" in notes or "hdr10" in hdr or "hdr" in hdr:
+                video_highlights.add("HDR10")
+        title["video_highlights"] = sorted(list(video_highlights))[:2]
+
+        # Fallback runtime from cuts if not in TMDB
+        if not title.get("runtime") and title.get("cuts"):
+            for c in title["cuts"]:
+                diff = c.get("runtime_diff")
+                if diff and ":" in diff:
+                    parts = diff.split(":")
+                    if parts[0].isdigit():
+                        title["runtime"] = int(parts[0])
+                        break
 
         return aiohttp_jinja2.render_template("movie.html", request, {
             "title": title,
