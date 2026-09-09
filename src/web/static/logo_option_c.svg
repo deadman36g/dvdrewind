@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 90" width="100%" height="100%" fill="none" style="shape-rendering: geometricPrecision;">
+  <defs>
+    <linearGradient id="optC_outer" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="50%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="optC_bezel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#00F0FF"/>
+    </linearGradient>
+    <linearGradient id="optC_chrome" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#CBD5E1"/>
+      <stop offset="50%" stop-color="#E2E8F0"/>
+      <stop offset="75%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+    <filter id="optC_shadow" x="-5%" y="-15%" width="115%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#optC_shadow)">
+    <rect x="6" y="8" width="748" height="74" rx="10" fill="url(#optC_outer)" stroke="url(#optC_bezel)" stroke-width="2"/>
+
+    <rect x="22" y="18" width="62" height="54" rx="8" fill="#0B111E" stroke="rgba(56, 189, 248, 0.35)" stroke-width="1.5"/>
+    <polygon points="51,28 32,45 51,62" fill="#38BDF8"/>
+    <polygon points="73,28 54,45 73,62" fill="#38BDF8"/>
+
+    <text x="98" y="57" font-family="'Impact', 'Arial Black', sans-serif" font-size="44" fill="url(#optC_chrome)" letter-spacing="2">REWIND</text>
+
+    <rect x="290" y="16" width="3" height="58" fill="#38BDF8" rx="1.5" opacity="0.8"/>
+
+    <text x="318" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="24" fill="#FFFFFF" letter-spacing="4.5">PRIVATE ARCHIVE</text>
+    <text x="320" y="64" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="12" fill="#94A3B8" letter-spacing="3.5">PHYSICAL MEDIA COMPARISON VAULT</text>
+
+    <rect x="640" y="27" width="92" height="36" rx="18" fill="rgba(56, 189, 248, 0.12)" stroke="#38BDF8" stroke-width="1.2"/>
+    <circle cx="657" cy="45" r="4" fill="#10B981"/>
+    <text x="668" y="49" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="11" fill="#F8FAFC" letter-spacing="1">ACTIVE</text>
+  </g>
+</svg>

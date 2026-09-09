@@ -4,8 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}DVDRewind Private Archive - Modern Physical Media Comparisons{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css?v=2.2">
+  <link rel="stylesheet" href="/static/style.css?v=3.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📀</text></svg>">
+  <script>
+    (function() {
+      const saved = localStorage.getItem("theme") || "dark";
+      document.documentElement.setAttribute("data-theme", saved);
+    })();
+
+    function updateThemeButtonIcon(theme) {
+      const btn = document.getElementById("theme-toggle-btn");
+      if (!btn) return;
+      if (theme === "dark") {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; display: block;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+      } else {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; display: block;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("theme", next);
+      updateThemeButtonIcon(next);
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      updateThemeButtonIcon(document.documentElement.getAttribute("data-theme") || "dark");
+    });
+  </script>
 </head>
 <body>
   {% block backdrop %}{% endblock %}
@@ -13,30 +41,8 @@
     <div class="nav-container">
       <div class="logo-area">
         <a href="/" class="brand-title" title="DVDRewind Private Archive">
-          <img src="/static/dvdrewind_logo.png" alt="DVDRewind" class="brand-logo-img">
+          <img src="/static/logo_option_a.svg?v=3.0" alt="DVDRewind Private Archive" class="brand-logo-img wide-logo">
         </a>
-        <div class="static-archive-plaque" title="DVDRewind Private Offline Archive">
-          <svg width="140" height="32" viewBox="0 0 140 32" fill="none" style="shape-rendering: geometricPrecision; display: block;">
-            <defs>
-              <linearGradient id="plaqueChrome" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#FFFFFF"/>
-                <stop offset="25%" stop-color="#CBD5E1"/>
-                <stop offset="60%" stop-color="#94A3B8"/>
-                <stop offset="100%" stop-color="#64748B"/>
-              </linearGradient>
-              <linearGradient id="plaqueBevel" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#1E293B"/>
-                <stop offset="100%" stop-color="#0A0D14"/>
-              </linearGradient>
-            </defs>
-            <rect x="0.5" y="0.5" width="139" height="31" rx="6" fill="#0C1017" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1.2"/>
-            <rect x="6" y="6" width="24" height="19" rx="3.5" fill="url(#plaqueChrome)" stroke="#E2E8F0" stroke-width="0.6"/>
-            <polygon points="17,10 10,15.5 17,21" fill="url(#plaqueBevel)"/>
-            <polygon points="25,10 18,15.5 25,21" fill="url(#plaqueBevel)"/>
-            <text x="37" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="8.5" fill="#F8FAFC" letter-spacing="1.2">PRIVATE</text>
-            <text x="37" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="7.5" fill="#94A3B8" letter-spacing="1.6">ARCHIVE</text>
-          </svg>
-        </div>
       </div>
 
       <div class="nav-search">
@@ -52,8 +58,8 @@
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
           </svg>
         </button>
-        <button id="theme-toggle-btn" class="nav-icon-btn theme-toggle-btn" title="Switch to Light Mode" aria-label="Switch to Light Mode">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="theme-toggle-btn" class="nav-icon-btn theme-toggle-btn" onclick="toggleTheme()" title="Switch theme" aria-label="Switch theme">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none; display: block;">
             <circle cx="12" cy="12" r="5"/>
             <line x1="12" y1="1" x2="12" y2="3"/>
             <line x1="12" y1="21" x2="12" y2="23"/>
@@ -237,7 +243,7 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=2.3"></script>
-  <script src="/static/js/archive_control.js?v=2.3"></script>
+  <script src="/static/app.js?v=3.0"></script>
+  <script src="/static/js/archive_control.js?v=3.0"></script>
 </body>
 </html>

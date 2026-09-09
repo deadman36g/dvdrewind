@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 90" width="100%" height="100%" fill="none" style="shape-rendering: geometricPrecision;">
+  <defs>
+    <linearGradient id="optD_silver" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="20%" stop-color="#E2E8F0"/>
+      <stop offset="40%" stop-color="#CBD5E1"/>
+      <stop offset="70%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#64748B"/>
+    </linearGradient>
+    <linearGradient id="optD_dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0A0E17"/>
+    </linearGradient>
+    <filter id="optD_shadow" x="-5%" y="-15%" width="115%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#optD_shadow)">
+    <path d="M 28 10 L 375 10 L 345 66 L 8 66 Z" fill="url(#optD_silver)" stroke="#FFFFFF" stroke-width="1.6"/>
+    
+    <polygon points="56,20 28,38 56,56" fill="#000000"/>
+    <polygon points="56,20 30,37 56,24" fill="#FFFFFF" fill-opacity="0.4"/>
+    <polygon points="86,20 58,38 86,56" fill="#000000"/>
+    <polygon points="86,20 60,37 86,24" fill="#FFFFFF" fill-opacity="0.4"/>
+
+    <text x="98" y="52" font-family="'Arial Black', -apple-system, sans-serif" font-weight="900" font-size="44" fill="#05070B" letter-spacing="-1.5">rewind</text>
+    <text x="98" y="51" font-family="'Arial Black', -apple-system, sans-serif" font-weight="900" font-size="44" fill="none" stroke="#FFFFFF" stroke-width="0.8" stroke-opacity="0.6" letter-spacing="-1.5">rewind</text>
+
+    <path d="M 378 10 L 736 10 L 706 66 L 348 66 Z" fill="url(#optD_silver)" stroke="#FFFFFF" stroke-width="1.6"/>
+    
+    <path d="M 388 16 L 722 16 L 696 60 L 362 60 Z" fill="url(#optD_dark)" stroke="#E2E8F0" stroke-width="1"/>
+
+    <text x="410" y="44" font-family="'Impact', -apple-system, sans-serif" font-size="28" fill="#F8FAFC" letter-spacing="4">PRIVATE ARCHIVE</text>
+    
+    <text x="80" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="11.5" fill="#94A3B8" letter-spacing="2.5">DVDCOMPARE.NET COMPANION &bull; PRIVATE OFFLINE ARCHIVE &bull; 4K UHD &bull; BLU-RAY &bull; DVD</text>
+  </g>
+</svg>
