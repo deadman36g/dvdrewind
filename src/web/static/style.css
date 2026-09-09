@@ -4451,6 +4451,23 @@ main {
   color: var(--text-muted);
 }
 
+/* Official Movie Tagline Right Below Title */
+.movie-tagline-wrapper {
+  margin: 0.15rem 0 0.85rem 0 !important;
+  max-width: 880px !important;
+}
+
+.movie-tagline-text {
+  font-size: 1.02rem !important;
+  font-style: italic !important;
+  font-weight: 500 !important;
+  color: #94A3B8 !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0.012em !important;
+  margin: 0 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 /* Integrated Format Switcher Pills (Plex / Apple TV style) */
 .title-format-pills {
   display: inline-flex !important;

@@ -67,6 +67,13 @@
         </div>
       </div>
 
+      <!-- Official Movie Tagline Right Below Title -->
+      {% if title.synopsis %}
+      <div class="movie-tagline-wrapper">
+        <p class="movie-tagline-text">&ldquo;{{ title.synopsis }}&rdquo;</p>
+      </div>
+      {% endif %}
+
       <!-- Hero Sub-Bar: Credits and 32x32 External Resources Strip -->
       <div class="hero-subbar">
         <div class="movie-credits-bar">
@@ -74,7 +81,7 @@
           <span class="credit-pill"><span class="credit-icon">🎬</span> <strong>Director:</strong> {{ title.director }}</span>
           {% endif %}
           {% if title.aka_titles %}
-          <span class="credit-pill"><span class="credit-icon">🏷️</span> <strong>AKA:</strong> {{ title.aka_titles|join(' &bull; ') }}</span>
+          <span class="credit-pill"><span class="credit-icon">🏷️</span> <strong>AKA:</strong> {{ title.aka_titles|join(' • ') }}</span>
           {% endif %}
           <span class="credit-pill"><span class="credit-icon">📦</span> <strong>Physical Editions:</strong> {{ title.releases|length }}</span>
           <span class="credit-pill credit-format-pill format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
@@ -125,16 +132,6 @@
           </a>
         </div>
       </div>
-
-      <!-- Collapsible / Expandable Plot Synopsis -->
-      {% if title.synopsis %}
-      <div class="hero-synopsis-container" id="hero-synopsis-container">
-        <p class="hero-synopsis-text" id="hero-synopsis-text">{{ title.synopsis }}</p>
-        {% if title.synopsis|length > 130 %}
-        <button type="button" class="btn-synopsis-toggle" id="btn-synopsis-toggle" aria-expanded="false">Read more ▾</button>
-        {% endif %}
-      </div>
-      {% endif %}
     </div>
   </header>
 
