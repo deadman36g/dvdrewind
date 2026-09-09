@@ -4251,6 +4251,12 @@ main {
   color: #38BDF8 !important;
 }
 
+.credit-format-pill.format-all {
+  border-color: rgba(139, 92, 246, 0.4) !important;
+  background: rgba(139, 92, 246, 0.14) !important;
+  color: #DDD6FE !important;
+}
+
 /* 4. Styled Hero Synopsis */
 .hero-synopsis-box {
   margin: 0.75rem 0 1rem 0 !important;
@@ -4519,6 +4525,32 @@ main {
   border-color: #F59E0B !important;
   color: #FBBF24 !important;
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.3) !important;
+}
+
+.format-pill.active.format-pill-all {
+  background: rgba(139, 92, 246, 0.22) !important;
+  border-color: #8B5CF6 !important;
+  color: #DDD6FE !important;
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.35) !important;
+}
+
+.num-cell-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.2rem !important;
+}
+
+.table-format-chip {
+  display: inline-block !important;
+  font-size: 0.62rem !important;
+  font-weight: 800 !important;
+  padding: 0.08rem 0.32rem !important;
+  border-radius: 4px !important;
+  line-height: 1 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
 }
 
 .format-pill.format-pill-disabled,

@@ -283,10 +283,11 @@ class ArchiveRepository:
             })
         return results
 
-    def get_title_detail(self, fid: int) -> Optional[Dict[str, Any]]:
+    def get_title_detail(self, fid: int, include_all_formats: bool = False) -> Optional[Dict[str, Any]]:
         """
         Returns full structured title details including all releases, tracks, extras,
-        cuts, recommendations, and update logs.
+        cuts, recommendations, and update logs. When include_all_formats=True,
+        merges all releases and cuts from sibling format titles (4K, Blu-ray, DVD).
         """
         title_row = self.conn.execute("SELECT * FROM titles WHERE fid = ?", (fid,)).fetchone()
         if not title_row:
@@ -297,50 +298,9 @@ class ArchiveRepository:
         title_data["aka_titles"] = json.loads(title_data["aka_titles"]) if title_data["aka_titles"] else []
         title_data["display_title"] = format_display_title(title_data["clean_title"])
 
-        # Recommendation
-        rec_row = self.conn.execute("SELECT * FROM recommendations WHERE title_id = ?", (title_id,)).fetchone()
-        if rec_row:
-            rec_dict = dict(rec_row)
-            if rec_dict.get("recommendation_text"):
-                rec_dict["recommendation_text"] = deduplicate_text(rec_dict["recommendation_text"])
-            title_data["recommendation"] = rec_dict
-        else:
-            title_data["recommendation"] = None
-
-        # Cuts
-        cuts_rows = self.conn.execute("SELECT * FROM cuts WHERE title_id = ?", (title_id,)).fetchall()
-        title_data["cuts"] = [dict(r) for r in cuts_rows]
-
-        # Update log
-        log_rows = self.conn.execute("SELECT * FROM update_log WHERE title_id = ? ORDER BY id ASC", (title_id,)).fetchall()
-        title_data["update_log"] = [dict(r) for r in log_rows]
-
-        # Releases
-        rel_rows = self.conn.execute("SELECT * FROM releases WHERE title_id = ? ORDER BY release_index ASC", (title_id,)).fetchall()
-        releases = []
-        for r in rel_rows:
-            rel_id = r["id"]
-            rel_dict = dict(r)
-
-            # Audio
-            a_rows = self.conn.execute("SELECT * FROM audio_tracks WHERE release_id = ?", (rel_id,)).fetchall()
-            rel_dict["audio_tracks"] = [dict(a) for a in a_rows]
-
-            # Subtitles
-            s_rows = self.conn.execute("SELECT * FROM subtitle_tracks WHERE release_id = ?", (rel_id,)).fetchall()
-            rel_dict["subtitle_tracks"] = [dict(s) for s in s_rows]
-
-            # Extras
-            e_rows = self.conn.execute("SELECT * FROM extras WHERE release_id = ? ORDER BY source_order ASC", (rel_id,)).fetchall()
-            rel_dict["extras"] = [dict(e) for e in e_rows]
-
-            releases.append(rel_dict)
-
-        title_data["releases"] = releases
-
         # Find sibling formats (grouping by clean_title and year or IMDb ID)
         sibling_sql = """
-            SELECT t.fid, t.clean_title, t.format_category, t.year,
+            SELECT t.id, t.fid, t.clean_title, t.format_category, t.year,
                    (SELECT COUNT(*) FROM releases r WHERE r.title_id = t.id) as release_count
             FROM titles t
             WHERE t.id != ? AND t.is_missing = 0 AND (
@@ -356,6 +316,124 @@ class ArchiveRepository:
             title_data.get("year")
         )).fetchall()
         title_data["format_siblings"] = [dict(s) for s in siblings]
+
+        # Recommendation
+        rec_row = self.conn.execute("SELECT * FROM recommendations WHERE title_id = ?", (title_id,)).fetchone()
+        if rec_row:
+            rec_dict = dict(rec_row)
+            if rec_dict.get("recommendation_text"):
+                rec_dict["recommendation_text"] = deduplicate_text(rec_dict["recommendation_text"])
+            title_data["recommendation"] = rec_dict
+        else:
+            title_data["recommendation"] = None
+
+        # Update log
+        log_rows = self.conn.execute("SELECT * FROM update_log WHERE title_id = ? ORDER BY id ASC", (title_id,)).fetchall()
+        title_data["update_log"] = [dict(r) for r in log_rows]
+
+        def _fmt_order(cat_str: str) -> int:
+            c = (cat_str or "").lower()
+            if "4k" in c or "uhd" in c:
+                return 1
+            elif "blu" in c:
+                return 2
+            elif "dvd" in c:
+                return 3
+            return 4
+
+        if include_all_formats:
+            title_data["is_all_formats"] = True
+            all_format_titles = [
+                {"id": title_id, "fid": fid, "format_category": title_data.get("format_category", "")}
+            ] + [dict(s) for s in siblings]
+            all_format_titles.sort(key=lambda x: _fmt_order(x.get("format_category", "")))
+
+            merged_releases = []
+            global_index = 1
+            cuts_all = []
+            cuts_seen = set()
+            recs_all = []
+
+            for t_item in all_format_titles:
+                t_id = t_item["id"]
+                t_fid = t_item["fid"]
+                t_fmt = t_item.get("format_category", "")
+
+                rel_rows = self.conn.execute("SELECT * FROM releases WHERE title_id = ? ORDER BY release_index ASC", (t_id,)).fetchall()
+                for r in rel_rows:
+                    rel_id = r["id"]
+                    rel_dict = dict(r)
+                    rel_dict["parent_fid"] = t_fid
+                    rel_dict["parent_format"] = t_fmt
+                    rel_dict["original_release_index"] = rel_dict["release_index"]
+                    rel_dict["release_index"] = global_index
+                    global_index += 1
+
+                    # Audio
+                    a_rows = self.conn.execute("SELECT * FROM audio_tracks WHERE release_id = ?", (rel_id,)).fetchall()
+                    rel_dict["audio_tracks"] = [dict(a) for a in a_rows]
+
+                    # Subtitles
+                    s_rows = self.conn.execute("SELECT * FROM subtitle_tracks WHERE release_id = ?", (rel_id,)).fetchall()
+                    rel_dict["subtitle_tracks"] = [dict(s) for s in s_rows]
+
+                    # Extras
+                    e_rows = self.conn.execute("SELECT * FROM extras WHERE release_id = ? ORDER BY source_order ASC", (rel_id,)).fetchall()
+                    rel_dict["extras"] = [dict(e) for e in e_rows]
+
+                    merged_releases.append(rel_dict)
+
+                # Cuts
+                c_rows = self.conn.execute("SELECT * FROM cuts WHERE title_id = ?", (t_id,)).fetchall()
+                for c in c_rows:
+                    c_dict = dict(c)
+                    key = (c_dict.get("cut_status", "").lower(), c_dict.get("runtime_diff", ""), (c_dict.get("description", "") or "").strip().lower())
+                    if key not in cuts_seen:
+                        cuts_seen.add(key)
+                        cuts_all.append(c_dict)
+
+                # Recommendations
+                rc_row = self.conn.execute("SELECT * FROM recommendations WHERE title_id = ?", (t_id,)).fetchone()
+                if rc_row:
+                    rc_dict = dict(rc_row)
+                    if rc_dict.get("overall_winner"):
+                        rc_dict["format_category"] = t_fmt
+                        recs_all.append(rc_dict)
+
+            title_data["releases"] = merged_releases
+            title_data["cuts"] = cuts_all
+            title_data["all_recommendations"] = recs_all
+        else:
+            title_data["is_all_formats"] = False
+            # Cuts
+            cuts_rows = self.conn.execute("SELECT * FROM cuts WHERE title_id = ?", (title_id,)).fetchall()
+            title_data["cuts"] = [dict(r) for r in cuts_rows]
+
+            # Releases
+            rel_rows = self.conn.execute("SELECT * FROM releases WHERE title_id = ? ORDER BY release_index ASC", (title_id,)).fetchall()
+            releases = []
+            for r in rel_rows:
+                rel_id = r["id"]
+                rel_dict = dict(r)
+                rel_dict["parent_fid"] = fid
+                rel_dict["parent_format"] = title_data.get("format_category", "")
+
+                # Audio
+                a_rows = self.conn.execute("SELECT * FROM audio_tracks WHERE release_id = ?", (rel_id,)).fetchall()
+                rel_dict["audio_tracks"] = [dict(a) for a in a_rows]
+
+                # Subtitles
+                s_rows = self.conn.execute("SELECT * FROM subtitle_tracks WHERE release_id = ?", (rel_id,)).fetchall()
+                rel_dict["subtitle_tracks"] = [dict(s) for s in s_rows]
+
+                # Extras
+                e_rows = self.conn.execute("SELECT * FROM extras WHERE release_id = ? ORDER BY source_order ASC", (rel_id,)).fetchall()
+                rel_dict["extras"] = [dict(e) for e in e_rows]
+
+                releases.append(rel_dict)
+
+            title_data["releases"] = releases
+
         return title_data
 
     def update_poster_url(self, fid: int, poster_url: str) -> None:

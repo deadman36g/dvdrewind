@@ -122,11 +122,18 @@ function initTableFilters() {
       const region = (row.getAttribute("data-region") || "").toLowerCase();
       const caseType = (row.getAttribute("data-case") || "").toLowerCase();
       const dist = (row.getAttribute("data-distributor") || "").toLowerCase();
+      const fmt = (row.getAttribute("data-format") || "").toLowerCase();
       const rowText = (row.textContent || "").toLowerCase();
 
       // Check pill filter condition
       let matchesPill = true;
-      if (activeFilter === "us") {
+      if (activeFilter === "4k") {
+        matchesPill = fmt.includes("4k") || fmt.includes("uhd");
+      } else if (activeFilter === "bluray") {
+        matchesPill = fmt.includes("blu");
+      } else if (activeFilter === "dvd") {
+        matchesPill = fmt.includes("dvd");
+      } else if (activeFilter === "us") {
         matchesPill = country.includes("united states") || country.includes("usa") || country.includes("america") || region.includes("r1") || region.includes("a");
       } else if (activeFilter === "uk") {
         matchesPill = country.includes("united kingdom") || country.includes("uk") || region.includes("r2") || region.includes("b");

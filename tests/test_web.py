@@ -102,5 +102,23 @@ class TestWebServer(AioHTTPTestCase):
         data = await resp.json()
         self.assertIn("candidates", data)
 
+    @unittest_run_loop
+    async def test_movie_page_all_formats(self):
+        # 1. Normal single format view
+        resp = await self.client.request("GET", "/film/111")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertIn("format-pill-all", text)
+        self.assertIn("format-pill-dvd", text)
+        self.assertIn("Physical Editions (32)", text)
+
+        # 2. Unified All Formats view
+        resp_all = await self.client.request("GET", "/film/111?format=all")
+        self.assertEqual(resp_all.status, 200)
+        text_all = await resp_all.text()
+        self.assertIn("format-pill active format-pill-all", text_all)
+        self.assertIn("Physical Editions (70)", text_all)
+        self.assertIn("table-format-chip", text_all)
+
 if __name__ == "__main__":
     unittest.main()

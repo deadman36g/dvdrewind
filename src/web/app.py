@@ -84,46 +84,75 @@ async def handle_api_search(request: web.Request) -> web.Response:
 
 async def handle_movie(request: web.Request) -> web.Response:
     fid = int(request.match_info["fid"])
+    format_param = request.query.get("format", "").strip().lower()
+    is_all = (format_param == "all")
+
     repo = ArchiveRepository()
     try:
-        title = repo.get_title_detail(fid)
+        title = repo.get_title_detail(fid, include_all_formats=is_all)
         if not title:
             raise web.HTTPNotFound(text=f"Film comparison FID {fid} not found.")
 
-        # Always construct uniform 3-format nav (4K UHD, Blu-ray, DVD)
+        # Always construct uniform 4-format nav (All, 4K UHD, Blu-ray, DVD)
         format_nav = {
+            'all': {'name': 'All', 'count': 0, 'fid': title["fid"], 'active': is_all},
             '4k': {'name': '4K UHD', 'count': 0, 'fid': None, 'active': False},
             'bluray': {'name': 'Blu-ray', 'count': 0, 'fid': None, 'active': False},
             'dvd': {'name': 'DVD', 'count': 0, 'fid': None, 'active': False}
         }
-        
+
         curr_cat = (title.get("format_category") or "").lower()
-        if '4k' in curr_cat or 'uhd' in curr_cat:
-            format_nav['4k']['active'] = True
-            format_nav['4k']['count'] = len(title.get("releases", []))
-            format_nav['4k']['fid'] = title["fid"]
-        elif 'blu' in curr_cat:
-            format_nav['bluray']['active'] = True
-            format_nav['bluray']['count'] = len(title.get("releases", []))
-            format_nav['bluray']['fid'] = title["fid"]
+        count_4k, fid_4k = 0, None
+        count_blu, fid_blu = 0, None
+        count_dvd, fid_dvd = 0, None
+
+        own_count = 0
+        if is_all:
+            for r in title.get("releases", []):
+                if r.get("parent_fid") == fid:
+                    own_count += 1
         else:
-            format_nav['dvd']['active'] = True
-            format_nav['dvd']['count'] = len(title.get("releases", []))
-            format_nav['dvd']['fid'] = title["fid"]
-            
+            own_count = len(title.get("releases", []))
+
+        if '4k' in curr_cat or 'uhd' in curr_cat:
+            count_4k = own_count
+            fid_4k = title["fid"]
+            if not is_all:
+                format_nav['4k']['active'] = True
+        elif 'blu' in curr_cat:
+            count_blu = own_count
+            fid_blu = title["fid"]
+            if not is_all:
+                format_nav['bluray']['active'] = True
+        else:
+            count_dvd = own_count
+            fid_dvd = title["fid"]
+            if not is_all:
+                format_nav['dvd']['active'] = True
+
         for s in title.get("format_siblings", []):
             scat = (s.get("format_category") or "").lower()
             if '4k' in scat or 'uhd' in scat:
-                format_nav['4k']['count'] = s.get("release_count", 0)
-                format_nav['4k']['fid'] = s.get("fid")
+                count_4k = s.get("release_count", 0)
+                fid_4k = s.get("fid")
             elif 'blu' in scat:
-                format_nav['bluray']['count'] = s.get("release_count", 0)
-                format_nav['bluray']['fid'] = s.get("fid")
+                count_blu = s.get("release_count", 0)
+                fid_blu = s.get("fid")
             elif 'dvd' in scat:
-                format_nav['dvd']['count'] = s.get("release_count", 0)
-                format_nav['dvd']['fid'] = s.get("fid")
-                
+                count_dvd = s.get("release_count", 0)
+                fid_dvd = s.get("fid")
+
+        total_count = count_4k + count_blu + count_dvd
+        format_nav['all']['count'] = total_count
+        format_nav['4k']['count'] = count_4k
+        format_nav['4k']['fid'] = fid_4k
+        format_nav['bluray']['count'] = count_blu
+        format_nav['bluray']['fid'] = fid_blu
+        format_nav['dvd']['count'] = count_dvd
+        format_nav['dvd']['fid'] = fid_dvd
+
         title["format_nav"] = format_nav
+        title["is_all_formats"] = is_all
 
         # Resolve fanart / backdrop image
         from src.config import ARCHIVE_DIR
@@ -147,10 +176,11 @@ async def handle_compare(request: web.Request) -> web.Response:
     fid = int(request.query.get("fid", "0"))
     indices_raw = request.query.get("indices", "")
     indices = [int(x.strip()) for x in indices_raw.split(",") if x.strip().isdigit()]
+    is_all = (request.query.get("format", "").lower() == "all")
 
     repo = ArchiveRepository()
     try:
-        title = repo.get_title_detail(fid)
+        title = repo.get_title_detail(fid, include_all_formats=is_all)
         if not title:
             raise web.HTTPNotFound(text=f"Film comparison FID {fid} not found.")
 

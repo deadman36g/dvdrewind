@@ -53,7 +53,7 @@
                 <span class="pill-count">{{ f.count }}</span>
               </span>
             {% elif f.fid and f.count > 0 %}
-              <a href="/film/{{ f.fid }}" class="format-pill format-pill-{{ key }}" title="Switch to {{ f.name }} Comparison ({{ f.count }} editions)">
+              <a href="{{ '/film/' ~ f.fid ~ '?format=all' if key == 'all' else '/film/' ~ f.fid }}" class="format-pill format-pill-{{ key }}" title="Switch to {{ f.name }} Comparison ({{ f.count }} editions)">
                 <span class="pill-label">{{ f.name }}</span>
                 <span class="pill-count">{{ f.count }}</span>
               </a>
@@ -84,10 +84,17 @@
           <span class="credit-pill"><span class="credit-icon">🏷️</span> <strong>AKA:</strong> {{ title.aka_titles|join(' • ') }}</span>
           {% endif %}
           <span class="credit-pill"><span class="credit-icon">📦</span> <strong>Physical Editions:</strong> {{ title.releases|length }}</span>
+          {% if title.is_all_formats %}
+          <span class="credit-pill credit-format-pill format-all">
+            <span class="credit-icon">✨</span>
+            <strong>All Formats (4K &bull; BD &bull; DVD)</strong>
+          </span>
+          {% else %}
           <span class="credit-pill credit-format-pill format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
             {{ icons.optical_disc(title.format_category, size=15) }}
             <strong>{{ title.format_category }}</strong>
           </span>
+          {% endif %}
         </div>
 
         <!-- Sleek 32x32 External Resources Strip -->
@@ -255,6 +262,20 @@
       <div class="filter-toolbar-container">
         <div class="filter-pills-row" id="filter-pills-row">
           <button type="button" class="filter-pill active" data-filter="all">All ({{ title.releases|length }})</button>
+          {% if title.is_all_formats %}
+          <button type="button" class="filter-pill" data-filter="4k" title="Filter to 4K UHD editions">
+            <span class="filter-pill-icon">✨</span>
+            <span>4K UHD</span>
+          </button>
+          <button type="button" class="filter-pill" data-filter="bluray" title="Filter to Blu-ray editions">
+            <span class="filter-pill-icon">💿</span>
+            <span>Blu-ray</span>
+          </button>
+          <button type="button" class="filter-pill" data-filter="dvd" title="Filter to DVD editions">
+            <span class="filter-pill-icon">📼</span>
+            <span>DVD</span>
+          </button>
+          {% endif %}
           <button type="button" class="filter-pill" data-filter="us" title="Filter to US / North America editions">
             {{ icons.country_flag('United States', width=16, height=11) }}
             <span>US</span>
@@ -308,11 +329,21 @@
           <tr class="summary-row release-card" 
               data-country="{{ r_country }}" 
               data-region="{{ r_region }}" 
+              data-format="{{ (r.parent_format or title.format_category)|lower }}"
               data-index="{{ r.release_index }}"
               data-distributor="{{ r.distributor or '' }}"
               data-case="{{ (r.case_type or '')|lower }}"
               id="row-{{ r.release_index }}">
-            <td class="td-num">{{ r.release_index }}</td>
+            <td class="td-num">
+              <div class="num-cell-wrap">
+                <span class="num-val">{{ r.release_index }}</span>
+                {% if title.is_all_formats %}
+                <span class="table-format-chip badge-{{ '4k' if '4k' in (r.parent_format or '')|lower else ('bluray' if 'blu' in (r.parent_format or '')|lower else 'dvd') }}" title="{{ r.parent_format }}">
+                  {{ '4K' if '4k' in (r.parent_format or '')|lower else ('BD' if 'blu' in (r.parent_format or '')|lower else 'DVD') }}
+                </span>
+                {% endif %}
+              </div>
+            </td>
             <td class="td-cb">
               <input type="checkbox" class="edition-compare-cb" data-index="{{ r.release_index }}" data-header="{{ r.header_raw }}" data-country="{{ r.country or '' }}" title="Select edition #{{ r.release_index }} for side-by-side comparison">
             </td>
@@ -338,12 +369,12 @@
             <td class="td-year">{{ r.release_year or '—' }}</td>
             <!-- Region: Clean Round Globe -->
             <td class="td-region">
-              {{ icons.globe_region(r.region, title.format_category, size=30) }}
+              {{ icons.globe_region(r.region, r.parent_format or title.format_category, size=30) }}
             </td>
             <!-- Video: Disc Icon & Framing Specs -->
             <td class="td-video">
               <div class="video-spec-cell">
-                {{ icons.optical_disc(title.format_category, size=24) }}
+                {{ icons.optical_disc(r.parent_format or title.format_category, size=24) }}
                 <div class="video-spec-info">
                   <span class="video-format-text">{{ r.picture_format or '' }} {{ r.aspect_ratio or '' }}</span>
                   {% if r.hdr_format %}<span class="hdr-tag">{{ r.hdr_format }}</span>{% endif %}
@@ -354,7 +385,7 @@
             <td class="td-audio">
               {% set ns = namespace(main_track=None) %}
               {% for a in r.audio_tracks %}
-                {% if not ns.main_track and not a.raw_text.strip().endswith(':') and 'version:' not in a.raw_text|lower %}
+                {% if not ns.main_track and ('english' in a.raw_text|lower or loop.first) %}
                   {% set ns.main_track = a %}
                 {% endif %}
               {% endfor %}
@@ -380,13 +411,18 @@
                 <div class="accordion-header-bar">
                   <div class="accordion-header-title">
                     <span class="spec-num">#{{ r.release_index }}</span>
+                    {% if title.is_all_formats %}
+                    <span class="badge badge-{{ '4k' if '4k' in (r.parent_format or '')|lower else ('bluray' if 'blu' in (r.parent_format or '')|lower else 'dvd') }}" style="margin-right: 0.45rem; font-size: 0.72rem; padding: 0.18rem 0.5rem;">
+                      {{ r.parent_format or title.format_category }}
+                    </span>
+                    {% endif %}
                     <strong>{{ r.header_raw }}</strong>
                     {% if r.release_year and r.release_year|string not in r.header_raw %}
                       <span class="text-muted">({{ r.release_year }})</span>
                     {% endif %}
                   </div>
                   <div class="accordion-header-badges">
-                    {{ icons.globe_region(r.region, title.format_category, size=26) }}
+                    {{ icons.globe_region(r.region, r.parent_format or title.format_category, size=26) }}
                   </div>
                 </div>
 
