@@ -9,6 +9,17 @@ from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 from src.web.app import create_app
 
 class TestWebServer(AioHTTPTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from src.cli import cmd_import_fixtures
+        class DummyArgs:
+            pass
+        try:
+            cmd_import_fixtures(DummyArgs())
+        except Exception:
+            pass
+
     async def get_application(self):
         return create_app()
 
