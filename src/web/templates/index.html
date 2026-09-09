@@ -34,7 +34,9 @@
   <div class="shelf-filter-bar">
     <button class="shelf-filter-btn active" id="btn-shuffle" onclick="shuffleShelves(this)">🎲 Shuffle Mix</button>
     <button class="shelf-filter-btn" onclick="filterShelves('all', this)">📚 Show All ({{ shelves|length }})</button>
-    <button class="shelf-filter-btn" onclick="filterShelves('showcase', this)">🌟 Highlights & 4K</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('showcase', this)">🌟 4K Reference</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('controversy', this)">⚡ Controversies</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('cult', this)">🔥 Cult Vault</button>
     <button class="shelf-filter-btn" onclick="filterShelves('director', this)">🎬 Directors</button>
     <button class="shelf-filter-btn" onclick="filterShelves('franchise', this)">👽 Franchises</button>
     <button class="shelf-filter-btn" onclick="filterShelves('label', this)">💿 Boutique Labels</button>
@@ -153,7 +155,7 @@ function shuffleShelves(btn) {
   };
 
   // Pick categories in randomized order
-  const categories = ['showcase', 'director', 'label', 'genre', 'decade', 'franchise'].sort(() => 0.5 - Math.random());
+  const categories = ['showcase', 'controversy', 'cult', 'director', 'label', 'genre', 'decade', 'franchise'].sort(() => 0.5 - Math.random());
   categories.forEach(cat => tryAdd(cat));
 
   // If any category was empty, fill up to exactly 6 from remaining shelves

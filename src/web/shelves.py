@@ -213,7 +213,18 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
         t for t in titles_list
         if any(k in t["clean_title"].lower() for k in CONTROVERSIAL_TITLES)
     ]
-    add_shelf("controversial", "⚡ Infamous Transfer Controversies & DNR Debates", "showcase", controversial, prefer_format="DVD")
+    add_shelf("controversial", "⚡ Infamous Transfer Controversies & DNR Debates", "controversy", controversial, prefer_format="DVD")
+
+    cult_keywords = [
+        "zombie", "dawn of the dead", "evil dead", "faces of death", "suspiria",
+        "cannibal", "re-animator", "toxic avenger", "eraserhead", "basket case",
+        "texas chain saw", "hellraiser", "videodrome", "scanners", "near dark"
+    ]
+    cult = [
+        t for t in titles_list
+        if any(k in t["clean_title"].lower() for k in cult_keywords)
+    ]
+    add_shelf("cult-vault", "🔥 Cult Cinema & Midnight Movie Vault", "cult", cult, prefer_format="DVD")
 
     # 2. Curated Franchises
     for canon_name, keywords, shelf_title, cat, s_id in TARGET_FRANCHISES:

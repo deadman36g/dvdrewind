@@ -15,10 +15,28 @@
         <a href="/" class="brand-title" title="DVDRewind Private Archive">
           <img src="/static/dvdrewind_logo.png" alt="DVDRewind" class="brand-logo-img">
         </a>
-        <span class="private-archive-badge">
-          <span class="badge-dot"></span>
-          Private Archive
-        </span>
+        <div class="static-archive-plaque" title="DVDRewind Private Offline Archive">
+          <svg width="140" height="32" viewBox="0 0 140 32" fill="none" style="shape-rendering: geometricPrecision; display: block;">
+            <defs>
+              <linearGradient id="plaqueChrome" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FFFFFF"/>
+                <stop offset="25%" stop-color="#CBD5E1"/>
+                <stop offset="60%" stop-color="#94A3B8"/>
+                <stop offset="100%" stop-color="#64748B"/>
+              </linearGradient>
+              <linearGradient id="plaqueBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#1E293B"/>
+                <stop offset="100%" stop-color="#0A0D14"/>
+              </linearGradient>
+            </defs>
+            <rect x="0.5" y="0.5" width="139" height="31" rx="6" fill="#0C1017" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1.2"/>
+            <rect x="6" y="6" width="24" height="19" rx="3.5" fill="url(#plaqueChrome)" stroke="#E2E8F0" stroke-width="0.6"/>
+            <polygon points="17,10 10,15.5 17,21" fill="url(#plaqueBevel)"/>
+            <polygon points="25,10 18,15.5 25,21" fill="url(#plaqueBevel)"/>
+            <text x="37" y="15" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="8.5" fill="#F8FAFC" letter-spacing="1.2">PRIVATE</text>
+            <text x="37" y="24" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="7.5" fill="#94A3B8" letter-spacing="1.6">ARCHIVE</text>
+          </svg>
+        </div>
       </div>
 
       <div class="nav-search">
@@ -29,14 +47,24 @@
       </div>
 
       <div class="nav-actions">
-        <button id="archive-status-btn" class="archive-status-btn" onclick="openArchiveModal()" title="Open Archive Control Center">
-          <span class="archive-pulse-dot" id="archive-pulse-dot"></span>
-          <svg class="archive-sync-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="archive-status-btn" class="nav-icon-btn archive-status-btn" onclick="openArchiveModal()" title="Archive Control Center">
+          <svg class="archive-sync-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
           </svg>
-          <span id="archive-status-label">Archive Sync</span>
         </button>
-        <button id="theme-toggle-btn" class="theme-toggle-btn">☀️ Light</button>
+        <button id="theme-toggle-btn" class="nav-icon-btn theme-toggle-btn" title="Switch to Light Mode" aria-label="Switch to Light Mode">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
       </div>
     </div>
   </header>

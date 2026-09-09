@@ -63,20 +63,26 @@ function renderArchiveStatus(data) {
   const navBtn = document.getElementById("archive-status-btn");
   const consolePulse = document.getElementById("console-pulse-dot");
 
-  // Header button status
+  // Header button status (Icon-only, no green dot, spinning when active)
   if (data.is_running) {
     if (pulseDot) pulseDot.className = "archive-pulse-dot pulsing";
     if (consolePulse) consolePulse.className = "console-dot amber pulse";
-    if (navBtn) navBtn.classList.add("is-running");
-    let label = "Working...";
-    if (data.task_type === "sync") label = "Syncing...";
-    else if (data.task_type === "posters") label = "Posters...";
-    else if (data.task_type === "vacuum") label = "Optimizing...";
-    if (navLabel) navLabel.textContent = label;
+    if (navBtn) {
+      navBtn.classList.add("is-running");
+      let label = "Working...";
+      if (data.task_type === "sync") label = "Syncing with DVDCompare...";
+      else if (data.task_type === "posters") label = "Backfilling posters...";
+      else if (data.task_type === "vacuum") label = "Optimizing database...";
+      navBtn.title = `Archive Task: ${label}`;
+    }
+    if (navLabel) navLabel.textContent = "Working...";
   } else {
     if (pulseDot) pulseDot.className = "archive-pulse-dot";
     if (consolePulse) consolePulse.className = "console-dot green";
-    if (navBtn) navBtn.classList.remove("is-running");
+    if (navBtn) {
+      navBtn.classList.remove("is-running");
+      navBtn.title = "Archive Control Center";
+    }
     if (navLabel) navLabel.textContent = "Archive Sync";
   }
 
