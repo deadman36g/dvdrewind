@@ -14,9 +14,17 @@ Enforces:
 
 import json
 import re
+import time
+from collections import defaultdict
 from typing import Any, Dict, List
 
 MIN_SHELF_TITLES = 8
+MAX_SHELF_CARDS = 12
+MAX_DYNAMIC_DIRECTOR_SHELVES = 24
+SHELF_CACHE_TTL_SECONDS = 60
+
+_SHELF_CACHE_BUILT_AT = 0.0
+_SHELF_CACHE = None
 
 # 1. Curated Directors
 TARGET_DIRECTORS = [
@@ -154,22 +162,42 @@ def collapse_film_editions(titles: List[Dict[str, Any]], prefer_format: str = "D
 
 
 def get_curated_shelves(repo) -> List[Dict[str, Any]]:
-    query = """
-        SELECT t.id, t.fid, t.clean_title, t.year, t.format_category, t.director, t.aka_titles, t.poster_url,
-               r.overall_winner,
-               (SELECT COUNT(*) FROM releases rel WHERE rel.title_id = t.id) as release_count,
-               (SELECT GROUP_CONCAT(COALESCE(rel.distributor, ''), ' || ') FROM releases rel WHERE rel.title_id = t.id) as distributors
-        FROM titles t
-        LEFT JOIN recommendations r ON r.title_id = t.id
-        WHERE t.is_missing = 0
-        ORDER BY t.year ASC, t.clean_title ASC;
-    """
-    rows = repo.conn.execute(query).fetchall()
+    global _SHELF_CACHE_BUILT_AT, _SHELF_CACHE
+
+    now = time.monotonic()
+    if _SHELF_CACHE is not None and now - _SHELF_CACHE_BUILT_AT < SHELF_CACHE_TTL_SECONDS:
+        return _SHELF_CACHE
+
+    # Avoid correlated subqueries over releases for every title. Reading the
+    # compact tables once is substantially faster on large NAS-hosted archives.
+    title_rows = repo.conn.execute("""
+        SELECT id, fid, clean_title, year, format_category, director, aka_titles, poster_url
+        FROM titles
+        WHERE is_missing = 0
+        ORDER BY year ASC, clean_title ASC
+    """).fetchall()
+    recommendation_rows = repo.conn.execute(
+        "SELECT title_id, overall_winner FROM recommendations"
+    ).fetchall()
+    release_rows = repo.conn.execute(
+        "SELECT title_id, distributor FROM releases"
+    ).fetchall()
+
+    winners = {row["title_id"]: row["overall_winner"] for row in recommendation_rows}
+    release_counts = defaultdict(int)
+    distributors = defaultdict(list)
+    for row in release_rows:
+        title_id = row["title_id"]
+        release_counts[title_id] += 1
+        distributor = row["distributor"]
+        if distributor:
+            distributors[title_id].append(distributor.lower())
 
     titles_list = []
-    for r in rows:
+    for r in title_rows:
+        title_id = r["id"]
         titles_list.append({
-            "id": r["id"],
+            "id": title_id,
             "fid": r["fid"],
             "clean_title": r["clean_title"],
             "year": r["year"],
@@ -177,9 +205,9 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
             "director": r["director"] or "",
             "aka_titles": json.loads(r["aka_titles"]) if r["aka_titles"] else [],
             "poster_url": r["poster_url"],
-            "overall_winner": r["overall_winner"],
-            "release_count": r["release_count"],
-            "distributors": (r["distributors"] or "").lower(),
+            "overall_winner": winners.get(title_id),
+            "release_count": release_counts[title_id],
+            "distributors": " || ".join(distributors[title_id]),
         })
 
     shelves = []
@@ -197,7 +225,9 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
             "title": title,
             "category": category,
             "count": len(unique_films),
-            "titles": unique_films,
+            # Keep the shelf useful while preventing the homepage from rendering
+            # tens of thousands of hidden cards. The badge retains the full count.
+            "titles": unique_films[:MAX_SHELF_CARDS],
         })
         used_shelf_ids.add(shelf_id)
 
@@ -249,13 +279,19 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
         if d and len(d) > 2 and "various" not in d.lower():
             dir_counts[d] = dir_counts.get(d, 0) + 1
     
+    dynamic_directors_added = 0
     for d, count in sorted(dir_counts.items(), key=lambda x: -x[1]):
+        if dynamic_directors_added >= MAX_DYNAMIC_DIRECTOR_SHELVES:
+            break
         if count >= MIN_SHELF_TITLES:
             slug = re.sub(r'[^a-z0-9]+', '-', d.lower()).strip('-')
             s_id = f"dir-{slug}"
             if s_id not in used_shelf_ids:
+                before = len(shelves)
                 items = [t for t in titles_list if t["director"] == d]
                 add_shelf(s_id, f"🎬 {d} Spotlight", "director", items, prefer_format="DVD")
+                if len(shelves) > before:
+                    dynamic_directors_added += 1
 
     # 4. Boutique Labels
     for label_name, keywords, shelf_title, cat, s_id in TARGET_LABELS:
@@ -271,7 +307,8 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
             t for t in titles_list
             if any(k in t["clean_title"].lower() for k in keywords)
         ]
-        add_shelf(s_id, f"🍿 {genre_name} Archive", "genre", items, prefer_format="DVD")
+        genre_slug = re.sub(r'[^a-z0-9]+', '-', genre_name.lower()).strip('-')
+        add_shelf(f"genre-{genre_slug}", f"🍿 {genre_name} Archive", "genre", items, prefer_format="DVD")
 
     # 6. Decades
     decades = [
@@ -288,4 +325,6 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
         ]
         add_shelf(s_id, f"📼 {d_title}", "decade", items, prefer_format="DVD")
 
+    _SHELF_CACHE_BUILT_AT = time.monotonic()
+    _SHELF_CACHE = shelves
     return shelves

@@ -47,7 +47,9 @@
       <div class="shelf-header">
         <div class="shelf-title-group">
           <h2 class="shelf-title">{{ shelf.title }}</h2>
-          <span class="shelf-badge">{{ shelf.count }} titles</span>
+          <span class="shelf-badge">
+            {{ shelf.count }} titles{% if shelf.count > shelf.titles|length %} · showing {{ shelf.titles|length }}{% endif %}
+          </span>
         </div>
         <div class="shelf-nav-controls">
           <button class="shelf-nav-btn" onclick="scrollShelf('track-{{ shelf.id }}', -1)" title="Scroll Left">&#x2039;</button>

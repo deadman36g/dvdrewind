@@ -1015,8 +1015,18 @@ async def handle_embed_proxy(request: web.Request) -> web.Response:
     )
 
 def create_app() -> web.Application:
-    # Ensure database is initialized
+    # Ensure database is initialized.
     init_db()
+
+    # Pre-warm the homepage shelf cache before accepting requests. On the full
+    # archive this moves the expensive first shelf build into container startup
+    # so the first person opening the site gets the same fast response as later
+    # requests.
+    warm_repo = ArchiveRepository()
+    try:
+        get_curated_shelves(warm_repo)
+    finally:
+        warm_repo.close()
 
     app = web.Application(middlewares=[archive_control_middleware])
     env = aiohttp_jinja2.setup(
