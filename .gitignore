@@ -10,9 +10,16 @@ venv/
 .pytest_cache/
 
 # SQLite Database & Runtime Scrapes (Keep repo lean and fast)
+*.db
+*.sqlite
+*.db-journal
+*.db-wal
+*.db-shm
 archive/raw/
 archive/posters/
 archive/backdrops/
+archive/manifests/
+archive/metadata/
 archive/*.db
 archive/*.db-journal
 archive/*.db-wal

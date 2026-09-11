@@ -32,38 +32,15 @@
 
     <!-- Metadata & Details Column -->
     <div class="movie-meta-pane">
-      <!-- Title Bar Row with Integrated Format Switcher Pills -->
+      <!-- Title Bar Row: Movie Title & Release Year -->
       <div class="hero-title-bar">
         <div class="movie-title-group">
           <h1 class="movie-title">{{ title.display_title or title.clean_title }}</h1>
           <span class="movie-year">({{ title.year or 'N/A' }})</span>
         </div>
-
-        <!-- Integrated Format Switcher Pills -->
-        <div class="title-format-pills format-tabs-list">
-          {% for key, f in title.format_nav.items() %}
-            {% if f.active %}
-              <span class="format-pill active format-pill-{{ key }}" title="{{ f.name }} Comparison ({{ f.count }} editions)">
-                <span class="pill-dot"></span>
-                <span class="pill-label">{{ f.name }}</span>
-                <span class="pill-count">{{ f.count }}</span>
-              </span>
-            {% elif f.fid and f.count > 0 %}
-              <a href="{{ '/film/' ~ f.fid ~ '?format=all' if key == 'all' else '/film/' ~ f.fid }}" class="format-pill format-pill-{{ key }}" title="Switch to {{ f.name }} Comparison ({{ f.count }} editions)">
-                <span class="pill-label">{{ f.name }}</span>
-                <span class="pill-count">{{ f.count }}</span>
-              </a>
-            {% else %}
-              <span class="format-pill format-pill-disabled format-pill-empty format-pill-{{ key }}" title="No {{ f.name }} comparison available (0 editions)" aria-disabled="true">
-                <span class="pill-label">{{ f.name }}</span>
-                <span class="pill-count">0</span>
-              </span>
-            {% endif %}
-          {% endfor %}
-        </div>
       </div>
 
-      <!-- Tagline -->
+      <!-- Official Movie Tagline Right Below Title -->
       {% if title.tagline %}
       <div class="movie-tagline-wrapper">
         <p class="movie-tagline-text">&ldquo;{{ title.tagline }}&rdquo;</p>
@@ -74,7 +51,6 @@
       </div>
       {% endif %}
 
-      <!-- Film Narrative Overview / Synopsis -->
       {% if title.overview %}
       <div class="movie-overview-wrapper">
         <p class="movie-overview-text">{{ title.overview }}</p>
@@ -85,7 +61,7 @@
       </div>
       {% endif %}
 
-      <!-- Quick Specs & Collector Highlights Bar -->
+      <!-- Quick Specs Bar: Universal Movie Metadata Only -->
       <div class="movie-specs-shelf">
         {% if title.runtime %}
         <span class="spec-pill" title="Film Runtime"><span class="spec-icon">⏱️</span> <strong>{{ title.runtime }} min</strong></span>
@@ -102,36 +78,174 @@
         <span class="spec-pill" title="Total Physical Releases in this comparison">
           <span class="spec-icon">📦</span> <strong>{{ title.releases|length }}</strong> {{ 'Editions' if title.releases|length != 1 else 'Edition' }}
         </span>
-        {% if title.is_all_formats %}
-        <span class="spec-pill credit-format-pill format-all">
-          <span class="credit-icon">✨</span>
-          <strong>All Formats</strong>
-        </span>
-        {% else %}
-        <span class="spec-pill credit-format-pill format-{{ '4k' if '4K' in title.format_category else ('bluray' if 'Blu-ray' in title.format_category else 'dvd') }}">
-          {{ icons.optical_disc(title.format_category, size=15) }}
-          <strong>{{ title.format_category }}</strong>
-        </span>
-        {% endif %}
-        {% for a in title.audio_highlights or [] %}
-        <span class="spec-pill spec-tech-pill" title="Audio Track Highlight">🔊 {{ a }}</span>
-        {% endfor %}
-        {% for v in title.video_highlights or [] %}
-        <span class="spec-pill spec-tech-pill" title="Video Master Highlight">📺 {{ v }}</span>
-        {% endfor %}
       </div>
 
-      <!-- External Resources & Tools Strip -->
+      <!-- Unified 11-Button External Intelligence Strip (All Uniform 38x38 Buttons) -->
       <div class="hero-ext-footer">
-        <div class="hero-ext-strip" role="navigation" aria-label="External Resources">
+        <div class="hero-ext-strip" role="navigation" aria-label="External Intelligence Resources">
+          <!-- 1. IMDb -->
           {% if title.imdb_id %}
-          <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="IMDb ({{ title.imdb_id }})" aria-label="View on IMDb">
+          <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="ext-icon-btn-sm" id="btn-imdb-link"
+             title="Open IMDb Overview &amp; Specs: {{ title.clean_title }} (Opens in new tab)"
+             aria-label="IMDb Overview">
             {{ icons.imdb_button() }}
           </a>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No IMDb title matched" aria-disabled="true">
+            {{ icons.imdb_button() }}
+          </span>
           {% endif %}
 
-          <button type="button" class="ext-icon-btn-sm btn-fix-poster" id="btn-fix-poster"
-                  title="Change Poster (Loads official TMDB gallery)"
+          <!-- 1. IMDb -->
+          {% if title.imdb_id %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-imdb-toggle"
+                  data-service="imdb"
+                  data-service-name="IMDb"
+                  data-embed-url="/embed/proxy?service=imdb&url={{ ('https://www.imdb.com/title/' ~ title.imdb_id ~ '/')|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="https://www.imdb.com/title/{{ title.imdb_id }}/"
+                  title="IMDb Mobile Dossier &amp; Ratings: {{ title.clean_title }} (Click to embed)"
+                  aria-label="IMDb Overview"
+                  aria-expanded="false">
+            {{ icons.imdb_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No IMDb title matched" aria-disabled="true">
+            {{ icons.imdb_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 2. Wikipedia -->
+          {% if title.wikipedia_summary or title.wikipedia_url %}
+          {% set wiki_target = (title.wikipedia_summary and title.wikipedia_summary.page_url) or title.wikipedia_url or 'https://en.wikipedia.org/wiki/' ~ title.clean_title|urlencode %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-wiki-toggle"
+                  data-service="wikipedia"
+                  data-service-name="Wikipedia"
+                  data-embed-url="/embed/proxy?service=wikipedia&url={{ wiki_target|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="{{ wiki_target }}"
+                  title="Wikipedia Mobile Article: {{ title.clean_title }} (Click to embed)"
+                  aria-label="Wikipedia Article"
+                  aria-expanded="false">
+            {{ icons.wikipedia_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No Wikipedia article found" aria-disabled="true">
+            {{ icons.wikipedia_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 3. Letterboxd -->
+          {% if title.letterboxd_url %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-letterboxd-toggle"
+                  data-service="letterboxd"
+                  data-service-name="Letterboxd"
+                  data-embed-url="/embed/proxy?service=letterboxd&url={{ title.letterboxd_url|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="{{ title.letterboxd_url }}"
+                  title="Letterboxd Cinephile Reviews &amp; Lists: {{ title.clean_title }} (Click to embed)"
+                  aria-label="Letterboxd Community"
+                  aria-expanded="false">
+            {{ icons.letterboxd_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No Letterboxd link found" aria-disabled="true">
+            {{ icons.letterboxd_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 4. Blu-ray.com -->
+          {% if title.clean_title %}
+          {% set bluray_target = 'https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword=' ~ title.clean_title|urlencode %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-bluray-toggle"
+                  data-service="bluray"
+                  data-service-name="Blu-ray.com"
+                  data-embed-url="/embed/proxy?service=bluray&url={{ bluray_target|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="{{ bluray_target }}"
+                  title="Blu-ray.com Physical Release Database: {{ title.clean_title }} (Click to embed)"
+                  aria-label="Blu-ray.com Database"
+                  aria-expanded="false">
+            {{ icons.bluray_dot_com_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="Blu-ray.com unavailable" aria-disabled="true">
+            {{ icons.bluray_dot_com_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 5. DVDBeaver -->
+          {% if title.dvdbeaver_url %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-dvdbeaver-toggle"
+                  data-service="dvdbeaver"
+                  data-service-name="DVDBeaver"
+                  data-embed-url="/embed/proxy?service=dvdbeaver&url={{ title.dvdbeaver_url|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="{{ title.dvdbeaver_url }}"
+                  title="DVDBeaver Review &amp; Screenshot Comparison: {{ title.clean_title }} (Click to embed)"
+                  aria-label="DVDBeaver Review"
+                  aria-expanded="false">
+            {{ icons.beaver_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No DVDBeaver comparison available" aria-disabled="true">
+            {{ icons.beaver_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 6. Movie-Censorship -->
+          {% if title.movie_censorship_summary or title.movie_censorship_url %}
+          {% set mc_target = (title.movie_censorship_summary and title.movie_censorship_summary.report_url) or title.movie_censorship_url or '#' %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-mc-toggle"
+                  data-service="moviecensorship"
+                  data-service-name="Movie-Censorship"
+                  data-embed-url="/embed/proxy?service=moviecensorship&url={{ mc_target|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="{{ mc_target }}"
+                  title="Movie-Censorship Comparison Report: {{ title.clean_title }} (Click to embed)"
+                  aria-label="Movie-Censorship Report"
+                  aria-expanded="false">
+            {{ icons.movie_censorship_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No Movie-Censorship report available" aria-disabled="true">
+            {{ icons.movie_censorship_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 7. DVDCompare / Rewind -->
+          {% if title.source_url %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-dvdcompare-toggle"
+                  data-service="dvdcompare"
+                  data-service-name="DVDCompare"
+                  data-embed-url="/embed/proxy?service=dvdcompare&url={{ title.source_url|urlencode }}&fid={{ title.fid }}"
+                  data-external-url="{{ title.source_url }}"
+                  title="DVDCompare Original Source: {{ title.clean_title }} (Click to embed)"
+                  aria-label="DVDCompare Source"
+                  aria-expanded="false">
+            {{ icons.rewind_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="DVDCompare source link missing" aria-disabled="true">
+            {{ icons.rewind_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 8. Local HTML Archive Snapshot -->
+          {% if title.fid %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-archive-toggle"
+                  data-service="archive"
+                  data-service-name="Vault HTML Snapshot"
+                  data-embed-url="/archive/raw/{{ title.fid }}"
+                  data-external-url="/archive/{{ title.fid }}"
+                  title="Original Archived HTML Snapshot: {{ title.clean_title }} (Click to embed)"
+                  aria-label="Archived HTML Snapshot"
+                  aria-expanded="false">
+            {{ icons.archive_button() }}
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No local HTML snapshot available" aria-disabled="true">
+            {{ icons.archive_button() }}
+          </span>
+          {% endif %}
+
+          <!-- 9. TMDB Official Poster Changer -->
+          <button type="button" class="ext-icon-btn-sm is-active btn-fix-poster" id="btn-poster-toggle"
+                  title="Change Movie Poster (Opens official TMDB artwork gallery)"
                   aria-label="Change Movie Poster"
                   data-fid="{{ title.fid }}"
                   data-title="{{ title.clean_title|e }}"
@@ -141,139 +255,156 @@
             {{ icons.tmdb_poster_button() }}
           </button>
 
-          {% if title.dvdbeaver_url %}
-          <a href="{{ title.dvdbeaver_url }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="DVDBeaver Review &amp; Screenshots" aria-label="DVDBeaver Review">
-            {{ icons.beaver_button() }}
-          </a>
+          <!-- 10. DVDCompare Official Verdict -->
+          {% if title.recommendation %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger btn-ext-verdict" id="btn-verdict-toggle"
+                  data-service="verdict"
+                  data-shelf-tab="verdict"
+                  title="DVDCompare Official Recommendation: {{ title.recommendation.overall_winner or 'Draw' }} (Click to embed breakdown)"
+                  aria-label="Overall Verdict"
+                  aria-expanded="false">
+            {{ icons.verdict_button() }}
+            <span class="btn-verdict-pill">{{ title.recommendation.overall_winner or 'Draw' }}</span>
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No official verdict declared" aria-disabled="true">
+            {{ icons.verdict_button() }}
+          </span>
           {% endif %}
 
-          <a href="https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword={{ title.clean_title|urlencode }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="Search on Blu-ray.com" aria-label="Search on Blu-ray.com">
-            {{ icons.bluray_dot_com_button() }}
-          </a>
+          <!-- 11. Cuts & Censorship -->
+          {% if title.cuts %}
+          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger btn-ext-cuts" id="btn-cuts-toggle"
+                  data-service="cuts"
+                  data-shelf-tab="cuts"
+                  title="Cuts &amp; Censorship: {{ title.cuts|length }} editions detailed (Click to embed breakdown)"
+                  aria-label="Cuts &amp; Censorship"
+                  aria-expanded="false">
+            {{ icons.cuts_button() }}
+            <span class="btn-cuts-badge">{{ title.cuts|length }}</span>
+          </button>
+          {% else %}
+          <span class="ext-icon-btn-sm is-deactivated" title="No cuts information recorded" aria-disabled="true">
+            {{ icons.cuts_button() }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
 
-          <a href="https://letterboxd.com/search/{{ title.clean_title|urlencode }}/" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="Search on Letterboxd" aria-label="Search on Letterboxd">
-            {{ icons.letterboxd_button() }}
-          </a>
+      <!-- Inline Collapsible Comparison Shelf (Verdict, Cuts, & Embedded Mobile Services) -->
+      <div class="hero-inline-shelf" id="hero-inline-shelf" style="display: none;" aria-label="Comparison Details Drawer">
+        <div class="inline-shelf-header">
+          <!-- Verdict & Cuts Tab Switcher (Visible when Verdict or Cuts is open) -->
+          <div class="inline-shelf-tabs" id="inline-shelf-tabs" role="tablist">
+            <button type="button" class="inline-shelf-tab-btn active" id="tab-btn-verdict" data-target="inline-panel-verdict" role="tab" aria-selected="true">
+              <span>🏆</span>
+              <span>Overall Verdict</span>
+            </button>
+            <button type="button" class="inline-shelf-tab-btn" id="tab-btn-cuts" data-target="inline-panel-cuts" role="tab" aria-selected="false">
+              <span>✂️</span>
+              <span>Cuts &amp; Censorship Breakdown</span>
+              {% if title.cuts %}
+              <span class="inline-shelf-count">{{ title.cuts|length }}</span>
+              {% endif %}
+            </button>
+          </div>
 
-          <a href="{{ title.source_url }}" target="_blank" rel="noopener" class="ext-icon-btn-sm" title="DVDCompare / Rewind (Live Source)" aria-label="DVDCompare Source">
-            {{ icons.rewind_button() }}
-          </a>
+          <!-- Service Header Info (Visible when an external service is embedded) -->
+          <div class="inline-service-header" id="inline-service-header" style="display: none;">
+            <div class="service-title-wrap">
+              <span class="service-name-label" id="service-name-label">External Resource</span>
+              <span class="service-movie-title">&bull; {{ title.clean_title }} ({{ title.year or 'N/A' }})</span>
+            </div>
+            <span class="embed-mode-badge"><i class="fas fa-shield-alt"></i> Mobile Ad-Free Embedded View</span>
+          </div>
 
-          <a href="/archive/{{ title.fid }}" target="_blank" class="ext-icon-btn-sm" title="Original Archived HTML Snapshot" aria-label="Archived HTML Snapshot">
-            {{ icons.archive_button() }}
-          </a>
+          <!-- Header Action Cluster -->
+          <div class="inline-shelf-actions">
+            <a href="#" target="_blank" rel="noopener noreferrer" class="embed-action-link" id="inline-embed-open-link" style="display: none;" title="Open in new browser window">
+              <span>Open In Full Window &rarr;</span>
+            </a>
+            <button type="button" class="embed-action-btn" id="inline-embed-reload-btn" style="display: none;" title="Reload embedded view">
+              <span>🔄</span>
+            </button>
+            <button type="button" class="inline-shelf-close-btn" id="btn-close-inline-shelf" title="Close drawer">&times;</button>
+          </div>
+        </div>
+
+        <div class="inline-shelf-body">
+          <!-- Verdict Panel -->
+          <div class="inline-shelf-panel active" id="inline-panel-verdict" role="tabpanel">
+            <div class="verdict-embedded-card">
+              <div class="verdict-banner-header">
+                <span class="hero-verdict-tag">OVERALL VERDICT</span>
+                <span class="hero-winner-badge">
+                  <span class="trophy-icon">🏆</span>
+                  <span class="winner-label">Winner:</span>
+                  <span class="winner-val">{{ (title.recommendation and title.recommendation.overall_winner) or 'Draw' }}</span>
+                </span>
+                {% if title.recommendation and title.recommendation.overall_winner %}
+                  <span class="hero-winner-sub">DVDCompare Official Recommendation</span>
+                {% endif %}
+              </div>
+              <div class="verdict-banner-text">
+                {% if title.recommendation and title.recommendation.recommendation_text %}
+                  {{ title.recommendation.recommendation_text }}
+                {% else %}
+                  All listed physical editions offer identical transfer presentation and extras. Winner declared as a Draw.
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Cuts Panel -->
+          <div class="inline-shelf-panel" id="inline-panel-cuts" role="tabpanel" style="display: none;">
+            <div class="cuts-embedded-card">
+              <div class="cuts-panel-header" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.92rem; color: var(--text-primary);">
+                <span class="cuts-icon">✂️</span>
+                <strong>Cuts &amp; Censorship Differences ({% if title.cuts %}{{ title.cuts|length }}{% else %}0{% endif %} Variants)</strong>
+              </div>
+              {% if title.cuts %}
+              <table class="cuts-breakdown-table">
+                <thead>
+                  <tr>
+                    <th>Edition / Release</th>
+                    <th>Status</th>
+                    <th>Runtime</th>
+                    <th>Censorship &amp; Presentation Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in title.cuts %}
+                  <tr>
+                    <td class="cuts-td-label"><strong>{{ c.release_label or c.edition_reference or 'Edition' }}</strong></td>
+                    <td class="cuts-td-status">
+                      <span class="cuts-status-tag {% if 'cut' in c.cut_status|lower and 'uncut' not in c.cut_status|lower and 'no cut' not in c.description|lower %}tag-cut{% else %}tag-uncut{% endif %}">
+                        {{ c.cut_status or 'Uncut' }}
+                      </span>
+                    </td>
+                    <td class="cuts-td-time">
+                      {% if c.runtime_diff %}<code>{{ c.runtime_diff }}</code>{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="cuts-td-desc">{{ c.description }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p class="text-muted" style="padding: 1rem 0;">All physical editions are uncut without recorded censorship cuts.</p>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Embedded Service Panel (Iframe with Mobile View) -->
+          <div class="inline-shelf-panel" id="inline-panel-embed" role="tabpanel" style="display: none;">
+            <div class="embed-frame-wrapper">
+              <iframe id="inline-embed-frame" class="inline-embed-frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" loading="lazy" src="about:blank" title="Embedded Service View"></iframe>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </header>
-
-  <!-- Section 2: Unified Horizontal Reference Banner (Verdict & Cuts Deck) -->
-  {% if title.recommendation or title.cuts %}
-    {% set all_uncut = true %}
-    {% set unique_runtimes = [] %}
-    {% if title.cuts %}
-      {% for c in title.cuts %}
-        {% if 'cut' in c.cut_status|lower and 'uncut' not in c.cut_status|lower and 'no cut' not in c.description|lower %}
-          {% set all_uncut = false %}
-        {% endif %}
-        {% if c.runtime_diff and c.runtime_diff not in unique_runtimes %}
-          {% set _ = unique_runtimes.append(c.runtime_diff) %}
-        {% endif %}
-      {% endfor %}
-    {% endif %}
-
-    <section class="unified-reference-banner" aria-label="Reference Verdict and Censorship">
-      <div class="banner-main-row">
-        <!-- Left: Overall Verdict & Winner Badge -->
-        {% if title.recommendation and title.recommendation.overall_winner %}
-        <div class="banner-col banner-winner-col">
-          <div class="banner-eyebrow">
-            <span class="banner-star">⭐</span>
-            <span class="banner-eyebrow-text">DVDCOMPARE OVERALL VERDICT</span>
-          </div>
-          <div class="banner-winner-badge">
-            <span class="winner-trophy">🏆</span>
-            <span class="winner-name">{{ title.recommendation.overall_winner }}</span>
-          </div>
-        </div>
-        {% endif %}
-
-        <!-- Center: Verdict Summary / Takeaway -->
-        <div class="banner-col banner-verdict-col">
-          <div class="banner-verdict-body">
-            {% if title.recommendation and title.recommendation.recommendation_text %}
-              {{ title.recommendation.recommendation_text }}
-            {% else %}
-              All listed physical editions offer identical transfer presentation and extras. Winner declared as a Draw.
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- Right: Cuts Status & Runtime Breakdown -->
-        {% if title.cuts %}
-        <div class="banner-col banner-cuts-col">
-          <div class="banner-cuts-header">
-            <span class="cuts-icon">✂️</span>
-            <span class="cuts-title-text">Cuts &amp; Censorship Differences</span>
-          </div>
-          <div class="banner-cuts-pills-row">
-            {% if all_uncut %}
-              <span class="banner-pill-uncut">UNCUT</span>
-            {% else %}
-              <span class="banner-pill-cut">CUT</span>
-            {% endif %}
-
-            {% if unique_runtimes %}
-              <span class="banner-pill-runtime" title="Main reported runtime">⏱️ {{ unique_runtimes[0] }}</span>
-              {% if unique_runtimes|length > 1 %}
-                <span class="banner-pill-alt-runtime" title="Alternate edition runtimes: {{ unique_runtimes[1:]|join(', ') }}">+{{ unique_runtimes|length - 1 }} var</span>
-              {% endif %}
-            {% endif %}
-
-            <button type="button" class="btn-cuts-expand-toggle" id="btn-cuts-toggle" aria-expanded="false" title="Toggle detailed censorship breakdown">
-              <span class="toggle-text">Notes</span>
-              <span class="toggle-arrow">▾</span>
-            </button>
-          </div>
-        </div>
-        {% endif %}
-      </div>
-
-      <!-- Collapsible Detailed Cuts Breakdown Drawer -->
-      {% if title.cuts %}
-      <div class="cuts-details-drawer" id="cuts-details-drawer" style="display: none;">
-        <div class="cuts-drawer-inner">
-          <table class="cuts-breakdown-table">
-            <thead>
-              <tr>
-                <th>Edition / Release</th>
-                <th>Status</th>
-                <th>Runtime</th>
-                <th>Censorship &amp; Presentation Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for c in title.cuts %}
-              <tr>
-                <td class="cuts-td-label"><strong>{{ c.release_label or c.edition_reference or 'Edition' }}</strong></td>
-                <td class="cuts-td-status">
-                  <span class="cuts-status-tag {% if 'cut' in c.cut_status|lower and 'uncut' not in c.cut_status|lower and 'no cut' not in c.description|lower %}tag-cut{% else %}tag-uncut{% endif %}">
-                    {{ c.cut_status or ('Uncut' if all_uncut else 'Cut') }}
-                  </span>
-                </td>
-                <td class="cuts-td-time">
-                  {% if c.runtime_diff %}<code>{{ c.runtime_diff }}</code>{% else %}&mdash;{% endif %}
-                </td>
-                <td class="cuts-td-desc">{{ c.description }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      {% endif %}
-    </section>
-  {% endif %}
 
   <!-- Editions Section: High-Density Table with Filters & Accordion Drawers -->
   <section class="editions-section">
@@ -281,6 +412,29 @@
       <div class="section-heading-group">
         <h2 class="section-title">Physical Editions ({{ title.releases|length }})</h2>
         <span class="section-desc">At-a-glance comparison table &bull; Select up to 4 editions to compare side-by-side</span>
+      </div>
+
+      <!-- Integrated Format Switcher Tabs (In Physical Editions toolbar where formats are browsed) -->
+      <div class="title-format-pills format-tabs-list">
+        {% for key, f in title.format_nav.items() %}
+          {% if f.active %}
+            <span class="format-pill active format-pill-{{ key }}" title="{{ f.name }} Comparison ({{ f.count }} editions)">
+              <span class="pill-dot"></span>
+              <span class="pill-label">{{ f.name }}</span>
+              <span class="pill-count">{{ f.count }}</span>
+            </span>
+          {% elif f.fid and f.count > 0 %}
+            <a href="{{ '/film/' ~ f.fid ~ '?format=all' if key == 'all' else '/film/' ~ f.fid }}" class="format-pill format-pill-{{ key }}" title="Switch to {{ f.name }} Comparison ({{ f.count }} editions)">
+              <span class="pill-label">{{ f.name }}</span>
+              <span class="pill-count">{{ f.count }}</span>
+            </a>
+          {% else %}
+            <span class="format-pill format-pill-disabled format-pill-empty format-pill-{{ key }}" title="No {{ f.name }} comparison available (0 editions)" aria-disabled="true">
+              <span class="pill-label">{{ f.name }}</span>
+              <span class="pill-count">0</span>
+            </span>
+          {% endif %}
+        {% endfor %}
       </div>
 
       <!-- Quick-Filter Pill Tags & Live Search Filter -->
@@ -317,6 +471,45 @@
             <span class="filter-pill-icon">✂️</span>
             <span>Uncut</span>
           </button>
+          {% if title.badge_counts %}
+            {% if title.badge_counts.get('badge-scan-4k') %}
+            <button type="button" class="filter-pill pill-4k-scan" data-filter="badge-scan-4k" title="Filter to editions mastered from a 4K Scan or 4K Restoration">
+              <span class="filter-pill-icon">💎</span>
+              <span>4K Scan ({{ title.badge_counts['badge-scan-4k'] }})</span>
+            </button>
+            {% endif %}
+            {% if title.badge_counts.get('badge-scan-2k') %}
+            <button type="button" class="filter-pill pill-2k-scan" data-filter="badge-scan-2k" title="Filter to editions mastered from a 2K Scan or 2K Restoration">
+              <span class="filter-pill-icon">🔬</span>
+              <span>2K Scan ({{ title.badge_counts['badge-scan-2k'] }})</span>
+            </button>
+            {% endif %}
+            {% if title.badge_counts.get('badge-ocn') %}
+            <button type="button" class="filter-pill pill-ocn" data-filter="badge-ocn" title="Filter to editions struck from the Original Camera Negative (OCN)">
+              <span class="filter-pill-icon">🎞️</span>
+              <span>OCN ({{ title.badge_counts['badge-ocn'] }})</span>
+            </button>
+            {% endif %}
+            {% if title.badge_counts.get('badge-dv') %}
+            <button type="button" class="filter-pill pill-dv" data-filter="badge-dv" title="Filter to editions featuring Dolby Vision dynamic HDR">
+              <span class="filter-pill-icon">✨</span>
+              <span>Dolby Vision ({{ title.badge_counts['badge-dv'] }})</span>
+            </button>
+            {% endif %}
+            {% set purist_count = (title.badge_counts.get('badge-purist', 0) + title.badge_counts.get('badge-mono', 0)) %}
+            {% if purist_count > 0 %}
+            <button type="button" class="filter-pill pill-purist" data-filter="badge-purist" title="Filter to editions preserving original theatrical mono or stereo audio">
+              <span class="filter-pill-icon">🎙️</span>
+              <span>Orig Audio ({{ purist_count }})</span>
+            </button>
+            {% endif %}
+            {% if title.badge_counts.get('badge-steelbook') %}
+            <button type="button" class="filter-pill pill-steelbook" data-filter="badge-steelbook" title="Filter to SteelBook collector packaging editions">
+              <span class="filter-pill-icon">🛡️</span>
+              <span>SteelBook ({{ title.badge_counts['badge-steelbook'] }})</span>
+            </button>
+            {% endif %}
+          {% endif %}
         </div>
 
         <div class="table-quick-search-box">
@@ -331,14 +524,42 @@
       <table class="editions-summary-table" id="summary-table">
         <thead>
           <tr>
-            <th class="th-num">#</th>
+            <th class="th-num sortable-th" data-sort-col="index" title="Sort by Release Index (Natural order)">
+              <span>#</span>
+              <span class="sort-indicator">↕</span>
+            </th>
             <th class="th-cb" title="Select to compare">Compare</th>
-            <th class="th-country">Country</th>
-            <th class="th-distributor">Distributor</th>
-            <th class="th-year">Year</th>
-            <th class="th-region">Region</th>
-            <th class="th-video">Video Presentation</th>
-            <th class="th-audio">Main Soundtrack</th>
+            <th class="th-country sortable-th" data-sort-col="country" title="Sort alphabetically by Country">
+              <span>Country</span>
+              <span class="sort-indicator">↕</span>
+            </th>
+            <th class="th-distributor sortable-th" data-sort-col="distributor" title="Sort alphabetically by Distributor">
+              <span>Distributor</span>
+              <span class="sort-indicator">↕</span>
+            </th>
+            <th class="th-year sortable-th" data-sort-col="year" title="Sort chronologically by Release Year">
+              <span>Year</span>
+              <span class="sort-indicator">↕</span>
+            </th>
+            <th class="th-region sortable-th" data-sort-col="region" title="Sort by Region Code">
+              <span>Region</span>
+              <span class="sort-indicator">↕</span>
+            </th>
+            <th class="th-video">Video Framing</th>
+            <th class="th-transfer sortable-th" data-sort-col="transfer" title="Sort by Video Transfer Lineage (OCN / 4K Scans first)">
+              <div class="th-content-with-key">
+                <span>Transfer &amp; Scan</span>
+                <span class="sort-indicator">↕</span>
+                <button type="button" class="th-key-btn btn-trigger-mastering-key" data-tab="video" title="Video Transfer Lineage Guide (Click to jump to guide at bottom)">?</button>
+              </div>
+            </th>
+            <th class="th-audio sortable-th" data-sort-col="audio" title="Sort by Audio Tier (Purist Theatrical / Atmos first)">
+              <div class="th-content-with-key">
+                <span>Main Soundtrack</span>
+                <span class="sort-indicator">↕</span>
+                <button type="button" class="th-key-btn btn-trigger-mastering-key" data-tab="audio" title="Audio Mastering Hierarchy Guide (Click to jump to guide at bottom)">?</button>
+              </div>
+            </th>
             <th class="th-action">Specs</th>
           </tr>
         </thead>
@@ -350,14 +571,31 @@
           {% set has_comm = 'commentary' in r_extras_str or (r.commentaries_raw and r.commentaries_raw != 'None') %}
           {% set has_doc = 'documentary' in r_extras_str or 'making of' in r_extras_str or 'featurette' in r_extras_str %}
           {% set has_book = 'booklet' in r_extras_str or 'book' in (r.case_type or '')|lower or 'cards' in r_extras_str %}
+          {% set has_top_transfer = (r.badges|selectattr('type', 'in', ['badge-ocn', 'badge-scan-4k', 'badge-scan-8k'])|list|length > 0) %}
+          {% set has_tier2_transfer = (r.badges|selectattr('type', 'in', ['badge-scan-2k', 'badge-ip', 'badge-restored'])|list|length > 0) %}
+          {% set transfer_rank = 1 if has_top_transfer else (2 if has_tier2_transfer else 3) %}
+          {% set has_purist_audio = (r.badges|selectattr('type', 'in', ['badge-purist', 'badge-mono', 'badge-atmos', 'badge-dtsx'])|list|length > 0) %}
+          {% set has_lossless_audio = (r.badges|selectattr('type', 'in', ['badge-lossless'])|list|length > 0) %}
+          {% set audio_rank = 1 if has_purist_audio else (2 if has_lossless_audio else 3) %}
+          {% set is_winner = false %}
+          {% if title.recommendation and title.recommendation.overall_winner and title.recommendation.overall_winner|lower != 'draw' %}
+            {% set w = title.recommendation.overall_winner|lower %}
+            {% if w in r.header_raw|lower or w in (r.country or '')|lower or w in (r.distributor or '')|lower %}
+              {% set is_winner = true %}
+            {% endif %}
+          {% endif %}
 
-          <tr class="summary-row release-card" 
+          <tr class="summary-row release-card {% if has_top_transfer or is_winner %}row-green-highlight{% endif %}" 
               data-country="{{ r_country }}" 
               data-region="{{ r_region }}" 
               data-format="{{ (r.parent_format or title.format_category)|lower }}"
               data-index="{{ r.release_index }}"
               data-distributor="{{ r.distributor or '' }}"
+              data-year="{{ r.release_year or '' }}"
+              data-transfer-rank="{{ transfer_rank }}"
+              data-audio-rank="{{ audio_rank }}"
               data-case="{{ (r.case_type or '')|lower }}"
+              data-badges="{{ r.badges|map(attribute='type')|join(' ') }}"
               id="row-{{ r.release_index }}">
             <td class="td-num">
               <div class="num-cell-wrap">
@@ -396,17 +634,42 @@
             <td class="td-region">
               {{ icons.globe_region(r.region, r.parent_format or title.format_category, size=30) }}
             </td>
-            <!-- Video: Disc Icon & Framing Specs -->
+            <!-- Video Framing (Option 2B) -->
             <td class="td-video">
               <div class="video-spec-cell">
-                {{ icons.optical_disc(r.parent_format or title.format_category, size=24) }}
+                {{ icons.optical_disc(r.parent_format or title.format_category, size=22) }}
                 <div class="video-spec-info">
-                  <span class="video-format-text">{{ r.picture_format or '' }} {{ r.aspect_ratio or '' }}</span>
-                  {% if r.hdr_format %}<span class="hdr-tag">{{ r.hdr_format }}</span>{% endif %}
+                  <div class="video-format-line">
+                    <span class="video-format-text">{{ r.video_spec.display_line if r.video_spec else (r.picture_format or r.aspect_ratio or '—') }}</span>
+                    {% if r.video_spec and r.video_spec.codec %}
+                      <span class="video-codec-tag">{{ r.video_spec.codec }}</span>
+                    {% endif %}
+                    {% if r.hdr_format and not (r.badges|selectattr('category', 'equalto', 'hdr')|list) %}
+                      <span class="hdr-tag">{{ r.hdr_format }}</span>
+                    {% endif %}
+                    {% for b in r.badges %}
+                      {% if b.category == 'hdr' %}
+                        <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
                 </div>
               </div>
             </td>
-            <!-- Audio: Logos & Soundtracks -->
+            <!-- Dedicated Transfer / Scan Column (Option 2B) -->
+            <td class="td-transfer">
+              {% set scan_badges = r.badges|selectattr('category', 'in', ['scan', 'lineage'])|list %}
+              {% if scan_badges %}
+              <div class="transfer-badges-cell">
+                {% for b in scan_badges %}
+                  <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+                {% endfor %}
+              </div>
+              {% else %}
+                <span class="badge-pill badge-catalog" title="Tier 3 Standard: Vintage studio catalog master without advertised modern 4K/2K scan">📽️ Catalog Master</span>
+              {% endif %}
+            </td>
+            <!-- Audio: Logos & Soundtracks & Purist Badges -->
             <td class="td-audio">
               {% set ns = namespace(main_track=None) %}
               {% for a in r.audio_tracks %}
@@ -420,6 +683,14 @@
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
+              {% set audio_badges = r.badges|selectattr('category', 'equalto', 'audio')|list %}
+              {% if audio_badges %}
+              <div class="table-badge-row audio-badge-row">
+                {% for b in audio_badges %}
+                  <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
             </td>
             <!-- Action: Slide-down Accordion Toggle -->
             <td class="td-action">
@@ -431,7 +702,7 @@
 
           <!-- Slide-down Inline Accordion Row for Edition #{{ r.release_index }} -->
           <tr class="edition-accordion-row" id="accordion-row-{{ r.release_index }}" style="display: none;">
-            <td colspan="9" class="accordion-td">
+            <td colspan="10" class="accordion-td">
               <div class="accordion-inner-panel">
                 <div class="accordion-header-bar">
                   <div class="accordion-header-title">
@@ -447,6 +718,13 @@
                     {% endif %}
                   </div>
                   <div class="accordion-header-badges">
+                    {% if r.badges %}
+                    <div class="accordion-badges-rack">
+                      {% for b in r.badges %}
+                      <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+                      {% endfor %}
+                    </div>
+                    {% endif %}
                     {{ icons.globe_region(r.region, r.parent_format or title.format_category, size=26) }}
                   </div>
                 </div>
@@ -558,9 +836,11 @@
                     <div class="spec-card-header">
                       <div class="spec-card-title">
                         <span class="spec-card-icon">📝</span>
-                        <span>Technical Notes</span>
+                        <span>Technical Notes &amp; Provenance</span>
                       </div>
-                      {% if '2k' in (r.notes_raw or '')|lower %}
+                      {% if r.badges %}
+                        <span class="spec-card-counter">{{ r.badges|length }} specs detected</span>
+                      {% elif '2k' in (r.notes_raw or '')|lower %}
                         <span class="spec-card-counter">2K Scan</span>
                       {% elif '4k' in (r.notes_raw or '')|lower %}
                         <span class="spec-card-counter">4K Scan</span>
@@ -568,6 +848,14 @@
                     </div>
 
                     <div class="spec-card-body">
+                      {% if r.badges %}
+                      <div class="accordion-provenance-chips">
+                        {% for b in r.badges %}
+                        <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+                        {% endfor %}
+                      </div>
+                      {% endif %}
+
                       {% if r.notes_raw %}
                       <div class="notes-quote-box">
                         <p class="notes-quote-text">{{ r.notes_raw }}</p>
@@ -599,29 +887,201 @@
         </tbody>
       </table>
     </div>
-  </section>
 
-  <!-- Archival Provenance Box -->
-  <footer class="provenance-section">
-    <div class="provenance-title">Archival Provenance</div>
-    <div class="provenance-text">
-      Source comparison ID: <strong>{{ title.fid }}</strong> &bull;
-      Added by: <strong>{{ title.added_by or 'Unknown' }}</strong> ({{ title.added_date or 'N/A' }}) &bull;
-      Last updated by: <strong>{{ title.updated_by or 'Unknown' }}</strong> ({{ title.updated_date or 'N/A' }}) &bull;
-      Local SHA-256 snapshot: <code class="hash-code">{{ title.source_hash[:16] }}...</code>
+    <!-- Collector Mastering Reference Shelf (Video Lineage & Audio Purist Hierarchy) - Connected directly to table -->
+    <div class="mastering-hierarchy-shelf mastering-shelf-attached" id="mastering-hierarchy-shelf" aria-label="Collector Mastering Guides">
+    <!-- Slim Bar Header -->
+    <div class="shelf-toggle-bar" id="shelf-toggle-bar" role="button" tabindex="0" aria-expanded="true" aria-controls="shelf-expanded-body">
+      <div class="shelf-bar-left">
+        <span class="shelf-icons">🎞️🔊</span>
+        <div class="shelf-bar-titles">
+          <span class="shelf-bar-title">Collector Mastering Reference Guides</span>
+          <span class="shelf-bar-sub">&bull; Video Transfer Lineage &amp; Audio Mastering Hierarchy</span>
+        </div>
+      </div>
+      <div class="shelf-bar-right">
+        <span class="shelf-toggle-pill expanded" id="shelf-toggle-pill">▲ Hide Guides (Click to collapse)</span>
+      </div>
     </div>
 
-    {% if title.update_log %}
-    <details class="update-log-details">
-      <summary class="update-log-summary">View Update History ({{ title.update_log|length }} revisions)</summary>
-      <ul class="update-log-list">
-        {% for u in title.update_log %}
-        <li><strong>{{ u.entry_date or 'Update' }}:</strong> {{ u.entry_text }}</li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
-  </footer>
+    <!-- Expandable Shelf Body (Open by default so information is immediately visible) -->
+    <div class="shelf-expanded-body" id="shelf-expanded-body" style="display: block;">
+      <!-- Top Switcher Tabs: Video vs Audio -->
+      <div class="shelf-nav-tabs" role="tablist">
+        <button type="button" class="shelf-nav-tab active" id="tab-guide-video" data-target="guide-panel-video" role="tab" aria-selected="true">
+          <span class="nav-icon">🎞️</span>
+          <span>Video Transfer Lineage &amp; Scan Guide</span>
+          <span class="guide-new-badge">Color &amp; Ranking Key</span>
+        </button>
+        <button type="button" class="shelf-nav-tab" id="tab-guide-audio" data-target="guide-panel-audio" role="tab" aria-selected="false">
+          <span class="nav-icon">🔊</span>
+          <span>Audio Mastering Hierarchy</span>
+        </button>
+      </div>
+
+      <!-- 1. VIDEO TRANSFER LINEAGE PANEL -->
+      <div class="shelf-guide-panel active" id="guide-panel-video" role="tabpanel">
+        <div class="key-grid">
+          <!-- Tier 1: Reference Grade -->
+          <div class="key-tier-card tier-card-reference">
+            <div class="key-tier-badge-row">
+              <span class="key-tier-tag tier-tag-reference">Tier 1 &bull; Reference Grade</span>
+              <span class="key-tier-accent-badge">★ Greenish Row Highlight</span>
+            </div>
+            <div class="key-badges-sample">
+              <span class="badge-pill badge-ocn" title="Tier 1 Reference: Original Camera Negative">🎞️ OCN Master</span>
+              <span class="badge-pill badge-scan-4k" title="Tier 1 Reference: Native 4K Digital Restoration Scan">💎 4K Scan</span>
+              <span class="badge-pill badge-scan-8k" title="Tier 1 Ultra-Reference: 8K Scan">👑 8K Scan</span>
+            </div>
+            <p class="key-tier-desc">
+              <strong>The Gold Standard (Rank 1).</strong> Struck directly from the <em>Original Camera Negative (OCN)</em> — Generation 1 film stock exposed on set — or captured via modern 4K/8K frame-by-frame digital film scans. Delivers authentic film grain and zero optical generation loss. Releases featuring these transfers are highlighted with a subtle <strong>greenish background row</strong> in the table above.
+            </p>
+          </div>
+
+          <!-- Tier 2: Preservation Grade -->
+          <div class="key-tier-card tier-card-preservation">
+            <div class="key-tier-badge-row">
+              <span class="key-tier-tag tier-tag-preservation">Tier 2 &bull; Preservation Grade</span>
+            </div>
+            <div class="key-badges-sample">
+              <span class="badge-pill badge-scan-2k" title="Tier 2 Preservation: Dedicated 2K Digital Scan">🔬 2K Scan</span>
+              <span class="badge-pill badge-ip" title="Tier 2 Preservation: 35mm Interpositive Element">📼 Interpositive</span>
+              <span class="badge-pill badge-restored" title="Tier 2 Preservation: Digitally Restored Master">✨ Restored Master</span>
+            </div>
+            <p class="key-tier-desc">
+              <strong>Archival High-Definition (Rank 2).</strong> Dedicated 2K scans or transfers struck from a <em>35mm Interpositive (IP)</em> (the finest first-generation positive element printed from the negative when camera negatives are lost or fragile), paired with extensive digital defect clean-up.
+            </p>
+          </div>
+
+          <!-- Tier 3: Standard Studio Catalog -->
+          <div class="key-tier-card tier-card-catalog">
+            <div class="key-tier-badge-row">
+              <span class="key-tier-tag tier-tag-catalog">Tier 3 &bull; Standard Studio Catalog</span>
+            </div>
+            <div class="key-badges-sample">
+              <span class="badge-pill badge-catalog" title="Tier 3 Standard: Vintage studio catalog master">📽️ Catalog Master</span>
+            </div>
+            <p class="key-tier-desc">
+              <strong>Studio Baseline (Rank 3).</strong> Vintage high-definition telecine or legacy studio master created prior to modern 4K restoration workflows. Very common for early Blu-ray and DVD pressings without advertised new frame restoration scans.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. AUDIO MASTERING HIERARCHY PANEL -->
+      <div class="shelf-guide-panel" id="guide-panel-audio" role="tabpanel" style="display: none;">
+        <div class="key-grid audio-key-grid">
+          <!-- Tier 1: Purist Theatrical Audio -->
+          <div class="key-tier-card tier-card-purist">
+            <div class="key-tier-badge-row">
+              <span class="key-tier-tag tier-tag-purist">Tier 1 &bull; Purist Theatrical</span>
+              <span class="key-tier-accent-badge gold-accent">★ Gold Standard</span>
+            </div>
+            <div class="key-badges-sample">
+              <span class="badge-pill badge-purist" title="Original Theatrical Mono: Unaltered cinema mix">🎙️ Theatrical Mono</span>
+              <span class="badge-pill badge-purist" title="Original Theatrical Stereo: Unaltered cinema mix">🎙️ Theatrical Stereo</span>
+              <span class="badge-pill badge-mono" title="LPCM Uncompressed original audio">💿 LPCM 1.0 / 2.0</span>
+            </div>
+            <p class="key-tier-desc">
+              <strong>Unaltered Theatrical Dynamics (Rank 1).</strong> Preserves the director- and sound designer-approved theatrical acoustics, original vintage Foley gunshots, footsteps, and analog synth score balances. Avoids the modern revisionist sound replacement common in retrospective 5.1/7.1 home video remixes.
+            </p>
+          </div>
+
+          <!-- Tier 1: Modern Immersive Spatial Audio -->
+          <div class="key-tier-card tier-card-immersive">
+            <div class="key-tier-badge-row">
+              <span class="key-tier-tag tier-tag-immersive">Tier 1 &bull; Immersive Spatial</span>
+              <span class="key-tier-accent-badge sky-accent">Home Cinema 3D</span>
+            </div>
+            <div class="key-badges-sample">
+              <span class="badge-pill badge-atmos" title="Dolby Atmos: 3D spatial object audio with height channels">🔊 Dolby Atmos</span>
+              <span class="badge-pill badge-dtsx" title="DTS:X: Spatial 3D object-based audio">🔊 DTS:X</span>
+            </div>
+            <p class="key-tier-desc">
+              <strong>Modern Multi-Speaker Showcase (Rank 1 Spatial).</strong> Object-based audio with discrete overhead height and ceiling channels, engineered for modern immersive home theater surround setups. Highly coveted when paired with the original theatrical mix.
+            </p>
+          </div>
+
+          <!-- Tier 2 & 3: Studio Lossless vs Legacy Compressed -->
+          <div class="key-tier-card tier-card-lossless">
+            <div class="key-tier-badge-row">
+              <span class="key-tier-tag tier-tag-lossless">Tier 2 &bull; Studio Lossless &bull; Tier 3 Legacy</span>
+            </div>
+            <div class="key-badges-sample">
+              <span class="badge-pill badge-lossless">5.1 DTS-HD MA</span>
+              <span class="badge-pill badge-lossless">Dolby TrueHD</span>
+              <span class="badge-pill badge-catalog">Dolby Digital (AC3)</span>
+            </div>
+            <p class="key-tier-desc">
+              <strong>Bit-for-Bit Studio Masters (Rank 2) vs. Lossy Legacy Codecs (Rank 3).</strong> Master Audio and TrueHD deliver 100% lossless multi-channel reproduction, whereas legacy AC-3 and standard DTS are lossy perceptual formats standard on vintage DVDs (capped at 448–640 kbps).
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </section>
+
+  <!-- Archived Comparison Records & Community History Shelf (Humanized Collapsible) -->
+  <div class="mastering-hierarchy-shelf archive-history-shelf" id="archive-history-shelf" aria-label="Archive &amp; Revision Records">
+    <div class="shelf-toggle-bar" id="archive-shelf-toggle-bar" role="button" tabindex="0" aria-expanded="false" aria-controls="archive-shelf-expanded-body">
+      <div class="shelf-bar-left">
+        <span class="shelf-icons">📋🕰️</span>
+        <div class="shelf-bar-titles">
+          <span class="shelf-bar-title">Archived Comparison &amp; Revision Log</span>
+          <span class="shelf-bar-sub">&bull; Community contributions and editorial history</span>
+        </div>
+      </div>
+      <div class="shelf-bar-right">
+        <span class="shelf-toggle-pill" id="archive-toggle-pill">▼ Show Revision Log (Click to expand)</span>
+      </div>
+    </div>
+
+    <div class="shelf-expanded-body" id="archive-shelf-expanded-body" style="display: none;">
+      <div class="archive-human-grid">
+        <div class="archive-human-card">
+          <div class="archive-human-icon">👤</div>
+          <div class="archive-human-content">
+            <span class="archive-human-label">Original Submitter</span>
+            <p class="archive-human-name"><strong>{{ title.added_by or 'DVDCompare Contributor' }}</strong></p>
+            <span class="archive-human-date">Submitted {{ title.added_date or 'N/A' }}</span>
+          </div>
+        </div>
+
+        <div class="archive-human-card">
+          <div class="archive-human-icon">✍️</div>
+          <div class="archive-human-content">
+            <span class="archive-human-label">Last Edited By</span>
+            <p class="archive-human-name"><strong>{{ title.updated_by or 'DVDCompare Editors' }}</strong></p>
+            <span class="archive-human-date">Updated {{ title.updated_date or 'Recent' }}</span>
+          </div>
+        </div>
+
+        <div class="archive-human-card">
+          <div class="archive-human-icon">💾</div>
+          <div class="archive-human-content">
+            <span class="archive-human-label">Archived Source Entry</span>
+            <p class="archive-human-name">DVDCompare Comparison <strong>#{{ title.fid }}</strong></p>
+            <span class="archive-human-date">Verified offline backup snapshot stored locally</span>
+          </div>
+        </div>
+      </div>
+
+      {% if title.update_log %}
+      <div class="archive-timeline-wrap">
+        <h4 class="archive-timeline-heading">What&rsquo;s Changed Over Time ({{ title.update_log|length }} revisions)</h4>
+        <div class="archive-timeline-list">
+          {% for u in title.update_log %}
+          <div class="archive-timeline-row">
+            <span class="archive-timeline-badge">{{ u.entry_date or 'Update' }}</span>
+            <span class="archive-timeline-text">{{ u.entry_text }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
 
   <!-- Floating Bottom Compare Action Dock (Slides up when editions are selected) -->
   <aside id="compare-floating-dock" class="compare-floating-dock" style="display: none;" aria-label="Comparison dock">

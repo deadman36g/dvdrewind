@@ -4,6 +4,9 @@
 
 A private, self-hosted archival, parsing, and modernization system for **Rewind / DVDCompare (dvdcompare.net)** with an interactive cinematic Web UI and built-in Archive Control Center.
 
+> ⚠️ **IMPORTANT FOR AI AGENTS (Claude, Codex, Antigravity, etc.):**  
+> Before making any changes or proposing plans, you **MUST** read [`AGENTS.md`](AGENTS.md) (or [`CLAUDE.md`](CLAUDE.md)) first. It outlines active architectural decisions, strict UX guidelines, test constraints, and current task handoffs.
+
 > **Notice:** This project is strictly for personal/private reference and disc collection preservation. It is not intended to be a public clone or redistribution of DVDCompare's content.
 
 ---

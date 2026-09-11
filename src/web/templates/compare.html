@@ -100,6 +100,13 @@
               <div class="col-compact-name" title="{{ e.header_raw }}">
                 {{ e.clean_header or e.header_raw }}
               </div>
+              {% if e.badges %}
+              <div class="compare-badges-rack">
+                {% for b in e.badges %}
+                <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
             </div>
           </th>
           {% endfor %}

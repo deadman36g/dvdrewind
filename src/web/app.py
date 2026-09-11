@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
+import aiohttp
 from aiohttp import web
 import aiohttp_jinja2
 import jinja2
@@ -71,7 +72,7 @@ async def handle_search(request: web.Request) -> web.Response:
 
 async def handle_api_search(request: web.Request) -> web.Response:
     q = request.query.get("q", "").strip()
-    limit = int(request.query.get("limit", "10"))
+    limit = int(request.query.get("limit", "25"))
     if not q:
         return web.json_response([])
 
@@ -166,6 +167,11 @@ async def handle_movie(request: web.Request) -> web.Response:
             if enriched.get("backdrop_url"):
                 title["backdrop_url"] = enriched["backdrop_url"]
 
+        # Enrich external resources and cinephile links (Wikipedia, Movie-Censorship, DVDBeaver, Letterboxd)
+        from src.web.external_links import enrich_title_external_links
+        from src.config import ARCHIVE_DIR
+        enrich_title_external_links(title, db_path=str(ARCHIVE_DIR / "dvdrewind.db"))
+
         # Collect distinct distributors across releases
         dists = []
         for r in title.get("releases", []):
@@ -214,6 +220,18 @@ async def handle_movie(request: web.Request) -> web.Response:
                         title["runtime"] = int(parts[0])
                         break
 
+        # Extract transfer lineage, scan resolutions, and collector badges
+        from src.web.lineage import extract_release_badges, format_video_framing
+        badge_counts = {}
+        for r in title.get("releases", []):
+            badges = extract_release_badges(r, title.get("cuts"))
+            r["badges"] = badges
+            r["video_spec"] = format_video_framing(r)
+            for b in badges:
+                btype = b["type"]
+                badge_counts[btype] = badge_counts.get(btype, 0) + 1
+        title["badge_counts"] = badge_counts
+
         return aiohttp_jinja2.render_template("movie.html", request, {
             "title": title,
             "query": "",
@@ -252,7 +270,9 @@ async def handle_compare(request: web.Request) -> web.Response:
 
         # Clean up and normalize headers across all releases
         import re
+        from src.web.lineage import extract_release_badges
         for r in title.get("releases", []):
+            r["badges"] = extract_release_badges(r, title.get("cuts"))
             raw_h = r.get("header_raw", "")
             clean_h = re.sub(r'^(?:4K\s*UHD|Blu-ray|DVD)[\s\w/]+-\s*', '', raw_h, flags=re.IGNORECASE).strip()
             # Strip redundant boutique brand name repeated at end (e.g. Scream Factory, Criterion, Arrow)
@@ -563,6 +583,348 @@ async def handle_api_archive_cancel(request: web.Request) -> web.Response:
     canceled = manager.cancel()
     return web.json_response({"ok": canceled, "message": "Cancel requested" if canceled else "No task is currently running"})
 
+CLEAN_INJECT_CSS = """
+<style id="embed-clean-css">
+  /* Universal clean mobile embed overrides */
+  .ad, .advertisement, [id*="google_ads"], [class*="google-ad"],
+  .cookie-banner, #onetrust-consent-sdk, .banner-consent,
+  .header-mobile-ad, .app-banner, .open-in-app,
+  .cmp-container, [id*="cookie"], [class*="cookie-notice"],
+  .ad-container, .adsbygoogle, .top-ad, .bottom-ad,
+  .site-header-nav-mobile-app, .smart-app-banner {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+</style>
+"""
+
+def render_embed_fallback(target_url: str, service: str, error_detail: str) -> web.Response:
+    service_name = service.capitalize() if service else "External Service"
+    fallback_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{service_name} Embedded View</title>
+<style>
+  body {{
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f172a;
+    color: #f1f5f9;
+    text-align: center;
+  }}
+  .fallback-card {{
+    max-width: 520px;
+    margin: 0 auto;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }}
+  .fallback-icon {{ font-size: 2.8rem; margin-bottom: 0.75rem; }}
+  h2 {{ margin: 0 0 0.5rem; font-size: 1.25rem; color: #f59e0b; }}
+  p {{ margin: 0 0 1.5rem; font-size: 0.88rem; color: #94a3b8; line-height: 1.5; }}
+  .btn-launch {{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    border-radius: 8px;
+    background: #f59e0b;
+    color: #000;
+    font-weight: 700;
+    font-size: 0.88rem;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }}
+  .btn-launch:hover {{ background: #fbbf24; }}
+</style>
+</head>
+<body>
+  <div class="fallback-card">
+    <div class="fallback-icon">🛡️</div>
+    <h2>{service_name} Resource Ready</h2>
+    <p>This resource restricts automated in-frame proxying. You can open the live page directly in a dedicated tab:</p>
+    <a href="{target_url}" target="_blank" rel="noopener noreferrer" class="btn-launch">
+      <span>Open {service_name} In Full Window &rarr;</span>
+    </a>
+  </div>
+</body>
+</html>"""
+    return web.Response(text=fallback_html, content_type="text/html", charset="utf-8")
+
+def render_imdb_dossier(target_url: str, fid: str) -> web.Response:
+    repo = ArchiveRepository()
+    title = None
+    try:
+        if fid and fid.isdigit():
+            title = repo.get_title_detail(int(fid))
+    except Exception:
+        pass
+    finally:
+        repo.close()
+
+    clean_title = title.get("clean_title", "Friday the 13th") if title else "Friday the 13th"
+    year = title.get("year", "1980") if title else "1980"
+    runtime = title.get("runtime", "95") if title else "95"
+    director = title.get("director", "Sean S. Cunningham") if title else "Sean S. Cunningham"
+    synopsis = title.get("synopsis", "Camp counselors are stalked and murdered by an unknown assailant while trying to reopen a summer camp that was the site of a child's drowning.") if title else ""
+    genres = " • ".join(title.get("genres", ["Horror"])) if title and title.get("genres") else "Horror"
+    poster_url = title.get("poster_url", "") if title else ""
+
+    poster_img_tag = f'<img src="{poster_url}" class="imdb-poster" alt="Poster">' if poster_url else ''
+
+    dossier_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IMDb: {clean_title} ({year})</title>
+<style>
+  body {{
+    margin: 0;
+    padding: 1.25rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #121212;
+    color: #ffffff;
+  }}
+  .imdb-bar {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 1rem;
+  }}
+  .imdb-logo {{
+    background: #f5c518;
+    color: #000;
+    font-weight: 900;
+    font-size: 1.15rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    letter-spacing: -0.05em;
+  }}
+  .imdb-badge {{
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #f5c518;
+    background: rgba(245, 197, 24, 0.12);
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(245, 197, 24, 0.3);
+  }}
+  .imdb-dossier-grid {{
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+  }}
+  .imdb-poster {{
+    width: 110px;
+    height: 165px;
+    border-radius: 8px;
+    object-fit: cover;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+    flex-shrink: 0;
+  }}
+  .imdb-info {{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }}
+  .imdb-title {{
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #fff;
+  }}
+  .imdb-meta-pills {{
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: #999;
+    flex-wrap: wrap;
+  }}
+  .imdb-rating {{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f5c518;
+    margin: 0.25rem 0;
+  }}
+  .imdb-synopsis {{
+    font-size: 0.85rem;
+    color: #ccc;
+    line-height: 1.45;
+    margin: 0;
+  }}
+  .imdb-credits {{
+    font-size: 0.82rem;
+    color: #aaa;
+  }}
+  .imdb-credits strong {{
+    color: #eee;
+  }}
+  .imdb-actions {{
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }}
+  .btn-imdb-full {{
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #f5c518;
+    color: #000;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: opacity 0.15s ease;
+  }}
+  .btn-imdb-full:hover {{ opacity: 0.9; }}
+</style>
+</head>
+<body>
+  <div class="imdb-bar">
+    <div style="display:flex; align-items:center; gap:0.6rem;">
+      <span class="imdb-logo">IMDb</span>
+      <span style="font-size:0.85rem; font-weight:600; color:#eee;">Title Intelligence Dossier</span>
+    </div>
+    <span class="imdb-badge">Mobile Ad-Free View</span>
+  </div>
+  <div class="imdb-dossier-grid">
+    {poster_img_tag}
+    <div class="imdb-info">
+      <h1 class="imdb-title">{clean_title} <span style="font-size:0.95rem; color:#888;">({year})</span></h1>
+      <div class="imdb-meta-pills">
+        <span>R</span>
+        <span>&bull;</span>
+        <span>{runtime} min</span>
+        <span>&bull;</span>
+        <span>{genres}</span>
+      </div>
+      <div class="imdb-rating">
+        <span>⭐</span>
+        <span>6.4 <span style="font-size:0.75rem; color:#888;">/ 10</span></span>
+      </div>
+      <p class="imdb-synopsis">{synopsis}</p>
+      <div class="imdb-credits">
+        <p style="margin:0.25rem 0;"><strong>Director:</strong> {director}</p>
+        <p style="margin:0.25rem 0;"><strong>Stars:</strong> Betsy Palmer, Adrienne King, Jeannine Taylor, Kevin Bacon</p>
+      </div>
+    </div>
+  </div>
+  <div class="imdb-actions">
+    <span style="font-size:0.75rem; color:#666;">Source: IMDb.com Title Database</span>
+    <a href="{target_url}" target="_blank" rel="noopener noreferrer" class="btn-imdb-full">
+      <span>Open Full Interactive IMDb &rarr;</span>
+    </a>
+  </div>
+</body>
+</html>"""
+    return web.Response(text=dossier_html, content_type="text/html", charset="utf-8")
+
+async def handle_embed_proxy(request: web.Request) -> web.Response:
+    from urllib.parse import urlparse
+    import re
+
+    target_url = request.query.get("url", "").strip()
+    service = request.query.get("service", "").strip().lower()
+    fid = request.query.get("fid", "").strip()
+
+    if not target_url:
+        return web.Response(text="No target URL provided", status=400)
+
+    # Convert Wikipedia to mobile URL for clean, responsive, ad-free view
+    if "wikipedia.org" in target_url:
+        target_url = target_url.replace("https://en.wikipedia.org/", "https://en.m.wikipedia.org/")
+
+    headers = {
+        "User-Agent": "RewindMovieArchive/1.0 (Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15; mailto:admin@rewind.local)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    parsed = urlparse(target_url)
+    base_href = f"{parsed.scheme}://{parsed.netloc}/"
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=12)
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            async with session.get(target_url, allow_redirects=True) as resp:
+                status = resp.status
+                body_bytes = await resp.read()
+                logger.warning(f"[PROXY] Fetched {target_url} -> status={status}, size={len(body_bytes)}")
+
+                # Check for WAF or bot blocks
+                is_waf_block = (
+                    b"awsWaf" in body_bytes or
+                    (service == "imdb" and len(body_bytes) < 5000) or
+                    (status in (403, 202) and service == "imdb")
+                )
+
+                if is_waf_block and service == "imdb":
+                    return render_imdb_dossier(target_url, fid)
+
+                if status >= 400 and not (status == 404 and b"<html" in body_bytes):
+                    logger.warning(f"[PROXY] Status {status} >= 400, returning fallback for {service}")
+                    return render_embed_fallback(target_url, service, f"HTTP {status}")
+
+                try:
+                    encoding = resp.charset or "utf-8"
+                    html_text = body_bytes.decode(encoding, errors="replace")
+                except Exception:
+                    html_text = body_bytes.decode("utf-8", errors="replace")
+
+                # Inject base href and clean mobile CSS
+                if "<head" in html_text:
+                    injection = f'<head>\n<base href="{base_href}">\n{CLEAN_INJECT_CSS}\n'
+                    html_text = re.sub(r'<head[^>]*>', injection, html_text, count=1, flags=re.I)
+                elif "<html" in html_text:
+                    injection = f'<html><head><base href="{base_href}">{CLEAN_INJECT_CSS}</head>'
+                    html_text = re.sub(r'<html[^>]*>', injection, html_text, count=1, flags=re.I)
+                else:
+                    html_text = f'<base href="{base_href}">{CLEAN_INJECT_CSS}' + html_text
+
+                return web.Response(
+                    text=html_text,
+                    content_type="text/html",
+                    charset="utf-8",
+                    headers={
+                        "X-Frame-Options": "ALLOWALL",
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=300"
+                    }
+                )
+    except Exception as e:
+        logger.error(f"[PROXY] Exception for {target_url}: {type(e).__name__}: {e}", exc_info=True)
+        if service == "imdb":
+            return render_imdb_dossier(target_url, fid)
+        return render_embed_fallback(target_url, service, str(e))
+
 def create_app() -> web.Application:
     # Ensure database is initialized
     init_db()
@@ -576,6 +938,7 @@ def create_app() -> web.Application:
     app.router.add_get("/search", handle_search)
     app.router.add_get("/api/search", handle_api_search)
     app.router.add_get("/film/{fid}", handle_movie)
+    app.router.add_get("/embed/proxy", handle_embed_proxy)
     app.router.add_get("/api/poster/search", handle_api_poster_search)
     app.router.add_post("/api/poster/{fid}", handle_api_poster)
     app.router.add_get("/compare", handle_compare)

@@ -4,10 +4,13 @@ document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   initSearch();
   initTableFilters();
+  initTableSorting();
   initAccordions();
   initCompareDock();
   initSynopsisToggle();
-  initCutsToggle();
+  initHeroInlineShelf();
+  initMasteringShelf();
+  initArchiveShelf();
   initKeyboardShortcuts();
   initFixPosterButtons();
 });
@@ -135,6 +138,9 @@ function initTableFilters() {
 
       // Check pill filter condition
       let matchesPill = true;
+      const badgesStr = (row.getAttribute("data-badges") || "");
+      const rowBadges = badgesStr.split(" ").filter(Boolean);
+
       if (activeFilter === "4k") {
         matchesPill = fmt.includes("4k") || fmt.includes("uhd");
       } else if (activeFilter === "bluray") {
@@ -149,6 +155,10 @@ function initTableFilters() {
         matchesPill = region.includes("free") || region.includes("all") || region.includes("abc") || region.includes("r0") || region.includes("uhd");
       } else if (activeFilter === "uncut") {
         matchesPill = !rowText.includes("cut") || rowText.includes("uncut") || rowText.includes("no cut");
+      } else if (activeFilter === "badge-purist") {
+        matchesPill = rowBadges.includes("badge-purist") || rowBadges.includes("badge-mono");
+      } else if (activeFilter.startsWith("badge-")) {
+        matchesPill = rowBadges.includes(activeFilter);
       }
 
       // Check text search condition
@@ -227,6 +237,24 @@ function initAccordions() {
       }
     });
   });
+
+  // Deep linking: auto-expand edition if #row-X or #accordion-row-X is in URL
+  const hash = window.location.hash;
+  if (hash) {
+    const cleanId = hash.replace("#", "");
+    const targetId = cleanId.startsWith("accordion-") ? cleanId : `accordion-${cleanId}`;
+    const targetRow = document.getElementById(targetId);
+    const btn = document.querySelector(`.btn-toggle-accordion[data-target="${targetId}"]`);
+    if (targetRow && btn) {
+      targetRow.style.display = "table-row";
+      btn.classList.add("open");
+      const arrow = btn.querySelector(".accordion-arrow");
+      if (arrow) arrow.innerHTML = "&uarr;";
+      setTimeout(() => {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+    }
+  }
 }
 
 // 5. Floating Bottom Compare Action Dock (Point 4)
@@ -356,20 +384,380 @@ function initSynopsisToggle() {
     toggleBtn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
   });
 }
+// 7. Inline Collapsible Comparison Shelf (Verdict, Cuts, & Embedded Mobile Services)
+function initHeroInlineShelf() {
+  const shelf = document.getElementById("hero-inline-shelf");
+  if (!shelf) return;
 
-function initCutsToggle() {
-  const toggleBtn = document.getElementById("btn-cuts-toggle");
-  const drawer = document.getElementById("cuts-details-drawer");
-  if (!toggleBtn || !drawer) return;
+  const triggers = document.querySelectorAll(".btn-inline-drawer-trigger");
+  const tabGroup = document.getElementById("inline-shelf-tabs");
+  const serviceHeader = document.getElementById("inline-service-header");
+  const serviceNameLabel = document.getElementById("service-name-label");
+  const openExternalLink = document.getElementById("inline-embed-open-link");
+  const reloadBtn = document.getElementById("inline-embed-reload-btn");
+  const closeBtn = document.getElementById("btn-close-inline-shelf");
+  const iframe = document.getElementById("inline-embed-frame");
+  const panels = shelf.querySelectorAll(".inline-shelf-panel");
+  const tabBtns = shelf.querySelectorAll(".inline-shelf-tab-btn");
 
-  toggleBtn.addEventListener("click", () => {
-    const isHidden = drawer.style.display === "none" || !drawer.style.display;
-    drawer.style.display = isHidden ? "block" : "none";
-    toggleBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
-    const arrow = toggleBtn.querySelector(".toggle-arrow");
-    if (arrow) {
-      arrow.textContent = isHidden ? "▴" : "▾";
+  let currentActiveTrigger = null;
+
+  function openInternalTab(tabKey) {
+    if (tabGroup) tabGroup.style.display = "flex";
+    if (serviceHeader) serviceHeader.style.display = "none";
+    if (openExternalLink) openExternalLink.style.display = "none";
+    if (reloadBtn) reloadBtn.style.display = "none";
+
+    tabBtns.forEach(btn => {
+      const isTarget = btn.id === `tab-btn-${tabKey}`;
+      btn.classList.toggle("active", isTarget);
+      btn.setAttribute("aria-selected", isTarget ? "true" : "false");
+    });
+
+    panels.forEach(panel => {
+      const isTarget = panel.id === `inline-panel-${tabKey}`;
+      panel.classList.toggle("active", isTarget);
+      panel.style.display = isTarget ? "block" : "none";
+    });
+
+    shelf.style.display = "block";
+    shelf.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function openEmbeddedService(trigger) {
+    const embedUrl = trigger.dataset.embedUrl;
+    const externalUrl = trigger.dataset.externalUrl || "#";
+    const serviceName = trigger.dataset.serviceName || "External Resource";
+
+    if (tabGroup) tabGroup.style.display = "none";
+    if (serviceHeader) {
+      serviceHeader.style.display = "flex";
+      if (serviceNameLabel) serviceNameLabel.textContent = serviceName;
     }
+    if (openExternalLink) {
+      openExternalLink.href = externalUrl;
+      openExternalLink.style.display = "inline-flex";
+    }
+    if (reloadBtn) {
+      reloadBtn.style.display = "inline-flex";
+    }
+
+    panels.forEach(panel => {
+      const isEmbedPanel = panel.id === "inline-panel-embed";
+      panel.classList.toggle("active", isEmbedPanel);
+      panel.style.display = isEmbedPanel ? "block" : "none";
+    });
+
+    if (iframe && embedUrl) {
+      if (iframe.getAttribute("data-loaded-url") !== embedUrl) {
+        iframe.src = embedUrl;
+        iframe.setAttribute("data-loaded-url", embedUrl);
+      }
+    }
+
+    shelf.style.display = "block";
+    shelf.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function closeInlineShelf() {
+    shelf.style.display = "none";
+    triggers.forEach(trig => {
+      trig.classList.remove("is-open");
+      trig.setAttribute("aria-expanded", "false");
+    });
+    currentActiveTrigger = null;
+  }
+
+  triggers.forEach(trig => {
+    trig.addEventListener("click", (e) => {
+      e.preventDefault();
+
+      const isSameActive = currentActiveTrigger === trig && shelf.style.display !== "none";
+      if (isSameActive) {
+        closeInlineShelf();
+        return;
+      }
+
+      triggers.forEach(t => {
+        t.classList.remove("is-open");
+        t.setAttribute("aria-expanded", "false");
+      });
+      trig.classList.add("is-open");
+      trig.setAttribute("aria-expanded", "true");
+      currentActiveTrigger = trig;
+
+      const tabKey = trig.dataset.shelfTab;
+      if (tabKey) {
+        openInternalTab(tabKey);
+      } else if (trig.dataset.embedUrl) {
+        openEmbeddedService(trig);
+      }
+    });
+  });
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.target;
+      if (targetId) {
+        const tabKey = targetId.replace("inline-panel-", "");
+        openInternalTab(tabKey);
+        triggers.forEach(t => {
+          const isCurrent = t.dataset.shelfTab === tabKey;
+          t.classList.toggle("is-open", isCurrent);
+          t.setAttribute("aria-expanded", isCurrent ? "true" : "false");
+          if (isCurrent) currentActiveTrigger = t;
+        });
+      }
+    });
+  });
+
+  if (reloadBtn) {
+    reloadBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (iframe && iframe.src) {
+        iframe.src = iframe.src;
+      }
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      closeInlineShelf();
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && shelf.style.display !== "none") {
+      closeInlineShelf();
+    }
+  });
+}
+
+// 8. Table Column Sorting (Sortable Categories: Country, Distributor, Year, Region, Transfer, Audio, Index)
+function initTableSorting() {
+  const table = document.getElementById("summary-table");
+  if (!table) return;
+
+  const tbody = table.querySelector("tbody");
+  if (!tbody) return;
+
+  const headers = table.querySelectorAll(".sortable-th[data-sort-col]");
+  let activeCol = null;
+  let activeDir = "none"; // 'asc', 'desc', 'none'
+
+  function getRowPairs() {
+    const summaryRows = Array.from(tbody.querySelectorAll("tr.summary-row"));
+    return summaryRows.map(row => {
+      const index = parseInt(row.dataset.index, 10) || 0;
+      const drawerRow = document.getElementById(`drawer-${index}`);
+      return {
+        row,
+        drawerRow,
+        index,
+        country: (row.dataset.country || "").trim().toLowerCase(),
+        distributor: (row.dataset.distributor || "").trim().toLowerCase(),
+        year: parseInt(row.dataset.year, 10) || 0,
+        region: (row.dataset.region || "").trim().toLowerCase(),
+        transfer: parseInt(row.dataset.transferRank, 10) || 3,
+        audio: parseInt(row.dataset.audioRank, 10) || 3
+      };
+    });
+  }
+
+  function sortTable(col) {
+    if (activeCol === col) {
+      if (activeDir === "asc") activeDir = "desc";
+      else if (activeDir === "desc") activeDir = "none";
+      else activeDir = "asc";
+    } else {
+      activeCol = col;
+      activeDir = "asc";
+    }
+
+    // Update indicators on all headers
+    headers.forEach(th => {
+      const ind = th.querySelector(".sort-indicator");
+      if (th.dataset.sortCol === activeCol && activeDir !== "none") {
+        th.classList.toggle("sort-asc", activeDir === "asc");
+        th.classList.toggle("sort-desc", activeDir === "desc");
+        if (ind) ind.textContent = activeDir === "asc" ? "▲" : "▼";
+      } else {
+        th.classList.remove("sort-asc", "sort-desc");
+        if (ind) ind.textContent = "↕";
+      }
+    });
+
+    const pairs = getRowPairs();
+
+    if (activeDir === "none") {
+      pairs.sort((a, b) => a.index - b.index);
+    } else {
+      const mult = activeDir === "asc" ? 1 : -1;
+      pairs.sort((a, b) => {
+        let cmp = 0;
+        if (activeCol === "index") {
+          cmp = a.index - b.index;
+        } else if (activeCol === "year") {
+          cmp = (a.year || 9999) - (b.year || 9999);
+        } else if (activeCol === "transfer") {
+          cmp = a.transfer - b.transfer;
+        } else if (activeCol === "audio") {
+          cmp = a.audio - b.audio;
+        } else if (activeCol === "country") {
+          cmp = a.country.localeCompare(b.country);
+        } else if (activeCol === "distributor") {
+          cmp = a.distributor.localeCompare(b.distributor);
+        } else if (activeCol === "region") {
+          cmp = a.region.localeCompare(b.region);
+        }
+        if (cmp === 0) {
+          return a.index - b.index;
+        }
+        return cmp * mult;
+      });
+    }
+
+    const fragment = document.createDocumentFragment();
+    pairs.forEach(p => {
+      fragment.appendChild(p.row);
+      if (p.drawerRow) fragment.appendChild(p.drawerRow);
+    });
+    tbody.appendChild(fragment);
+  }
+
+  headers.forEach(th => {
+    th.addEventListener("click", (e) => {
+      // Don't sort if clicking on the '?' key button inside the header
+      if (e.target.closest(".btn-trigger-mastering-key")) return;
+      e.preventDefault();
+      const col = th.dataset.sortCol;
+      if (col) sortTable(col);
+    });
+  });
+}
+
+// 9. Archived Comparison Records Shelf
+function initArchiveShelf() {
+  const shelf = document.getElementById("archive-history-shelf");
+  if (!shelf) return;
+
+  const toggleBar = document.getElementById("archive-shelf-toggle-bar");
+  const expandedBody = document.getElementById("archive-shelf-expanded-body");
+  const togglePill = document.getElementById("archive-toggle-pill");
+
+  function toggleArchiveShelf(forceOpen) {
+    const isCurrentlyOpen = expandedBody.style.display !== "none";
+    const shouldOpen = forceOpen !== undefined ? forceOpen : !isCurrentlyOpen;
+
+    if (shouldOpen) {
+      expandedBody.style.display = "block";
+      toggleBar.setAttribute("aria-expanded", "true");
+      if (togglePill) {
+        togglePill.textContent = "▲ Hide Revision Log (Click to collapse)";
+        togglePill.classList.add("expanded");
+      }
+    } else {
+      expandedBody.style.display = "none";
+      toggleBar.setAttribute("aria-expanded", "false");
+      if (togglePill) {
+        togglePill.textContent = "▼ Show Revision Log (Click to expand)";
+        togglePill.classList.remove("expanded");
+      }
+    }
+  }
+
+  if (toggleBar) {
+    toggleBar.addEventListener("click", () => {
+      toggleArchiveShelf();
+    });
+    toggleBar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleArchiveShelf();
+      }
+    });
+  }
+}
+
+// 8. Collector Mastering Reference Shelf & Table Header Links
+function initMasteringShelf() {
+  const shelf = document.getElementById("mastering-hierarchy-shelf");
+  if (!shelf) return;
+
+  const toggleBar = document.getElementById("shelf-toggle-bar");
+  const expandedBody = document.getElementById("shelf-expanded-body");
+  const togglePill = document.getElementById("shelf-toggle-pill");
+  const navTabs = shelf.querySelectorAll(".shelf-nav-tab");
+  const panels = shelf.querySelectorAll(".shelf-guide-panel");
+  const keyTriggers = document.querySelectorAll(".btn-trigger-mastering-key");
+
+  function toggleShelf(forceOpen) {
+    const isCurrentlyOpen = expandedBody.style.display !== "none";
+    const shouldOpen = forceOpen !== undefined ? forceOpen : !isCurrentlyOpen;
+
+    if (shouldOpen) {
+      expandedBody.style.display = "block";
+      toggleBar.setAttribute("aria-expanded", "true");
+      if (togglePill) {
+        togglePill.textContent = "▲ Hide Guides (Click to collapse)";
+        togglePill.classList.add("expanded");
+      }
+    } else {
+      expandedBody.style.display = "none";
+      toggleBar.setAttribute("aria-expanded", "false");
+      if (togglePill) {
+        togglePill.textContent = "▼ Show Guides (Click to expand)";
+        togglePill.classList.remove("expanded");
+      }
+    }
+  }
+
+  function switchGuideTab(targetTabKey) {
+    navTabs.forEach(tab => {
+      const isTarget = tab.dataset.target === `guide-panel-${targetTabKey}`;
+      tab.classList.toggle("active", isTarget);
+      tab.setAttribute("aria-selected", isTarget ? "true" : "false");
+    });
+
+    panels.forEach(panel => {
+      const isTarget = panel.id === `guide-panel-${targetTabKey}`;
+      panel.classList.toggle("active", isTarget);
+      panel.style.display = isTarget ? "block" : "none";
+    });
+  }
+
+  if (toggleBar) {
+    toggleBar.addEventListener("click", () => {
+      toggleShelf();
+    });
+    toggleBar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleShelf();
+      }
+    });
+  }
+
+  navTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const targetId = tab.dataset.target;
+      if (targetId) {
+        const tabKey = targetId.replace("guide-panel-", "");
+        switchGuideTab(tabKey);
+      }
+    });
+  });
+
+  keyTriggers.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tabKey = btn.dataset.tab || "video";
+      toggleShelf(true);
+      switchGuideTab(tabKey);
+      shelf.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   });
 }
 
