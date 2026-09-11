@@ -11,6 +11,18 @@ A private, self-hosted archival, parsing, and modernization system for **Rewind 
 
 ---
 
+## Project Boundary: DVDRewind vs. Personal Collection Tracking
+
+DVDRewind is the canonical home for **general release research and edition comparison**: release discovery, disc/spec information, mastering and transfer notes, broad release history, retailer/source links, and comparisons between editions.
+
+The user's separate **Boutique Physical Media Collection Tracker** remains spreadsheet-first and owns personal collecting state: owned vs. missing titles, slipcover wanted/secured status, numbered-line completion, preorders, sale targets, prices paid/target prices, and personal collection goals such as Shout Select or selected Kino Lorber lines.
+
+Do **not** rebuild a second general 4K release database inside that spreadsheet. Conversely, DVDRewind should not become the canonical source for the user's personal ownership/checklist workflow.
+
+Durable cross-project direction: [Project Hub — Boutique Physical Media Collection Tracker](https://github.com/deadman36g/project-hub/blob/main/docs/boutique-physical-media-collection-tracker.md).
+
+---
+
 ## Quick Start (Docker & NAS Deployment)
 
 The fastest and easiest way to deploy DVDRewind 24/7 on your NAS (Synology, Unraid, TrueNAS, QNAP) or home server:
