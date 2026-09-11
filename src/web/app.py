@@ -1,8 +1,9 @@
+import html
 import json
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 
-import aiohttp
 from aiohttp import web
 import aiohttp_jinja2
 import jinja2
@@ -11,9 +12,44 @@ from src.config import FIXTURES_DIR, PROJECT_ROOT, RAW_DIR
 from src.db.migrations import init_db
 from src.db.repository import ArchiveRepository
 from src.web.shelves import get_curated_shelves
+from src.web.security import (
+    DEFAULT_MAX_HTML_BYTES,
+    ResponseTooLarge,
+    TooManyRedirects,
+    URLSecurityError,
+    archive_control_middleware,
+    fetch_public_bytes,
+    validate_url_structure,
+)
 
 STATIC_DIR = PROJECT_ROOT / "src" / "web" / "static"
 TEMPLATES_DIR = PROJECT_ROOT / "src" / "web" / "templates"
+
+EMBED_SERVICE_DOMAINS = {
+    "imdb": ("imdb.com",),
+    "wikipedia": ("wikipedia.org",),
+    "letterboxd": ("letterboxd.com",),
+    "bluray": ("blu-ray.com",),
+    "dvdbeaver": ("dvdbeaver.com",),
+    "moviecensorship": ("movie-censorship.com", "schnittberichte.com"),
+    "dvdcompare": ("dvdcompare.net",),
+}
+
+EMBED_SERVICE_NAMES = {
+    "imdb": "IMDb",
+    "wikipedia": "Wikipedia",
+    "letterboxd": "Letterboxd",
+    "bluray": "Blu-ray.com",
+    "dvdbeaver": "DVDBeaver",
+    "moviecensorship": "Movie-Censorship",
+    "dvdcompare": "DVDCompare",
+}
+
+EMBED_RESPONSE_HEADERS = {
+    "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
 
 async def handle_index(request: web.Request) -> web.Response:
     repo = ArchiveRepository()
@@ -404,7 +440,12 @@ async def handle_api_poster(request: web.Request) -> web.Response:
 
         custom_url = data.get("poster_url")
         if custom_url:
-            cached_url = cache_custom_poster(custom_url, cache_key)
+            try:
+                cached_url = await cache_custom_poster(custom_url, cache_key)
+            except ResponseTooLarge:
+                return web.json_response({"error": "Poster response is too large"}, status=413)
+            except URLSecurityError as exc:
+                return web.json_response({"error": f"Poster URL blocked: {exc}"}, status=400)
             repo.update_poster_url(fid, cached_url)
             return web.json_response({"success": True, "poster_url": cached_url})
 
@@ -608,13 +649,15 @@ CLEAN_INJECT_CSS = """
 """
 
 def render_embed_fallback(target_url: str, service: str, error_detail: str) -> web.Response:
-    service_name = service.capitalize() if service else "External Service"
+    service_name = EMBED_SERVICE_NAMES.get(service, "External Service")
+    safe_service_name = html.escape(service_name, quote=True)
+    safe_target_url = html.escape(target_url, quote=True)
     fallback_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{service_name} Embedded View</title>
+<title>{safe_service_name} Embedded View</title>
 <style>
   body {{
     margin: 0;
@@ -655,15 +698,20 @@ def render_embed_fallback(target_url: str, service: str, error_detail: str) -> w
 <body>
   <div class="fallback-card">
     <div class="fallback-icon">🛡️</div>
-    <h2>{service_name} Resource Ready</h2>
+    <h2>{safe_service_name} Resource Ready</h2>
     <p>This resource restricts automated in-frame proxying. You can open the live page directly in a dedicated tab:</p>
-    <a href="{target_url}" target="_blank" rel="noopener noreferrer" class="btn-launch">
-      <span>Open {service_name} In Full Window &rarr;</span>
+    <a href="{safe_target_url}" target="_blank" rel="noopener noreferrer" class="btn-launch">
+      <span>Open {safe_service_name} In Full Window &rarr;</span>
     </a>
   </div>
 </body>
 </html>"""
-    return web.Response(text=fallback_html, content_type="text/html", charset="utf-8")
+    return web.Response(
+        text=fallback_html,
+        content_type="text/html",
+        charset="utf-8",
+        headers=EMBED_RESPONSE_HEADERS,
+    )
 
 def render_imdb_dossier(target_url: str, fid: str) -> web.Response:
     repo = ArchiveRepository()
@@ -681,8 +729,17 @@ def render_imdb_dossier(target_url: str, fid: str) -> web.Response:
     runtime = title.get("runtime", "95") if title else "95"
     director = title.get("director", "Sean S. Cunningham") if title else "Sean S. Cunningham"
     synopsis = title.get("synopsis", "Camp counselors are stalked and murdered by an unknown assailant while trying to reopen a summer camp that was the site of a child's drowning.") if title else ""
-    genres = " • ".join(title.get("genres", ["Horror"])) if title and title.get("genres") else "Horror"
+    genres = " • ".join(str(g) for g in title.get("genres", ["Horror"])) if title and title.get("genres") else "Horror"
     poster_url = title.get("poster_url", "") if title else ""
+
+    clean_title = html.escape(str(clean_title), quote=True)
+    year = html.escape(str(year), quote=True)
+    runtime = html.escape(str(runtime), quote=True)
+    director = html.escape(str(director), quote=True)
+    synopsis = html.escape(str(synopsis), quote=True)
+    genres = html.escape(str(genres), quote=True)
+    poster_url = html.escape(str(poster_url), quote=True)
+    target_url = html.escape(str(target_url), quote=True)
 
     poster_img_tag = f'<img src="{poster_url}" class="imdb-poster" alt="Poster">' if poster_url else ''
 
@@ -842,10 +899,15 @@ def render_imdb_dossier(target_url: str, fid: str) -> web.Response:
   </div>
 </body>
 </html>"""
-    return web.Response(text=dossier_html, content_type="text/html", charset="utf-8")
+    return web.Response(
+        text=dossier_html,
+        content_type="text/html",
+        charset="utf-8",
+        headers=EMBED_RESPONSE_HEADERS,
+    )
 
 async def handle_embed_proxy(request: web.Request) -> web.Response:
-    from urllib.parse import urlparse
+    import logging
     import re
 
     target_url = request.query.get("url", "").strip()
@@ -855,9 +917,23 @@ async def handle_embed_proxy(request: web.Request) -> web.Response:
     if not target_url:
         return web.Response(text="No target URL provided", status=400)
 
-    # Convert Wikipedia to mobile URL for clean, responsive, ad-free view
-    if "wikipedia.org" in target_url:
-        target_url = target_url.replace("https://en.wikipedia.org/", "https://en.m.wikipedia.org/")
+    allowed_domains = EMBED_SERVICE_DOMAINS.get(service)
+    if not allowed_domains:
+        return web.Response(text="Unsupported embedded service", status=400)
+
+    # Structural validation happens before any rewrite or network access.
+    try:
+        parsed = validate_url_structure(target_url, allowed_domains)
+    except URLSecurityError:
+        return web.Response(text="Blocked target URL", status=400)
+
+    # Convert English Wikipedia to its mobile hostname only after validating
+    # the exact parsed host, never by substring replacement.
+    if service == "wikipedia" and (parsed.hostname or "").rstrip(".").lower() == "en.wikipedia.org":
+        mobile_netloc = "en.m.wikipedia.org"
+        if parsed.port:
+            mobile_netloc = f"{mobile_netloc}:{parsed.port}"
+        target_url = parsed._replace(netloc=mobile_netloc).geturl()
 
     headers = {
         "User-Agent": "RewindMovieArchive/1.0 (Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15; mailto:admin@rewind.local)",
@@ -865,72 +941,89 @@ async def handle_embed_proxy(request: web.Request) -> web.Response:
         "Accept-Language": "en-US,en;q=0.9",
     }
 
-    parsed = urlparse(target_url)
-    base_href = f"{parsed.scheme}://{parsed.netloc}/"
-
-    import logging
     logger = logging.getLogger(__name__)
 
     try:
-        timeout = aiohttp.ClientTimeout(total=12)
-        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
-            async with session.get(target_url, allow_redirects=True) as resp:
-                status = resp.status
-                body_bytes = await resp.read()
-                logger.warning(f"[PROXY] Fetched {target_url} -> status={status}, size={len(body_bytes)}")
-
-                # Check for WAF or bot blocks
-                is_waf_block = (
-                    b"awsWaf" in body_bytes or
-                    (service == "imdb" and len(body_bytes) < 5000) or
-                    (status in (403, 202) and service == "imdb")
-                )
-
-                if is_waf_block and service == "imdb":
-                    return render_imdb_dossier(target_url, fid)
-
-                if status >= 400 and not (status == 404 and b"<html" in body_bytes):
-                    logger.warning(f"[PROXY] Status {status} >= 400, returning fallback for {service}")
-                    return render_embed_fallback(target_url, service, f"HTTP {status}")
-
-                try:
-                    encoding = resp.charset or "utf-8"
-                    html_text = body_bytes.decode(encoding, errors="replace")
-                except Exception:
-                    html_text = body_bytes.decode("utf-8", errors="replace")
-
-                # Inject base href and clean mobile CSS
-                if "<head" in html_text:
-                    injection = f'<head>\n<base href="{base_href}">\n{CLEAN_INJECT_CSS}\n'
-                    html_text = re.sub(r'<head[^>]*>', injection, html_text, count=1, flags=re.I)
-                elif "<html" in html_text:
-                    injection = f'<html><head><base href="{base_href}">{CLEAN_INJECT_CSS}</head>'
-                    html_text = re.sub(r'<html[^>]*>', injection, html_text, count=1, flags=re.I)
-                else:
-                    html_text = f'<base href="{base_href}">{CLEAN_INJECT_CSS}' + html_text
-
-                return web.Response(
-                    text=html_text,
-                    content_type="text/html",
-                    charset="utf-8",
-                    headers={
-                        "X-Frame-Options": "ALLOWALL",
-                        "Access-Control-Allow-Origin": "*",
-                        "Cache-Control": "public, max-age=300"
-                    }
-                )
-    except Exception as e:
-        logger.error(f"[PROXY] Exception for {target_url}: {type(e).__name__}: {e}", exc_info=True)
+        fetched = await fetch_public_bytes(
+            target_url,
+            allowed_domains=allowed_domains,
+            headers=headers,
+            max_redirects=5,
+            max_bytes=DEFAULT_MAX_HTML_BYTES,
+            timeout_seconds=12,
+        )
+    except ResponseTooLarge:
+        return web.Response(text="Embedded resource is too large", status=413)
+    except (URLSecurityError, TooManyRedirects) as exc:
+        logger.warning("[PROXY] Blocked %s URL: %s", service, exc)
+        return web.Response(text="Blocked target URL", status=400)
+    except Exception as exc:
+        logger.warning("[PROXY] Fetch failed for %s: %s", service, exc)
         if service == "imdb":
             return render_imdb_dossier(target_url, fid)
-        return render_embed_fallback(target_url, service, str(e))
+        return render_embed_fallback(target_url, service, str(exc))
+
+    status = fetched.status
+    body_bytes = fetched.body
+    final_url = fetched.final_url
+    logger.info("[PROXY] Fetched %s -> status=%s, size=%s", final_url, status, len(body_bytes))
+
+    # Do not turn the endpoint into a generic binary relay.
+    if fetched.content_type and fetched.content_type not in ("text/html", "application/xhtml+xml"):
+        return render_embed_fallback(final_url, service, "Unsupported content type")
+
+    # Check for WAF or bot blocks.
+    is_waf_block = (
+        b"awsWaf" in body_bytes
+        or (service == "imdb" and len(body_bytes) < 5000)
+        or (status in (403, 202) and service == "imdb")
+    )
+    if is_waf_block and service == "imdb":
+        return render_imdb_dossier(final_url, fid)
+
+    if status >= 400 and not (status == 404 and b"<html" in body_bytes):
+        return render_embed_fallback(final_url, service, f"HTTP {status}")
+
+    try:
+        encoding = fetched.charset or "utf-8"
+        html_text = body_bytes.decode(encoding, errors="replace")
+    except Exception:
+        html_text = body_bytes.decode("utf-8", errors="replace")
+
+    final_parsed = urlsplit(final_url)
+    base_href = f"{final_parsed.scheme}://{final_parsed.netloc}/"
+    safe_base_href = html.escape(base_href, quote=True)
+
+    # Inject base href and clean mobile CSS. The iframe is sandboxed without
+    # same-origin privileges, so proxied scripts cannot reach the parent app.
+    if "<head" in html_text:
+        injection = f'<head>\n<base href="{safe_base_href}">\n{CLEAN_INJECT_CSS}\n'
+        html_text = re.sub(r'<head[^>]*>', injection, html_text, count=1, flags=re.I)
+    elif "<html" in html_text:
+        injection = f'<html><head><base href="{safe_base_href}">{CLEAN_INJECT_CSS}</head>'
+        html_text = re.sub(r'<html[^>]*>', injection, html_text, count=1, flags=re.I)
+    else:
+        html_text = f'<base href="{safe_base_href}">{CLEAN_INJECT_CSS}' + html_text
+
+    response_headers = dict(EMBED_RESPONSE_HEADERS)
+    response_headers["Cache-Control"] = "public, max-age=300"
+    return web.Response(
+        text=html_text,
+        content_type="text/html",
+        charset="utf-8",
+        headers=response_headers,
+    )
 
 def create_app() -> web.Application:
     # Ensure database is initialized
     init_db()
 
-    app = web.Application()
-    env = aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)))
+    app = web.Application(middlewares=[archive_control_middleware])
+    env = aiohttp_jinja2.setup(
+        app,
+        loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
+        autoescape=jinja2.select_autoescape(["html", "xml"]),
+    )
     env.filters['parse_audio'] = parse_audio_track
 
     # Routes

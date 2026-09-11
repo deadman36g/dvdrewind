@@ -5,6 +5,11 @@ from typing import Optional
 import requests
 
 from src.config import ARCHIVE_DIR, DEFAULT_USER_AGENT
+from src.web.security import (
+    DEFAULT_MAX_IMAGE_BYTES,
+    URLSecurityError,
+    fetch_public_bytes,
+)
 
 POSTERS_DIR = ARCHIVE_DIR / "posters"
 POSTERS_DIR.mkdir(parents=True, exist_ok=True)
@@ -94,26 +99,30 @@ def fetch_poster_from_wikipedia(clean_title: str, imdb_id: Optional[str] = None)
             print(f"Wikipedia poster fallback error: {e}")
     return None
 
-def cache_custom_poster(url: str, cache_key: str) -> str:
-    """
-    Downloads an arbitrary poster image URL and caches it locally in archive/posters/
-    """
+async def cache_custom_poster(url: str, cache_key: str) -> str:
+    """Download a user-selected poster without allowing SSRF or huge bodies."""
     if url.startswith("/static/posters/"):
+        if ".." in url or "\\" in url:
+            raise URLSecurityError("Invalid local poster path")
         return url
-    if not url.startswith("http://") and not url.startswith("https://"):
-        return url
-    
+
     headers = {"User-Agent": DEFAULT_USER_AGENT}
+    result = await fetch_public_bytes(
+        url,
+        headers=headers,
+        max_redirects=5,
+        max_bytes=DEFAULT_MAX_IMAGE_BYTES,
+        timeout_seconds=15,
+    )
+    if result.status != 200:
+        raise URLSecurityError(f"Poster host returned HTTP {result.status}")
+    if result.content_type and not result.content_type.lower().startswith("image/"):
+        raise URLSecurityError("Poster URL did not return an image")
+
     local_file = POSTERS_DIR / f"{cache_key}.jpg"
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        if resp.status_code == 200:
-            with open(local_file, "wb") as f:
-                f.write(resp.content)
-            return f"/static/posters/{cache_key}.jpg"
-    except Exception as e:
-        print(f"Error caching custom poster: {e}")
-    return url
+    with open(local_file, "wb") as f:
+        f.write(result.body)
+    return f"/static/posters/{cache_key}.jpg"
 
 def fetch_poster_from_tmdb(imdb_id: Optional[str], clean_title: str, year: Optional[int] = None, api_key: Optional[str] = None) -> Optional[str]:
     """

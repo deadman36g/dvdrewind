@@ -74,7 +74,15 @@ python -m unittest discover -s tests -v
    - Created rich in-app dossier fallback for IMDb (which blocks automated traffic via WAF).
    - In `src/web/static/app.js`, updated `initHeroInlineShelf()` to handle both internal tabs (verdict/cuts) and external embedded service iframes with reload and close controls.
 4. **Unit Tests:**
-   - 24/24 unit tests passing cleanly.
+   - 24/24 original unit tests passing cleanly.
+
+### Security Hardening — 2026-09-10
+- **SSRF / open-proxy fix:** `/embed/proxy` now accepts only `http`/`https` URLs on the explicit per-service domain allowlist (IMDb, Wikipedia, Letterboxd, Blu-ray.com, DVDBeaver, Movie-Censorship/Schnittberichte, and DVDCompare). Hostnames use exact/subdomain-boundary matching, standard web ports only, DNS results must be globally routable, and localhost/loopback/private/link-local/reserved/unspecified/multicast plus local-network hostname suffixes are blocked.
+- **Redirects and size limits:** Proxy redirects are followed manually with every hop revalidated, capped at 5 hops and 5 MiB. Custom poster URL downloads reuse the same public-network validation, revalidate redirects, and are capped at 15 MiB.
+- **HTML safety:** Generated fallback/IMDb dossier values are HTML-escaped, Jinja templates now use autoescaping, and proxied service iframes no longer receive `allow-same-origin` alongside script execution.
+- **Archive controls:** `POST /api/archive/sync`, `/api/archive/posters`, `/api/archive/vacuum`, and `/api/archive/cancel` remain seamless on true localhost requests. Non-local requests receive `403` unless `DVDREWIND_ADMIN_TOKEN` is configured and supplied as `X-DVDRewind-Admin-Token` (a reverse proxy can inject this header for trusted admin access).
+- **Exposure guidance:** Keep DVDRewind private. If using a reverse proxy, preserve external Host/client-address headers or explicitly block the archive-control routes unless the admin-token header is injected; a proxy that rewrites remote requests to look exactly like localhost can defeat localhost-only detection. The embed proxy is intentionally still permitted to fetch only the listed public services.
+- **Verification:** 38/38 tests pass after adding security regressions for blocked IPv4/IPv6/local schemes, hostname tricks, private redirects, response-size limits, HTML escaping, poster SSRF, and archive-control authorization.
 
 ### Known Watch Items / Next Steps for Incoming Agent:
 1. **Visual Polish:**
