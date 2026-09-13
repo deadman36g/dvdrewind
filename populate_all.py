@@ -61,6 +61,7 @@ from src.cli_monitor import (
     completion_message as cli_completion_message,
     retry_failed_fids as cli_retry_failed_fids,
     run_archive_status_monitor as cli_run_archive_status_monitor,
+    run_command_center as cli_run_command_center,
     search_archive as cli_search_archive,
 )
 
@@ -886,6 +887,7 @@ Examples:
   python populate_all.py                     Interactive full catalog sweep (dashboard)
   python populate_all.py --sync              Resume post-76,200 catch-up + check current revisions
   python populate_all.py --since-initial     Re-scan everything added after the original 76,200 cutoff
+  python populate_all.py --command-center    Open the unified DVD Rewind terminal command center
   python populate_all.py --watch             Watch the live web-managed sync with hotkeys and live dashboard
   python populate_all.py --watch-new         Watch only newly discovered titles
   python populate_all.py --status            Show one live Archive Control Center status snapshot
@@ -896,6 +898,7 @@ Examples:
   python populate_all.py --vacuum            Check DB integrity, optimize search index & VACUUM
         """
     )
+    parser.add_argument("--command-center", action="store_true", help="Open the unified DVD Rewind interactive terminal interface")
     parser.add_argument("--sync", "--update", action="store_true", help="Incremental sync: check current revisions and resume scanning FIDs added after the original catalog cutoff")
     parser.add_argument("--since-initial", action="store_true", help="Force a complete catch-up scan from FID 76,201 onward, skipping titles already in the database")
     parser.add_argument("--status", action="store_true", help="Show a one-time status snapshot of the web-managed archive task")
@@ -917,7 +920,9 @@ Examples:
     is_headless = args.cron or (not sys.stdout.isatty())
     state.headless = is_headless
 
-    if args.completion_message:
+    if args.command_center:
+        raise SystemExit(cli_run_command_center())
+    elif args.completion_message:
         print(cli_completion_message())
     elif args.search or args.search_b64:
         query = args.search

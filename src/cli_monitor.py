@@ -32,6 +32,8 @@ from src.scraper.posters import fetch_poster_from_tmdb
 
 INITIAL_MAX_FID = 76200
 STATUS_URL = "http://127.0.0.1:8088/api/archive/status"
+CONTROL_BASE_URL = "http://127.0.0.1:8088/api/archive"
+WEB_URL = "http://192.168.50.39:8091"
 FAILED_FIDS_FILE = ARCHIVE_DIR / "sync_failed_fids.json"
 console = Console()
 
@@ -430,6 +432,184 @@ def run_archive_status_monitor(watch: bool = False, new_only: bool = False, exit
         console.print("\n[bold green]DVDRewind task completed.[/]")
         raise SystemExit(20)
     console.print("\n[dim]Monitor closed. The DVDRewind task, if running, continues on the NAS.[/]")
+
+
+def _post_archive_action(endpoint: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    response = requests.post(
+        f"{CONTROL_BASE_URL}/{endpoint}",
+        json=payload or {},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def build_command_center_panel(data: Dict[str, Any]) -> Panel:
+    running = bool(data.get("is_running"))
+    stats = data.get("stats") or {}
+    metrics = data.get("metrics") or {}
+    last_sync = data.get("last_sync") or {}
+    post_initial = data.get("post_initial") or {}
+
+    status = Text()
+    status.append("RUNNING", style="bold black on bright_green" if running else "bold white on bright_black") if running else status.append("IDLE", style="bold white on bright_black")
+    if running:
+        status.append(f"  {data.get('status_message') or ''}", style="bold green")
+
+    overview = Table(box=box.SIMPLE, show_header=False, expand=True, padding=(0, 1))
+    overview.add_column("Label", style="dim", width=16)
+    overview.add_column("Value", style="bold", width=20)
+    overview.add_column("Label2", style="dim", width=16)
+    overview.add_column("Value2", style="bold")
+    next_fid = int(stats.get("next_fid") or post_initial.get("next_fid") or INITIAL_MAX_FID + 1)
+    overview.add_row("Archive titles", f"{int(metrics.get('titles') or data.get('db_titles') or 0):,}", "Next FID", f"{next_fid:,}")
+    overview.add_row("Releases", f"{int(metrics.get('releases') or 0):,}", "Database", f"{float(metrics.get('db_size_mb') or data.get('db_size_mb') or 0):.2f} MB")
+    overview.add_row("Last run", _fmt_duration(last_sync.get("elapsed_seconds")) if last_sync else "—", "Last result", str(last_sync.get("status") or "—").upper())
+
+    menu = Table(box=box.ROUNDED, expand=True, show_header=False, padding=(0, 1))
+    menu.add_column("Key", width=5, style="bold cyan", justify="center")
+    menu.add_column("Action", ratio=1, style="bold")
+    menu.add_column("What it does", ratio=2, style="dim")
+    options = [
+        ("1", "Run Update", "Normal DVDCompare revision check + resume catch-up"),
+        ("2", "Catch Up Since 76,200", "Full post-initial pass from FID 76,201"),
+        ("3", "Watch Current Run", "Open the live progress dashboard"),
+        ("4", "Recent Discoveries", "Show only titles found by the current run"),
+        ("5", "Search Archive", "Search titles, years, formats, FIDs and releases"),
+        ("6", "Errors / Retry Failures", "Inspect failures and retry only failed FIDs"),
+        ("7", "Last Run Report", "Summary, archive growth and previous-run comparison"),
+        ("8", "Open DVD Rewind", "Open the web interface on this Windows PC"),
+        ("P", "Poster Backfill", "Fetch missing artwork through the web-managed worker"),
+        ("D", "Database Maintenance", "Integrity check, FTS optimization and VACUUM"),
+        ("Q", "Quit", "Leave DVD Rewind Command Center"),
+    ]
+    for key, action, detail in options:
+        menu.add_row(key, action, detail)
+
+    return Panel(
+        Group(
+            Text("DVD Rewind Command Center", style="bold cyan"),
+            Text("One program for the archive — no Docker or SSH commands to remember.", style="dim"),
+            Text(""),
+            status,
+            overview,
+            Text(""),
+            menu,
+        ),
+        title="[bold cyan]📀 DVD REWIND[/]",
+        subtitle="[dim]Choose a key • running jobs stay on the NAS if you leave[/]",
+        border_style="green" if running else "cyan",
+        box=box.DOUBLE,
+        padding=(1, 2),
+    )
+
+
+def _read_menu_key() -> str:
+    if os.name == "posix" and termios is not None and tty is not None and sys.stdin.isatty():
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd)
+            key = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        console.print(key)
+        return key.strip().lower()
+    return console.input("[bold cyan]Choose:[/] ").strip().lower()
+
+
+def _pause_command_center(message: str = "Press Enter to return to the Command Center…") -> None:
+    console.input(f"\n[dim]{message}[/]")
+
+
+def _watch_after_start() -> int:
+    try:
+        run_archive_status_monitor(watch=True, exit_on_complete=True)
+    except SystemExit as exc:
+        if exc.code == 20:
+            return 20
+        raise
+    return 0
+
+
+def run_command_center() -> int:
+    while True:
+        try:
+            data = fetch_archive_status()
+        except Exception as exc:
+            console.clear()
+            console.print(Panel(f"[bold red]DVD Rewind web service is unavailable.[/]\n{exc}", border_style="red"))
+            _pause_command_center()
+            continue
+
+        console.clear()
+        console.print(build_command_center_panel(data))
+        console.print("[bold cyan]Select:[/] ", end="")
+        choice = _read_menu_key()
+
+        if choice == "q":
+            return 0
+        if choice == "1":
+            result = _post_archive_action("sync", {"since_initial": False})
+            if not result.get("ok"):
+                console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
+                _pause_command_center()
+                continue
+            return _watch_after_start()
+        if choice == "2":
+            result = _post_archive_action("sync", {"since_initial": True})
+            if not result.get("ok"):
+                console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
+                _pause_command_center()
+                continue
+            return _watch_after_start()
+        if choice == "3":
+            run_archive_status_monitor(watch=True)
+            continue
+        if choice == "4":
+            if data.get("is_running"):
+                run_archive_status_monitor(watch=True, new_only=True)
+            else:
+                console.clear()
+                console.print(build_archive_status_panel(data, view="new"))
+                _pause_command_center()
+            continue
+        if choice == "5":
+            query = console.input("\n[bold cyan]Search DVD Rewind:[/] ").strip()
+            if query:
+                search_archive(query)
+            _pause_command_center()
+            continue
+        if choice == "6":
+            console.clear()
+            console.print(build_archive_status_panel(data, view="errors"))
+            retry = console.input("\n[bold cyan]R[/] retry failed FIDs  •  [bold cyan]Enter[/] back: ").strip().lower()
+            if retry == "r":
+                retry_failed_fids()
+                _pause_command_center()
+            continue
+        if choice == "7":
+            console.clear()
+            console.print(build_archive_status_panel(data, view="main"))
+            _pause_command_center()
+            continue
+        if choice == "8":
+            console.print(f"[cyan]Opening {WEB_URL}…[/]")
+            return 81
+        if choice == "p":
+            result = _post_archive_action("posters")
+            if not result.get("ok"):
+                console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
+                _pause_command_center()
+                continue
+            return _watch_after_start()
+        if choice == "d":
+            result = _post_archive_action("vacuum")
+            if not result.get("ok"):
+                console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
+                _pause_command_center()
+                continue
+            return _watch_after_start()
 
 
 def search_archive(query: str, limit: int = 25) -> List[Dict[str, Any]]:

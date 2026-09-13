@@ -54,16 +54,42 @@ function Invoke-DVDRewindWatch {
     }
 }
 
+function Invoke-DVDRewindCommandCenter {
+    param([string]$Nas)
+    $webUrl = 'http://192.168.50.39:8091'
+    while ($true) {
+        ssh -t $Nas 'docker exec -it dvdrewind python populate_all.py --command-center'
+        $code = $LASTEXITCODE
+        if ($code -eq 20) {
+            $summary = ssh $Nas 'docker exec dvdrewind python populate_all.py --completion-message'
+            if (-not $summary) { $summary = 'DVD Rewind task finished.' }
+            Show-DVDRewindNotification -Message ($summary -join ' ')
+            continue
+        }
+        if ($code -eq 81) {
+            Start-Process $webUrl
+            continue
+        }
+        if ($code -ne 0) {
+            Write-Warning "DVD Rewind Command Center exited with code $code"
+        }
+        break
+    }
+}
+
 function dvdrewind {
     param(
         [Parameter(Position = 0)]
-        [string]$Command = 'watch',
+        [string]$Command = 'menu',
         [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
         [string[]]$Rest
     )
 
     $nas = 'deadman36g@192.168.50.39'
     switch ($Command.ToLowerInvariant()) {
+        'menu' {
+            Invoke-DVDRewindCommandCenter -Nas $nas
+        }
         'watch' {
             Invoke-DVDRewindWatch -Nas $nas
         }
@@ -95,7 +121,8 @@ function dvdrewind {
         }
         default {
             Write-Host 'DVDRewind commands:' -ForegroundColor Cyan
-            Write-Host '  dvdrewind                  Live dashboard + completion notification'
+            Write-Host '  dvdrewind                  Unified interactive Command Center'
+            Write-Host '  dvdrewind menu             Same Command Center explicitly'
             Write-Host '  dvdrewind new              Watch only new discoveries'
             Write-Host '  dvdrewind status           One status snapshot'
             Write-Host '  dvdrewind search "Title"  Search the archive'
@@ -115,7 +142,7 @@ Set-Content -Path $profilePath -Value $newProfile -Encoding UTF8
 
 Write-Host ''
 Write-Host 'DVDRewind CLI installed/upgraded.' -ForegroundColor Green
-Write-Host 'Run:  dvdrewind                  # enhanced live dashboard' -ForegroundColor Cyan
+Write-Host 'Run:  dvdrewind                  # unified interactive Command Center' -ForegroundColor Cyan
 Write-Host '      dvdrewind new              # only new discoveries'
 Write-Host '      dvdrewind search "The Thing"'
 Write-Host '      dvdrewind retry            # retry previous failures'

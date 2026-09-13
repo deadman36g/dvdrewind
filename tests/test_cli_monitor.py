@@ -8,7 +8,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from rich.console import Console
 
-from src.cli_monitor import build_archive_status_panel
+from src.cli_monitor import build_archive_status_panel, build_command_center_panel
 
 
 class TestEnhancedCLIMonitor(unittest.TestCase):
@@ -70,6 +70,22 @@ class TestEnhancedCLIMonitor(unittest.TestCase):
         self.assertIn("New discoveries only", text)
         self.assertIn("76,249", text)
         self.assertIn("The Thing", text)
+
+    def test_command_center_exposes_unified_project_actions(self):
+        data = self.sample_status()
+        data["is_running"] = False
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=140)
+        console.print(build_command_center_panel(data))
+        text = buf.getvalue()
+        self.assertIn("DVD Rewind Command Center", text)
+        self.assertIn("Run Update", text)
+        self.assertIn("Catch Up Since 76,200", text)
+        self.assertIn("Watch Current Run", text)
+        self.assertIn("Search Archive", text)
+        self.assertIn("Errors / Retry Failures", text)
+        self.assertIn("Poster Backfill", text)
+        self.assertIn("Database Maintenance", text)
 
     def test_idle_dashboard_becomes_end_of_run_report(self):
         data = self.sample_status()

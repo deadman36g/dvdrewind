@@ -68,7 +68,7 @@ Windows users can install the NAS-aware `dvdrewind` PowerShell command with:
 irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_windows_cli.ps1 | iex
 ```
 
-Then use `dvdrewind` for the live dashboard, `dvdrewind new` for discoveries only, `dvdrewind search "The Thing"` for local archive search, and `dvdrewind retry` to retry saved failed FIDs. The Windows launcher sends a desktop notification when a watched NAS task completes.
+Then use `dvdrewind` to open the unified interactive **DVD Rewind Command Center**. From that one menu you can start a normal update, force the post-76,200 catch-up, watch live progress, view discoveries, search the archive, inspect/retry failures, view the last-run report, start poster/database maintenance, or open the web UI. Legacy shortcuts such as `dvdrewind new`, `dvdrewind search "The Thing"`, and `dvdrewind status` remain available. The Windows launcher sends a desktop notification when a menu-started NAS task completes.
 
 The same operations are also available from the Python command line:
 
@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_
 Then use:
 
 ```powershell
-dvdrewind          # live read-only CLI monitor
+dvdrewind          # unified interactive Command Center
 dvdrewind status   # one status snapshot
 dvdrewind help     # populate_all.py options
 dvdrewind web      # open the web UI
