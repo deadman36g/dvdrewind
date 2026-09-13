@@ -161,6 +161,50 @@ class TestGeneratedHTMLEscaping(unittest.TestCase):
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", text)
         self.assertIn("&quot;&gt;", text)
 
+    def test_imdb_dossier_extracts_relevant_json_ld_metadata(self):
+        imdb_html = """
+        <html><head><script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Movie",
+          "name": "Blade Runner",
+          "datePublished": "1982-06-25",
+          "duration": "PT1H57M",
+          "genre": ["Science Fiction", "Thriller"],
+          "contentRating": "R",
+          "description": "A blade runner must pursue and terminate four replicants.",
+          "aggregateRating": {"ratingValue": 8.1, "ratingCount": 845000},
+          "director": [{"@type": "Person", "name": "Ridley Scott"}],
+          "actor": [
+            {"@type": "Person", "name": "Harrison Ford"},
+            {"@type": "Person", "name": "Rutger Hauer"}
+          ]
+        }
+        </script></head><body></body></html>
+        """
+
+        class FakeRepo:
+            def get_title_detail(self, _fid):
+                return {"clean_title": "Blade Runner", "poster_url": ""}
+
+            def close(self):
+                pass
+
+        with patch("src.web.app.ArchiveRepository", return_value=FakeRepo()):
+            response = render_imdb_dossier(
+                "https://www.imdb.com/title/tt0083658/",
+                "43651",
+                html_text=imdb_html,
+            )
+        text = response.text
+        self.assertIn("Blade Runner", text)
+        self.assertIn("8.1", text)
+        self.assertIn("845000 votes", text)
+        self.assertIn("1h 57m", text)
+        self.assertIn("Ridley Scott", text)
+        self.assertIn("Harrison Ford, Rutger Hauer", text)
+        self.assertIn("Fixed scraped info view", text)
+
     def test_imdb_dossier_escapes_interpolated_movie_fields(self):
         class FakeRepo:
             def get_title_detail(self, _fid):
@@ -286,6 +330,19 @@ class TestSecurityHTTP(AioHTTPTestCase):
         iframe_line = next(line for line in template.splitlines() if 'id="inline-embed-frame"' in line)
         self.assertIn('sandbox="allow-scripts allow-forms allow-popups"', iframe_line)
         self.assertNotIn("allow-same-origin", iframe_line)
+
+    def test_external_resource_panel_has_one_imdb_control_and_fixed_height(self):
+        template = (PROJECT_ROOT / "src" / "web" / "templates" / "movie.html").read_text(encoding="utf-8")
+        css = (PROJECT_ROOT / "src" / "web" / "static" / "style.css").read_text(encoding="utf-8")
+        self.assertEqual(template.count('id="btn-imdb-toggle"'), 1)
+        self.assertNotIn('id="btn-imdb-link"', template)
+        self.assertIn('id="btn-letterboxd-toggle"', template)
+        self.assertIn('/embed/proxy?service=imdb', template)
+        self.assertIn('/embed/proxy?service=letterboxd', template)
+        self.assertIn('Fixed Scraped Info View', template)
+        self.assertIn('height: 430px;', css)
+        self.assertIn('min-height: 430px;', css)
+        self.assertIn('max-height: 430px;', css)
 
 
 if __name__ == "__main__":

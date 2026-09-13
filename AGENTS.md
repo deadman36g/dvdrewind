@@ -33,7 +33,7 @@
 3. **Respect Established Design & UX Directives:**
    - **Hero Section:** Keep only clean movie information at the top (Title, Year, Runtime, Director, Studio, Tagline/Synopsis). Do **not** place format pills (like "Blu-ray" or "4K UHD") or specific audio tracks (like "DTS-HD MA") in the universal movie hero. Format selectors belong on the editions table toolbar.
    - **Physical Editions Table:** The Collector Mastering References Guide must sit directly connected beneath the physical editions table (using `.mastering-shelf-attached` with zero margin/top-border gap) looking like a natural extension, while remaining collapsible.
-   - **Service Buttons (Letterboxd, Wikipedia, IMDb, etc.):** Buttons open in-page embedded views (iframe proxy via `/embed/proxy` or inline dossier), **not** external popup tabs.
+   - **Service Buttons:** External-resource buttons (IMDb, Wikipedia, Letterboxd, Blu-ray.com, DVDBeaver, Movie-Censorship, DVDCompare) open one consistent fixed-size in-page info panel. `/embed/proxy` fetches only allowlisted public HTML, extracts relevant metadata into a compact dossier, and always includes an explicit “Open Full Site” link. Do not open these buttons directly into external tabs as their primary action, and do not render raw third-party pages inside the app.
    - **Tone & Wording:** Use human-friendly, conversational archivist language (not sterile or robotic database jargon).
 4. **Handoff Protocol:**
    - When finishing a session or switching models, update this `AGENTS.md` file with what was completed, any bugs found/fixed, and the exact next steps for the incoming agent.
@@ -68,10 +68,10 @@ python -m unittest discover -s tests -v
 2. **Mastering Reference Guide Connection:**
    - Relocated `#mastering-hierarchy-shelf` inside `<section class="editions-section">` right below `.table-scroll-box`.
    - Styled with `.mastering-shelf-attached` to eliminate the visual gap, making it feel like an integrated extension.
-3. **Embedded Service Viewer & Proxy Route (`/embed/proxy`):**
-   - Added `/embed/proxy` endpoint in `src/web/app.py` fetching mobile ad-free views of Letterboxd, Wikipedia, and external sources with `<base href>` injection and clean CSS.
-   - Fixed missing `import aiohttp` in `app.py`.
-   - Created rich in-app dossier fallback for IMDb (which blocks automated traffic via WAF).
+3. **Fixed External Info Viewer & Proxy Route (`/embed/proxy`):**
+   - `/embed/proxy` validates the requested service/URL, fetches bounded public HTML, and converts the response into a fixed-size scraped-information dossier rather than relaying the raw third-party page.
+   - IMDb JSON-LD is used when available for rating, vote count, runtime, genres, director, cast, description, and release metadata; anti-bot/WAF responses fall back cleanly to DVDRewind's local title metadata without resizing the panel.
+   - Wikipedia, Letterboxd, Blu-ray.com, DVDBeaver, Movie-Censorship, and DVDCompare use the same fixed-panel formula with generic structured/meta-description extraction plus an “Open Full Site” action.
    - In `src/web/static/app.js`, updated `initHeroInlineShelf()` to handle both internal tabs (verdict/cuts) and external embedded service iframes with reload and close controls.
 4. **Unit Tests:**
    - 24/24 original unit tests passing cleanly.

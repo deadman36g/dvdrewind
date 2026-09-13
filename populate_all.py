@@ -12,6 +12,7 @@
 ║           • Boutique Labels (Criterion, Arrow, Eureka, etc.) ║
 ║                                                              ║
 ║  Phase 2: Full Catalog Sweep (FIDs 1 -> 76,200)              ║
+║  Phase 3: Catch Up New Comparisons Added After 76,200         ║
 ║                                                              ║
 ║  Usage:   python populate_all.py                              ║
 ║  Stop:    Ctrl+C (safely saves progress, resume anytime)      ║
@@ -31,8 +32,9 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Project setup
-PROJECT_ROOT = Path(r"C:\Users\deadman36g\.gemini\antigravity\scratch\dvdrewind")
+# Project setup — resolve from this file so the same script works on Windows,
+# NAS/Docker deployments, and development workspaces.
+PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
@@ -58,12 +60,16 @@ from src.scraper.client import ScraperClient
 import requests
 
 # ── Configuration ──────────────────────────────────────────────
-MAX_FID = 76200
+INITIAL_MAX_FID = 76200   # Historical endpoint of the original full-catalog sweep
+MAX_FID = INITIAL_MAX_FID # Dashboard compatibility for the original sweep
 CRAWL_DELAY = 2.0        # Polite crawl delay
 POSTER_DELAY = 1.0       # Poster fetch delay
+POST_INITIAL_TAIL_FIDS = 100       # Keep looking this far beyond the newest known FID
+POST_INITIAL_FALLBACK_WINDOW = 500 # Used when the homepage cannot reveal a high-water mark
 PROGRESS_FILE = ARCHIVE_DIR / "populate_progress.json"
 PRIORITY_FILE = ARCHIVE_DIR / "priority_queue.json"
 SYNC_STATUS_FILE = ARCHIVE_DIR / "sync_status.json"
+POST_INITIAL_STATE_FILE = ARCHIVE_DIR / "post_initial_sync.json"
 POSTERS_DIR = ARCHIVE_DIR / "posters"
 POSTERS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -499,11 +505,12 @@ def run_posters_backfill(headless=False, limit=None):
     repo.close()
 
 
-def run_incremental_sync(headless=False, limit=None):
+def run_incremental_sync(headless=False, limit=None, force_from_initial=False):
     """
-    Checks DVDCompare homepage for newly updated/reviewed comparisons,
-    re-fetches any changed HTML (detected via sha256 source_hash),
-    and probes forward beyond MAX(fid) for brand new releases.
+    Checks DVDCompare for newly updated/reviewed comparisons and catches up every
+    FID added after the original 1..76,200 catalog sweep. Progress beyond the
+    original cutoff is persisted separately so future syncs resume where the
+    previous one stopped instead of relying on a fragile consecutive-miss rule.
     """
     tag = "[SYNC]"
     start_ts = time.time()
@@ -533,8 +540,6 @@ def run_incremental_sync(headless=False, limit=None):
         if r.status_code == 200:
             found = set(int(m) for m in re.findall(r'film\.php\?fid=(\d+)', r.text))
             homepage_fids = sorted(list(found))
-            if limit and limit > 0:
-                homepage_fids = homepage_fids[:limit]
             msg = f"{tag} Found {len(homepage_fids)} comparison links to check on homepage."
             if headless:
                 print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
@@ -591,33 +596,86 @@ def run_incremental_sync(headless=False, limit=None):
             else:
                 console.print(f"    [red]• Error checking FID {fid}: {e}[/]")
 
-    # 2. Probe beyond MAX(fid) for newly added comparisons
+    # 2. Catch up every FID added after the original catalog cutoff.
+    # The old implementation stopped after only 15 misses, which could leave a
+    # permanent hole if DVDCompare assigned IDs sparsely. The new cursor is
+    # durable and scans through the newest FID observed on the homepage, plus a
+    # polite tail window for titles not linked there yet.
     cur.execute("SELECT MAX(fid) FROM titles WHERE is_missing = 0")
     max_row = cur.fetchone()
     max_db_fid = max_row[0] if max_row and max_row[0] else 0
-    probe_start = max(max_db_fid + 1, 1)
+    homepage_high_fid = max(homepage_fids) if homepage_fids else 0
 
-    msg = f"{tag} Probing for new comparisons starting at FID {probe_start}..."
+    sync_state = {}
+    if POST_INITIAL_STATE_FILE.exists() and not force_from_initial:
+        try:
+            sync_state = json.loads(POST_INITIAL_STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            sync_state = {}
+
+    saved_next_fid = sync_state.get("next_fid", INITIAL_MAX_FID + 1)
+    try:
+        saved_next_fid = int(saved_next_fid)
+    except (TypeError, ValueError):
+        saved_next_fid = INITIAL_MAX_FID + 1
+
+    probe_start = INITIAL_MAX_FID + 1 if force_from_initial else max(INITIAL_MAX_FID + 1, saved_next_fid)
+    known_high_fid = max(INITIAL_MAX_FID, max_db_fid, homepage_high_fid)
+    if known_high_fid >= probe_start:
+        probe_end = known_high_fid + POST_INITIAL_TAIL_FIDS
+    else:
+        probe_end = probe_start + POST_INITIAL_FALLBACK_WINDOW - 1
+
+    if limit and limit > 0:
+        probe_end = min(probe_end, probe_start + limit - 1)
+
+    msg = (
+        f"{tag} Post-initial catch-up scanning FIDs {probe_start:,} -> {probe_end:,} "
+        f"(newest known: {known_high_fid:,})..."
+    )
     if headless:
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
     else:
         console.print(f"  [yellow]• {msg}[/]")
 
     new_titles_ingested = 0
-    consecutive_misses = 0
-    MAX_CONSECUTIVE_MISSES = limit if (limit and limit > 0 and limit < 15) else 15
+    scanned_fids = 0
+    try:
+        saved_highest_seen = int(sync_state.get("highest_seen_fid", INITIAL_MAX_FID) or INITIAL_MAX_FID)
+    except (TypeError, ValueError):
+        saved_highest_seen = INITIAL_MAX_FID
+    highest_seen_fid = max(known_high_fid, saved_highest_seen)
     current_probe = probe_start
     existing_fids = set(r[0] for r in cur.execute("SELECT fid FROM titles").fetchall())
 
-    while state.running and consecutive_misses < MAX_CONSECUTIVE_MISSES and (limit is None or new_titles_ingested < limit):
-        res = ingest_one(current_probe, client, parser, repo, existing_fids, group_tag="Sync", live=None)
-        if res:
-            new_titles_ingested += 1
-            consecutive_misses = 0
+    while state.running and current_probe <= probe_end:
+        already_present = current_probe in existing_fids
+        if already_present:
+            highest_seen_fid = max(highest_seen_fid, current_probe)
         else:
-            consecutive_misses += 1
+            res = ingest_one(current_probe, client, parser, repo, existing_fids, group_tag="Sync", live=None)
+            if res:
+                new_titles_ingested += 1
+                highest_seen_fid = max(highest_seen_fid, current_probe)
+                if not limit:
+                    probe_end = max(probe_end, current_probe + POST_INITIAL_TAIL_FIDS)
+            time.sleep(CRAWL_DELAY)
+
+        scanned_fids += 1
         current_probe += 1
-        time.sleep(CRAWL_DELAY)
+
+        if scanned_fids % 25 == 0:
+            POST_INITIAL_STATE_FILE.write_text(json.dumps({
+                "next_fid": current_probe,
+                "highest_seen_fid": highest_seen_fid,
+                "updated_at": datetime.now().isoformat(),
+            }, indent=2), encoding="utf-8")
+
+    POST_INITIAL_STATE_FILE.write_text(json.dumps({
+        "next_fid": current_probe,
+        "highest_seen_fid": highest_seen_fid,
+        "updated_at": datetime.now().isoformat(),
+    }, indent=2), encoding="utf-8")
 
     elapsed = time.time() - start_ts
     total_db = len(existing_fids)
@@ -629,6 +687,9 @@ def run_incremental_sync(headless=False, limit=None):
         "homepage_checked": len(homepage_fids),
         "revisions_updated": revisions_updated,
         "new_titles_ingested": new_titles_ingested,
+        "post_initial_scanned_fids": scanned_fids,
+        "post_initial_next_fid": current_probe,
+        "highest_seen_fid": highest_seen_fid,
         "total_db_titles": total_db,
         "elapsed_seconds": round(elapsed, 1),
     }
@@ -640,7 +701,8 @@ def run_incremental_sync(headless=False, limit=None):
     summary = (
         f"{tag} Sync completed in {elapsed:.1f}s. "
         f"Homepage checked: {len(homepage_fids)}, Revisions updated: {revisions_updated}, "
-        f"New titles: {new_titles_ingested}, Total in DB: {total_db:,}"
+        f"Post-initial FIDs scanned: {scanned_fids}, New titles: {new_titles_ingested}, "
+        f"Next FID: {current_probe:,}, Total in DB: {total_db:,}"
     )
     if headless:
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {summary}", flush=True)
@@ -734,17 +796,19 @@ def main():
         epilog="""
 Examples:
   python populate_all.py                     Interactive full catalog sweep (dashboard)
-  python populate_all.py --sync              Check DVDCompare homepage & probe for new releases
+  python populate_all.py --sync              Resume post-76,200 catch-up + check current revisions
+  python populate_all.py --since-initial     Re-scan everything added after the original 76,200 cutoff
   python populate_all.py --cron --sync       Automated headless daily sync (ideal for NAS crontab)
   python populate_all.py --posters-only      Backfill missing movie posters from TMDB / Wikipedia
   python populate_all.py --vacuum            Check DB integrity, optimize search index & VACUUM
         """
     )
-    parser.add_argument("--sync", "--update", action="store_true", help="Incremental sync: check homepage revisions and probe for new film reviews")
+    parser.add_argument("--sync", "--update", action="store_true", help="Incremental sync: check current revisions and resume scanning FIDs added after the original catalog cutoff")
+    parser.add_argument("--since-initial", action="store_true", help="Force a complete catch-up scan from FID 76,201 onward, skipping titles already in the database")
     parser.add_argument("--cron", "--headless", action="store_true", help="Run in headless logging mode (auto-detected if no TTY)")
     parser.add_argument("--posters-only", action="store_true", help="Backfill missing posters for existing titles without re-scraping HTML")
     parser.add_argument("--vacuum", "--health", action="store_true", help="Run database integrity check, FTS5 index optimization, and VACUUM")
-    parser.add_argument("--limit", type=int, default=None, help="Maximum items to process (for --posters-only or debug)")
+    parser.add_argument("--limit", type=int, default=None, help="Maximum items/FIDs to process (poster backfill or bounded sync testing)")
 
     args = parser.parse_args()
 
@@ -756,15 +820,20 @@ Examples:
         run_vacuum(headless=is_headless)
     elif args.posters_only:
         run_posters_backfill(headless=is_headless, limit=args.limit)
-    elif args.sync:
-        run_incremental_sync(headless=is_headless, limit=args.limit)
+    elif args.sync or args.since_initial:
+        run_incremental_sync(
+            headless=is_headless,
+            limit=args.limit,
+            force_from_initial=args.since_initial,
+        )
     else:
         if not is_headless:
             console.clear()
             console.print(Panel(
                 "[bold cyan]🎬 DVDRewind Priority & Full Catalog Ingestion[/]\n\n"
                 "Phase 1: Curated Priority Lists (Directors, Franchises & Boutique Labels)\n"
-                "Phase 2: Full Catalog Sweep (FIDs 1 -> 76,200)\n\n"
+                "Phase 2: Full Catalog Sweep (FIDs 1 -> 76,200)\n"
+                "Phase 3: Catch Up Everything Added Since the Original Sweep\n\n"
                 "[dim]• Press Ctrl+C at any time to safely stop and save progress\n"
                 "• Resume anytime — skips all existing titles\n"
                 "• Every new title is immediately live at http://127.0.0.1:8088[/]",
@@ -773,6 +842,8 @@ Examples:
             ))
             time.sleep(1.5)
         populate(headless=is_headless)
+        if state.running and state.current_fid >= INITIAL_MAX_FID:
+            run_incremental_sync(headless=is_headless, limit=args.limit)
 
 
 if __name__ == "__main__":

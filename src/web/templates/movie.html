@@ -85,25 +85,12 @@
         <div class="hero-ext-strip" role="navigation" aria-label="External Intelligence Resources">
           <!-- 1. IMDb -->
           {% if title.imdb_id %}
-          <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="ext-icon-btn-sm" id="btn-imdb-link"
-             title="Open IMDb Overview &amp; Specs: {{ title.clean_title }} (Opens in new tab)"
-             aria-label="IMDb Overview">
-            {{ icons.imdb_button() }}
-          </a>
-          {% else %}
-          <span class="ext-icon-btn-sm is-deactivated" title="No IMDb title matched" aria-disabled="true">
-            {{ icons.imdb_button() }}
-          </span>
-          {% endif %}
-
-          <!-- 1. IMDb -->
-          {% if title.imdb_id %}
           <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-imdb-toggle"
                   data-service="imdb"
                   data-service-name="IMDb"
                   data-embed-url="/embed/proxy?service=imdb&url={{ ('https://www.imdb.com/title/' ~ title.imdb_id ~ '/')|urlencode }}&fid={{ title.fid }}"
                   data-external-url="https://www.imdb.com/title/{{ title.imdb_id }}/"
-                  title="IMDb Mobile Dossier &amp; Ratings: {{ title.clean_title }} (Click to embed)"
+                  title="IMDb title info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="IMDb Overview"
                   aria-expanded="false">
             {{ icons.imdb_button() }}
@@ -122,7 +109,7 @@
                   data-service-name="Wikipedia"
                   data-embed-url="/embed/proxy?service=wikipedia&url={{ wiki_target|urlencode }}&fid={{ title.fid }}"
                   data-external-url="{{ wiki_target }}"
-                  title="Wikipedia Mobile Article: {{ title.clean_title }} (Click to embed)"
+                  title="Wikipedia title info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="Wikipedia Article"
                   aria-expanded="false">
             {{ icons.wikipedia_button() }}
@@ -140,7 +127,7 @@
                   data-service-name="Letterboxd"
                   data-embed-url="/embed/proxy?service=letterboxd&url={{ title.letterboxd_url|urlencode }}&fid={{ title.fid }}"
                   data-external-url="{{ title.letterboxd_url }}"
-                  title="Letterboxd Cinephile Reviews &amp; Lists: {{ title.clean_title }} (Click to embed)"
+                  title="Letterboxd title info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="Letterboxd Community"
                   aria-expanded="false">
             {{ icons.letterboxd_button() }}
@@ -159,7 +146,7 @@
                   data-service-name="Blu-ray.com"
                   data-embed-url="/embed/proxy?service=bluray&url={{ bluray_target|urlencode }}&fid={{ title.fid }}"
                   data-external-url="{{ bluray_target }}"
-                  title="Blu-ray.com Physical Release Database: {{ title.clean_title }} (Click to embed)"
+                  title="Blu-ray.com release info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="Blu-ray.com Database"
                   aria-expanded="false">
             {{ icons.bluray_dot_com_button() }}
@@ -177,7 +164,7 @@
                   data-service-name="DVDBeaver"
                   data-embed-url="/embed/proxy?service=dvdbeaver&url={{ title.dvdbeaver_url|urlencode }}&fid={{ title.fid }}"
                   data-external-url="{{ title.dvdbeaver_url }}"
-                  title="DVDBeaver Review &amp; Screenshot Comparison: {{ title.clean_title }} (Click to embed)"
+                  title="DVDBeaver review info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="DVDBeaver Review"
                   aria-expanded="false">
             {{ icons.beaver_button() }}
@@ -196,7 +183,7 @@
                   data-service-name="Movie-Censorship"
                   data-embed-url="/embed/proxy?service=moviecensorship&url={{ mc_target|urlencode }}&fid={{ title.fid }}"
                   data-external-url="{{ mc_target }}"
-                  title="Movie-Censorship Comparison Report: {{ title.clean_title }} (Click to embed)"
+                  title="Movie-Censorship comparison info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="Movie-Censorship Report"
                   aria-expanded="false">
             {{ icons.movie_censorship_button() }}
@@ -214,7 +201,7 @@
                   data-service-name="DVDCompare"
                   data-embed-url="/embed/proxy?service=dvdcompare&url={{ title.source_url|urlencode }}&fid={{ title.fid }}"
                   data-external-url="{{ title.source_url }}"
-                  title="DVDCompare Original Source: {{ title.clean_title }} (Click to embed)"
+                  title="DVDCompare source info: {{ title.clean_title }} (Show fixed info panel)"
                   aria-label="DVDCompare Source"
                   aria-expanded="false">
             {{ icons.rewind_button() }}
@@ -315,7 +302,7 @@
               <span class="service-name-label" id="service-name-label">External Resource</span>
               <span class="service-movie-title">&bull; {{ title.clean_title }} ({{ title.year or 'N/A' }})</span>
             </div>
-            <span class="embed-mode-badge"><i class="fas fa-shield-alt"></i> Mobile Ad-Free Embedded View</span>
+            <span class="embed-mode-badge"><i class="fas fa-shield-alt"></i> Fixed Scraped Info View</span>
           </div>
 
           <!-- Header Action Cluster -->
@@ -323,7 +310,7 @@
             <a href="#" target="_blank" rel="noopener noreferrer" class="embed-action-link" id="inline-embed-open-link" style="display: none;" title="Open in new browser window">
               <span>Open In Full Window &rarr;</span>
             </a>
-            <button type="button" class="embed-action-btn" id="inline-embed-reload-btn" style="display: none;" title="Reload embedded view">
+            <button type="button" class="embed-action-btn" id="inline-embed-reload-btn" style="display: none;" title="Refresh scraped info">
               <span>🔄</span>
             </button>
             <button type="button" class="inline-shelf-close-btn" id="btn-close-inline-shelf" title="Close drawer">&times;</button>
@@ -395,7 +382,7 @@
             </div>
           </div>
 
-          <!-- Embedded Service Panel (Iframe with Mobile View) -->
+          <!-- External Service Info Panel (fixed-size sandboxed iframe) -->
           <div class="inline-shelf-panel" id="inline-panel-embed" role="tabpanel" style="display: none;">
             <div class="embed-frame-wrapper">
               <iframe id="inline-embed-frame" class="inline-embed-frame" sandbox="allow-scripts allow-forms allow-popups" loading="lazy" src="about:blank" title="Embedded Service View"></iframe>

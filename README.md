@@ -60,14 +60,18 @@ python -m src.cli serve --host 127.0.0.1 --port 8088
 
 ## Archive Maintenance & Ingestion Engine
 
-You can manage and update your archive directly in the **Web UI** by clicking the **`Archive Sync`** button in the header, or via the command line:
+You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The same operations are also available from the command line:
 
 ```bash
 # Interactive full catalog sweep with live curses dashboard
 python populate_all.py
 
-# Incremental update: checks DVDCompare homepage revisions & probes new releases
+# Incremental update: checks current revisions and resumes the post-76,200 catch-up cursor
 python populate_all.py --sync
+
+# One-time/full catch-up: re-scan everything added after the original 76,200 cutoff
+# (already-ingested titles are skipped)
+python populate_all.py --since-initial
 
 # Headless daily sync with auto-vacuum (ideal for crontab on a NAS/server)
 python populate_all.py --cron --sync

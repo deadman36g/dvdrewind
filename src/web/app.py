@@ -1,11 +1,13 @@
 import html
 import json
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlsplit
 
 from aiohttp import web
 import aiohttp_jinja2
+from bs4 import BeautifulSoup
 import jinja2
 
 from src.config import FIXTURES_DIR, PROJECT_ROOT, RAW_DIR
@@ -595,13 +597,19 @@ async def handle_api_archive_status(request: web.Request) -> web.Response:
 async def handle_api_archive_sync(request: web.Request) -> web.Response:
     manager = ArchiveSyncManager()
     limit = None
+    force_from_initial = False
     try:
         data = await request.json()
         limit = data.get("limit")
+        force_from_initial = bool(data.get("since_initial"))
     except Exception:
         pass
-    started = manager.start_sync(limit=limit)
-    return web.json_response({"ok": started, "message": "Sync started" if started else "A task is already running"})
+    started = manager.start_sync(limit=limit, force_from_initial=force_from_initial)
+    if force_from_initial:
+        message = "Post-76,200 catch-up started" if started else "A task is already running"
+    else:
+        message = "Sync started" if started else "A task is already running"
+    return web.json_response({"ok": started, "message": message})
 
 async def handle_api_archive_posters(request: web.Request) -> web.Response:
     manager = ArchiveSyncManager()
@@ -713,198 +721,297 @@ def render_embed_fallback(target_url: str, service: str, error_detail: str) -> w
         headers=EMBED_RESPONSE_HEADERS,
     )
 
-def render_imdb_dossier(target_url: str, fid: str) -> web.Response:
+def _load_title_for_dossier(fid: str) -> dict[str, Any]:
+    if not fid or not fid.isdigit():
+        return {}
     repo = ArchiveRepository()
-    title = None
     try:
-        if fid and fid.isdigit():
-            title = repo.get_title_detail(int(fid))
+        return repo.get_title_detail(int(fid)) or {}
     except Exception:
-        pass
+        return {}
     finally:
         repo.close()
 
-    clean_title = title.get("clean_title", "Friday the 13th") if title else "Friday the 13th"
-    year = title.get("year", "1980") if title else "1980"
-    runtime = title.get("runtime", "95") if title else "95"
-    director = title.get("director", "Sean S. Cunningham") if title else "Sean S. Cunningham"
-    synopsis = title.get("synopsis", "Camp counselors are stalked and murdered by an unknown assailant while trying to reopen a summer camp that was the site of a child's drowning.") if title else ""
-    genres = " • ".join(str(g) for g in title.get("genres", ["Horror"])) if title and title.get("genres") else "Horror"
-    poster_url = title.get("poster_url", "") if title else ""
 
-    clean_title = html.escape(str(clean_title), quote=True)
-    year = html.escape(str(year), quote=True)
-    runtime = html.escape(str(runtime), quote=True)
-    director = html.escape(str(director), quote=True)
-    synopsis = html.escape(str(synopsis), quote=True)
-    genres = html.escape(str(genres), quote=True)
-    poster_url = html.escape(str(poster_url), quote=True)
-    target_url = html.escape(str(target_url), quote=True)
+def _first_json_ld_item(soup: BeautifulSoup) -> dict[str, Any]:
+    for node in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = node.string or node.get_text("", strip=True)
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for candidate in candidates:
+            if isinstance(candidate, dict) and candidate.get("@graph"):
+                candidates.extend(item for item in candidate["@graph"] if isinstance(item, dict))
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            item_type = candidate.get("@type")
+            types = item_type if isinstance(item_type, list) else [item_type]
+            if any(t in {"Movie", "TVSeries", "TVEpisode", "CreativeWork"} for t in types):
+                return candidate
+    return {}
 
-    poster_img_tag = f'<img src="{poster_url}" class="imdb-poster" alt="Poster">' if poster_url else ''
+
+def _person_names(value: Any, limit: int = 6) -> list[str]:
+    if not value:
+        return []
+    values = value if isinstance(value, list) else [value]
+    names = []
+    for item in values:
+        if isinstance(item, dict):
+            name = item.get("name")
+        else:
+            name = str(item) if item else ""
+        if name and name not in names:
+            names.append(str(name))
+        if len(names) >= limit:
+            break
+    return names
+
+
+def _format_iso_duration(value: Any) -> str:
+    text = str(value or "").strip()
+    match = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?", text, flags=re.I)
+    if not match:
+        return text
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    bits = []
+    if hours:
+        bits.append(f"{hours}h")
+    if minutes:
+        bits.append(f"{minutes}m")
+    return " ".join(bits)
+
+
+def _safe_poster_url(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.startswith("/"):
+        return text
+    try:
+        parsed = urlsplit(text)
+    except Exception:
+        return ""
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return text
+    return ""
+
+
+def _extract_service_metadata(service: str, html_text: str, title: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    if not html_text:
+        return metadata
+
+    soup = BeautifulSoup(html_text, "html.parser")
+    json_ld = _first_json_ld_item(soup)
+
+    def meta_content(*, prop: str | None = None, name: str | None = None) -> str:
+        attrs = {"property": prop} if prop else {"name": name}
+        node = soup.find("meta", attrs=attrs)
+        return str(node.get("content") or "").strip() if node else ""
+
+    if json_ld:
+        metadata["name"] = json_ld.get("name")
+        metadata["description"] = json_ld.get("description")
+        metadata["content_rating"] = json_ld.get("contentRating")
+        metadata["runtime"] = _format_iso_duration(json_ld.get("duration"))
+        metadata["genres"] = json_ld.get("genre")
+        metadata["director"] = ", ".join(_person_names(json_ld.get("director"), 3))
+        metadata["stars"] = _person_names(json_ld.get("actor"), 6)
+        date_published = str(json_ld.get("datePublished") or "")
+        if len(date_published) >= 4 and date_published[:4].isdigit():
+            metadata["year"] = date_published[:4]
+        aggregate = json_ld.get("aggregateRating") or {}
+        if isinstance(aggregate, dict):
+            metadata["rating"] = aggregate.get("ratingValue")
+            metadata["rating_count"] = aggregate.get("ratingCount") or aggregate.get("reviewCount")
+        image = json_ld.get("image")
+        if isinstance(image, dict):
+            image = image.get("url")
+        if isinstance(image, list):
+            image = image[0] if image else ""
+        metadata["image"] = image
+
+    metadata["name"] = metadata.get("name") or meta_content(prop="og:title")
+    metadata["description"] = (
+        metadata.get("description")
+        or meta_content(prop="og:description")
+        or meta_content(name="description")
+    )
+    metadata["image"] = metadata.get("image") or meta_content(prop="og:image")
+
+    if not metadata.get("name") and soup.title:
+        metadata["name"] = soup.title.get_text(" ", strip=True)
+
+    if not metadata.get("description"):
+        for paragraph in soup.find_all("p"):
+            text = " ".join(paragraph.get_text(" ", strip=True).split())
+            if len(text) >= 80:
+                metadata["description"] = text[:900]
+                break
+
+    if service == "wikipedia" and metadata.get("description"):
+        metadata["description"] = str(metadata["description"])[:1200]
+
+    return {key: value for key, value in metadata.items() if value not in (None, "", [], {})}
+
+
+def render_service_dossier(
+    target_url: str,
+    service: str,
+    fid: str,
+    html_text: str = "",
+    fetch_note: str = "",
+) -> web.Response:
+    title = _load_title_for_dossier(fid)
+    scraped = _extract_service_metadata(service, html_text, title)
+    service_name = EMBED_SERVICE_NAMES.get(service, service.replace("_", " ").title() or "External Resource")
+
+    clean_title = scraped.get("name") or title.get("clean_title") or "Movie resource"
+    year = scraped.get("year") or title.get("year") or ""
+    runtime = scraped.get("runtime") or title.get("runtime") or ""
+    director = scraped.get("director") or title.get("director") or ""
+    synopsis = scraped.get("description") or title.get("synopsis") or title.get("overview") or ""
+    genres_value = scraped.get("genres") or title.get("genres") or []
+    if isinstance(genres_value, str):
+        genres = genres_value
+    else:
+        genres = " • ".join(str(item) for item in genres_value if item)
+    stars = scraped.get("stars") or []
+    rating = scraped.get("rating")
+    rating_count = scraped.get("rating_count")
+    content_rating = scraped.get("content_rating") or ""
+    poster_url = _safe_poster_url(title.get("poster_url") or scraped.get("image"))
+
+    safe = lambda value: html.escape(str(value or ""), quote=True)
+    safe_service = safe(service_name)
+    safe_title = safe(clean_title)
+    safe_year = safe(year)
+    safe_runtime = safe(runtime)
+    safe_director = safe(director)
+    safe_synopsis = safe(synopsis)
+    safe_genres = safe(genres)
+    safe_content_rating = safe(content_rating)
+    safe_target_url = safe(target_url)
+    safe_fetch_note = safe(fetch_note)
+    safe_poster_url = safe(poster_url)
+    safe_stars = safe(", ".join(str(item) for item in stars if item))
+    safe_rating = safe(rating)
+    safe_rating_count = safe(rating_count)
+
+    meta_bits = []
+    for value in (safe_content_rating, safe_runtime, safe_genres):
+        if value:
+            meta_bits.append(f"<span>{value}</span>")
+    meta_html = '<span class="sep">•</span>'.join(meta_bits) if meta_bits else '<span>Metadata summary</span>'
+
+    rating_html = ""
+    if safe_rating:
+        votes = f' <span class="rating-count">({safe_rating_count} votes)</span>' if safe_rating_count else ""
+        rating_html = f'<div class="rating"><span>★</span><strong>{safe_rating}</strong><span>/10</span>{votes}</div>'
+
+    credits = []
+    if safe_director:
+        credits.append(f"<p><strong>Director:</strong> {safe_director}</p>")
+    if safe_stars:
+        credits.append(f"<p><strong>Cast:</strong> {safe_stars}</p>")
+    credits_html = "".join(credits)
+
+    poster_html = f'<img src="{safe_poster_url}" class="resource-poster" alt="Poster">' if safe_poster_url else ""
+    note_html = f'<div class="fetch-note">{safe_fetch_note}</div>' if safe_fetch_note else ""
+    year_html = f' <span class="year">({safe_year})</span>' if safe_year else ""
 
     dossier_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IMDb: {clean_title} ({year})</title>
+<title>{safe_service}: {safe_title}</title>
 <style>
+  * {{ box-sizing: border-box; }}
+  html, body {{ height: 100%; }}
   body {{
     margin: 0;
-    padding: 1.25rem;
+    padding: 1.15rem;
+    overflow-y: auto;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #121212;
-    color: #ffffff;
+    background: #0b1120;
+    color: #f8fafc;
   }}
-  .imdb-bar {{
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    margin-bottom: 1rem;
+  .resource-card {{ max-width: 980px; margin: 0 auto; }}
+  .resource-bar {{
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding-bottom: .75rem; border-bottom: 1px solid rgba(255,255,255,.11); margin-bottom: 1rem;
   }}
-  .imdb-logo {{
-    background: #f5c518;
-    color: #000;
-    font-weight: 900;
-    font-size: 1.15rem;
-    padding: 0.2rem 0.55rem;
-    border-radius: 4px;
-    letter-spacing: -0.05em;
+  .source-badge {{
+    display: inline-flex; align-items: center; padding: .28rem .62rem; border-radius: 6px;
+    background: #f59e0b; color: #111827; font-size: .82rem; font-weight: 900;
   }}
-  .imdb-badge {{
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #f5c518;
-    background: rgba(245, 197, 24, 0.12);
-    padding: 0.2rem 0.6rem;
-    border-radius: 9999px;
-    border: 1px solid rgba(245, 197, 24, 0.3);
+  .mode {{ color: #94a3b8; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }}
+  .resource-grid {{ display: flex; align-items: flex-start; gap: 1.15rem; }}
+  .resource-poster {{ width: 116px; height: 174px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; box-shadow: 0 6px 18px rgba(0,0,0,.45); }}
+  .resource-info {{ min-width: 0; flex: 1; }}
+  h1 {{ margin: 0 0 .45rem; font-size: 1.32rem; line-height: 1.2; }}
+  .year {{ color: #94a3b8; font-weight: 500; }}
+  .meta {{ display: flex; flex-wrap: wrap; gap: .45rem; color: #94a3b8; font-size: .79rem; margin-bottom: .55rem; }}
+  .sep {{ color: #475569; }}
+  .rating {{ display: flex; align-items: baseline; gap: .3rem; color: #fbbf24; margin: .25rem 0 .65rem; }}
+  .rating strong {{ font-size: 1.1rem; }}
+  .rating-count {{ color: #64748b; font-size: .72rem; margin-left: .25rem; }}
+  .synopsis {{ margin: 0; color: #cbd5e1; font-size: .86rem; line-height: 1.52; }}
+  .credits {{ margin-top: .7rem; color: #94a3b8; font-size: .8rem; }}
+  .credits p {{ margin: .22rem 0; }}
+  .credits strong {{ color: #e2e8f0; }}
+  .fetch-note {{ margin-top: .8rem; padding: .55rem .7rem; border: 1px solid rgba(245,158,11,.24); border-radius: 7px; color: #cbd5e1; background: rgba(245,158,11,.06); font-size: .76rem; }}
+  .resource-actions {{
+    margin-top: 1rem; padding-top: .75rem; border-top: 1px solid rgba(255,255,255,.08);
+    display: flex; justify-content: space-between; align-items: center; gap: .75rem;
   }}
-  .imdb-dossier-grid {{
-    display: flex;
-    gap: 1.25rem;
-    align-items: flex-start;
+  .source-line {{ color: #64748b; font-size: .72rem; }}
+  .open-full {{
+    display: inline-flex; align-items: center; padding: .48rem .85rem; border-radius: 6px;
+    background: rgba(245,158,11,.16); border: 1px solid rgba(245,158,11,.45); color: #fbbf24;
+    text-decoration: none; font-size: .79rem; font-weight: 800;
   }}
-  .imdb-poster {{
-    width: 110px;
-    height: 165px;
-    border-radius: 8px;
-    object-fit: cover;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
-    flex-shrink: 0;
-  }}
-  .imdb-info {{
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }}
-  .imdb-title {{
-    margin: 0;
-    font-size: 1.35rem;
-    font-weight: 700;
-    color: #fff;
-  }}
-  .imdb-meta-pills {{
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.78rem;
-    color: #999;
-    flex-wrap: wrap;
-  }}
-  .imdb-rating {{
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #f5c518;
-    margin: 0.25rem 0;
-  }}
-  .imdb-synopsis {{
-    font-size: 0.85rem;
-    color: #ccc;
-    line-height: 1.45;
-    margin: 0;
-  }}
-  .imdb-credits {{
-    font-size: 0.82rem;
-    color: #aaa;
-  }}
-  .imdb-credits strong {{
-    color: #eee;
-  }}
-  .imdb-actions {{
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }}
-  .btn-imdb-full {{
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: #f5c518;
-    color: #000;
-    font-weight: 700;
-    font-size: 0.82rem;
-    padding: 0.45rem 0.95rem;
-    border-radius: 6px;
-    text-decoration: none;
-    transition: opacity 0.15s ease;
-  }}
-  .btn-imdb-full:hover {{ opacity: 0.9; }}
+  .open-full:hover {{ background: rgba(245,158,11,.25); }}
+  @media (max-width: 560px) {{ .resource-poster {{ width: 86px; height: 129px; }} .resource-grid {{ gap: .8rem; }} }}
 </style>
 </head>
 <body>
-  <div class="imdb-bar">
-    <div style="display:flex; align-items:center; gap:0.6rem;">
-      <span class="imdb-logo">IMDb</span>
-      <span style="font-size:0.85rem; font-weight:600; color:#eee;">Title Intelligence Dossier</span>
+  <div class="resource-card">
+    <div class="resource-bar">
+      <span class="source-badge">{safe_service}</span>
+      <span class="mode">Fixed scraped info view</span>
     </div>
-    <span class="imdb-badge">Mobile Ad-Free View</span>
-  </div>
-  <div class="imdb-dossier-grid">
-    {poster_img_tag}
-    <div class="imdb-info">
-      <h1 class="imdb-title">{clean_title} <span style="font-size:0.95rem; color:#888;">({year})</span></h1>
-      <div class="imdb-meta-pills">
-        <span>R</span>
-        <span>&bull;</span>
-        <span>{runtime} min</span>
-        <span>&bull;</span>
-        <span>{genres}</span>
-      </div>
-      <div class="imdb-rating">
-        <span>⭐</span>
-        <span>6.4 <span style="font-size:0.75rem; color:#888;">/ 10</span></span>
-      </div>
-      <p class="imdb-synopsis">{synopsis}</p>
-      <div class="imdb-credits">
-        <p style="margin:0.25rem 0;"><strong>Director:</strong> {director}</p>
-        <p style="margin:0.25rem 0;"><strong>Stars:</strong> Betsy Palmer, Adrienne King, Jeannine Taylor, Kevin Bacon</p>
+    <div class="resource-grid">
+      {poster_html}
+      <div class="resource-info">
+        <h1>{safe_title}{year_html}</h1>
+        <div class="meta">{meta_html}</div>
+        {rating_html}
+        <p class="synopsis">{safe_synopsis or 'No summary was available from this source. Use the full-site link below for the live page.'}</p>
+        <div class="credits">{credits_html}</div>
       </div>
     </div>
-  </div>
-  <div class="imdb-actions">
-    <span style="font-size:0.75rem; color:#666;">Source: IMDb.com Title Database</span>
-    <a href="{target_url}" target="_blank" rel="noopener noreferrer" class="btn-imdb-full">
-      <span>Open Full Interactive IMDb &rarr;</span>
-    </a>
+    {note_html}
+    <div class="resource-actions">
+      <span class="source-line">Source: {safe_service}</span>
+      <a href="{safe_target_url}" target="_blank" rel="noopener noreferrer" class="open-full">Open Full Site &rarr;</a>
+    </div>
   </div>
 </body>
 </html>"""
-    return web.Response(
-        text=dossier_html,
-        content_type="text/html",
-        charset="utf-8",
-        headers=EMBED_RESPONSE_HEADERS,
-    )
+    response_headers = dict(EMBED_RESPONSE_HEADERS)
+    response_headers["Cache-Control"] = "public, max-age=300"
+    return web.Response(text=dossier_html, content_type="text/html", charset="utf-8", headers=response_headers)
+
+
+def render_imdb_dossier(target_url: str, fid: str, html_text: str = "", fetch_note: str = "") -> web.Response:
+    return render_service_dossier(target_url, "imdb", fid, html_text=html_text, fetch_note=fetch_note)
 
 async def handle_embed_proxy(request: web.Request) -> web.Response:
     import logging
@@ -959,30 +1066,49 @@ async def handle_embed_proxy(request: web.Request) -> web.Response:
         return web.Response(text="Blocked target URL", status=400)
     except Exception as exc:
         logger.warning("[PROXY] Fetch failed for %s: %s", service, exc)
-        if service == "imdb":
-            return render_imdb_dossier(target_url, fid)
-        return render_embed_fallback(target_url, service, str(exc))
+        return render_service_dossier(
+            target_url,
+            service,
+            fid,
+            fetch_note="The live site blocked or failed the metadata fetch. DVDRewind is showing the local title data it already knows.",
+        )
 
     status = fetched.status
     body_bytes = fetched.body
     final_url = fetched.final_url
     logger.info("[PROXY] Fetched %s -> status=%s, size=%s", final_url, status, len(body_bytes))
 
-    # Do not turn the endpoint into a generic binary relay.
+    # The endpoint is an information scraper, not a generic binary relay.
     if fetched.content_type and fetched.content_type not in ("text/html", "application/xhtml+xml"):
-        return render_embed_fallback(final_url, service, "Unsupported content type")
+        return render_service_dossier(
+            final_url,
+            service,
+            fid,
+            fetch_note="The source returned non-HTML content, so DVDRewind is showing its local metadata instead.",
+        )
 
-    # Check for WAF or bot blocks.
+    # IMDb commonly returns an AWS WAF challenge (often HTTP 202) instead of
+    # title HTML. Keep the panel stable and fall back to local title metadata.
     is_waf_block = (
         b"awsWaf" in body_bytes
         or (service == "imdb" and len(body_bytes) < 5000)
         or (status in (403, 202) and service == "imdb")
     )
-    if is_waf_block and service == "imdb":
-        return render_imdb_dossier(final_url, fid)
+    if is_waf_block:
+        return render_service_dossier(
+            final_url,
+            service,
+            fid,
+            fetch_note="The source returned an anti-bot challenge. DVDRewind kept the same info box and fell back to local metadata.",
+        )
 
     if status >= 400 and not (status == 404 and b"<html" in body_bytes):
-        return render_embed_fallback(final_url, service, f"HTTP {status}")
+        return render_service_dossier(
+            final_url,
+            service,
+            fid,
+            fetch_note=f"The source returned HTTP {status}; local metadata is shown instead.",
+        )
 
     try:
         encoding = fetched.charset or "utf-8"
@@ -990,29 +1116,7 @@ async def handle_embed_proxy(request: web.Request) -> web.Response:
     except Exception:
         html_text = body_bytes.decode("utf-8", errors="replace")
 
-    final_parsed = urlsplit(final_url)
-    base_href = f"{final_parsed.scheme}://{final_parsed.netloc}/"
-    safe_base_href = html.escape(base_href, quote=True)
-
-    # Inject base href and clean mobile CSS. The iframe is sandboxed without
-    # same-origin privileges, so proxied scripts cannot reach the parent app.
-    if "<head" in html_text:
-        injection = f'<head>\n<base href="{safe_base_href}">\n{CLEAN_INJECT_CSS}\n'
-        html_text = re.sub(r'<head[^>]*>', injection, html_text, count=1, flags=re.I)
-    elif "<html" in html_text:
-        injection = f'<html><head><base href="{safe_base_href}">{CLEAN_INJECT_CSS}</head>'
-        html_text = re.sub(r'<html[^>]*>', injection, html_text, count=1, flags=re.I)
-    else:
-        html_text = f'<base href="{safe_base_href}">{CLEAN_INJECT_CSS}' + html_text
-
-    response_headers = dict(EMBED_RESPONSE_HEADERS)
-    response_headers["Cache-Control"] = "public, max-age=300"
-    return web.Response(
-        text=html_text,
-        content_type="text/html",
-        charset="utf-8",
-        headers=response_headers,
-    )
+    return render_service_dossier(final_url, service, fid, html_text=html_text)
 
 def create_app() -> web.Application:
     # Ensure database is initialized.

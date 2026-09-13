@@ -123,7 +123,11 @@ function renderArchiveStatus(data) {
       statProgress.textContent = data.task_type.toUpperCase();
       if (statProgressSub) {
         const stats = data.stats || {};
-        statProgressSub.textContent = `New: ${stats.new_titles || 0} • Rev: ${stats.revisions_updated || 0} (${data.elapsed_seconds || 0}s)`;
+        if (data.task_type === "sync") {
+          statProgressSub.textContent = `New: ${stats.new_titles || 0} • Rev: ${stats.revisions_updated || 0} • Scanned: ${stats.scanned_fids || 0} • FID ${stats.current_fid || 0}`;
+        } else {
+          statProgressSub.textContent = `Checked: ${stats.checked || 0} • Errors: ${stats.errors || 0} (${data.elapsed_seconds || 0}s)`;
+        }
       }
     } else {
       statProgress.textContent = "Idle";
@@ -133,11 +137,13 @@ function renderArchiveStatus(data) {
 
   // Toggle action buttons
   const btnSync = document.getElementById("btn-start-sync");
+  const btnCatchup = document.getElementById("btn-catchup-since-initial");
   const btnPosters = document.getElementById("btn-start-posters");
   const btnVacuum = document.getElementById("btn-start-vacuum");
   const btnCancel = document.getElementById("btn-cancel-task");
 
   if (btnSync) btnSync.disabled = data.is_running;
+  if (btnCatchup) btnCatchup.disabled = data.is_running;
   if (btnPosters) btnPosters.disabled = data.is_running;
   if (btnVacuum) btnVacuum.disabled = data.is_running;
   if (btnCancel) {
@@ -150,7 +156,7 @@ function renderArchiveStatus(data) {
     if (data.log_lines.length !== lastLogLinesLength || data.is_running) {
       lastLogLinesLength = data.log_lines.length;
       if (data.log_lines.length === 0) {
-        consoleElem.innerHTML = `<div class="console-line dim"><span class="console-ts">--:--:--</span> Ready. Click "Sync with DVDCompare" to check for new releases and revisions.</div>`;
+        consoleElem.innerHTML = `<div class="console-line dim"><span class="console-ts">--:--:--</span> Ready. Use Sync for normal updates, or Catch Up Since 76,200 for a full post-initial pass.</div>`;
       } else {
         const html = data.log_lines.map(line => {
           const styleClass = line.style ? ` style-${line.style}` : "";
@@ -195,6 +201,23 @@ async function triggerArchiveSync() {
     pollArchiveStatus();
   } catch (err) {
     alert(`Failed to start sync: ${err.message}`);
+  }
+}
+
+async function triggerArchiveCatchUp() {
+  try {
+    const res = await fetch("/api/archive/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ since_initial: true }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.message || "Could not start post-76,200 catch-up.");
+    }
+    pollArchiveStatus();
+  } catch (err) {
+    alert(`Failed to start catch-up: ${err.message}`);
   }
 }
 
