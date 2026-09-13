@@ -58,7 +58,7 @@ function Invoke-DVDRewindCommandCenter {
     param([string]$Nas)
     $webUrl = 'http://192.168.50.39:8091'
     while ($true) {
-        ssh -t $Nas 'docker exec -it dvdrewind python populate_all.py --command-center'
+        ssh -t $Nas 'docker exec -it -e DVDREWIND_TUI_WRAPPER=1 dvdrewind python populate_all.py --command-center'
         $code = $LASTEXITCODE
         if ($code -eq 20) {
             $summary = ssh $Nas 'docker exec dvdrewind python populate_all.py --completion-message'
@@ -68,6 +68,11 @@ function Invoke-DVDRewindCommandCenter {
         }
         if ($code -eq 81) {
             Start-Process $webUrl
+            continue
+        }
+        if ($code -eq 82) {
+            # F5 requested an in-place CLI code reload. Preserve the terminal
+            # session and simply launch the command center process again.
             continue
         }
         if ($code -ne 0) {
@@ -149,4 +154,4 @@ Write-Host '      dvdrewind retry            # retry previous failures'
 Write-Host '      dvdrewind status           # one status snapshot'
 Write-Host '      dvdrewind web              # open DVDRewind'
 Write-Host ''
-Write-Host 'Dashboard hotkeys: Q quit, R refresh, E errors, N new-only, S search, H help.' -ForegroundColor DarkGray
+Write-Host 'Main footer: N Best Next, F Find, H Keys, F5 Reload, Q Quit. R refreshes data without restarting.' -ForegroundColor DarkGray

@@ -28,6 +28,7 @@ archive/sync_status.json
 archive/sync_failed_fids.json
 archive/post_initial_sync.json
 archive/populate_progress.json
+archive/tui_state.json
 archive/*.html
 
 # Logs & Temporary Media

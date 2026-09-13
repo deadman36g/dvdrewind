@@ -61,9 +61,9 @@ from src.cli_monitor import (
     completion_message as cli_completion_message,
     retry_failed_fids as cli_retry_failed_fids,
     run_archive_status_monitor as cli_run_archive_status_monitor,
-    run_command_center as cli_run_command_center,
     search_archive as cli_search_archive,
 )
+from src.tui_app import run_tui_command_center
 
 import requests
 
@@ -921,7 +921,7 @@ Examples:
     state.headless = is_headless
 
     if args.command_center:
-        raise SystemExit(cli_run_command_center())
+        raise SystemExit(run_tui_command_center())
     elif args.completion_message:
         print(cli_completion_message())
     elif args.search or args.search_b64:

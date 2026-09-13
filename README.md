@@ -60,7 +60,7 @@ python -m src.cli serve --host 127.0.0.1 --port 8088
 
 ## Archive Maintenance & Ingestion Engine
 
-You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The terminal interface uses a compact blue operations-console layout: persistent RUNNING/IDLE state, phase progress, current/next FID, speed/ETA, run counters, activity feed, discovery/error views, explicit end-of-run reports, and keyboard hotkeys.
+You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The terminal interface is a persistent Textual TUI inspired by vintage video-store database software: a three-column **Library / Current Work / Intelligence** layout, semantic workflow badges, selected-item detail panel, Best Next recommendations, restrained recent activity, search, live population state, and progressive-disclosure keyboard controls.
 
 Windows users can install the NAS-aware `dvdrewind` PowerShell command with:
 
@@ -68,7 +68,7 @@ Windows users can install the NAS-aware `dvdrewind` PowerShell command with:
 irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_windows_cli.ps1 | iex
 ```
 
-Then use `dvdrewind` to open the unified interactive **DVD Rewind Archive Console**. Its split layout keeps operations on the left and live system state on the right, so it is always obvious whether the NAS worker is RUNNING or IDLE. From that one interface you can start a normal update, force the post-76,200 catch-up, watch progress, view discoveries, search, inspect/retry failures, open the last-run report, start poster/database maintenance, or open the web UI. A completed menu-started job gets a dedicated **RUN COMPLETE** screen before returning to the console, and the Windows launcher still sends the desktop completion notification. Legacy shortcuts such as `dvdrewind new`, `dvdrewind search "The Thing"`, and `dvdrewind status` remain available.
+Then use `dvdrewind` to open the unified interactive **DVD Rewind Archive Console**. The left rail answers **where am I?**, the larger center workspace answers **what am I working on?**, and the right intelligence rail answers **what should I do next?** From that one interface you can start a normal update, force the post-76,200 catch-up, watch progress, browse recent archive titles, find movies, inspect/retry failures, run poster/database maintenance, or open the web UI. `R` refreshes archive data without restarting the app; `F5` reloads updated CLI code while preserving the current section/search, and the header shows **UPDATE READY - F5** when watched source files change. `H` opens the complete grouped shortcut sheet while the normal footer stays limited to five high-value commands. Menu-started jobs still produce a visible completion state and Windows completion notification. Legacy shortcuts such as `dvdrewind new`, `dvdrewind search "The Thing"`, and `dvdrewind status` remain available.
 
 The same operations are also available from the Python command line:
 
@@ -122,7 +122,7 @@ irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_
 Then use:
 
 ```powershell
-dvdrewind          # unified interactive Command Center
+dvdrewind          # persistent three-column Textual Archive Console
 dvdrewind status   # one status snapshot
 dvdrewind help     # populate_all.py options
 dvdrewind web      # open the web UI
