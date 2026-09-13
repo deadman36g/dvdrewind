@@ -506,6 +506,7 @@ def build_command_center_panel(data: Dict[str, Any]) -> Panel:
 
 def _read_menu_key() -> str:
     if os.name == "posix" and termios is not None and tty is not None and sys.stdin.isatty():
+        console.print("[bold cyan]Select:[/] ", end="")
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
         try:
@@ -515,7 +516,10 @@ def _read_menu_key() -> str:
             termios.tcsetattr(fd, termios.TCSADRAIN, old)
         console.print(key)
         return key.strip().lower()
-    return console.input("[bold cyan]Choose:[/] ").strip().lower()
+    try:
+        return console.input("[bold cyan]Select:[/] ").strip().lower()
+    except EOFError:
+        return "q"
 
 
 def _pause_command_center(message: str = "Press Enter to return to the Command Center…") -> None:
@@ -544,7 +548,6 @@ def run_command_center() -> int:
 
         console.clear()
         console.print(build_command_center_panel(data))
-        console.print("[bold cyan]Select:[/] ", end="")
         choice = _read_menu_key()
 
         if choice == "q":
