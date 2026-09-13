@@ -49,15 +49,17 @@ class TestEnhancedCLIMonitor(unittest.TestCase):
             "last_sync": {"new_titles_ingested": 2, "revisions_updated": 1, "errors": 0, "elapsed_seconds": 80},
         }
 
-    def test_main_dashboard_contains_approved_visual_features(self):
+    def test_main_dashboard_contains_blueprint_console_features(self):
         text = self.render(self.sample_status())
+        self.assertIn("DVD REWIND", text)
+        self.assertIn("ARCHIVE OPERATIONS", text)
         self.assertIn("76,201+ CATCH-UP", text)
-        self.assertIn("Now Processing", text)
+        self.assertIn("SYSTEM STATUS", text)
+        self.assertIn("THIS RUN", text)
+        self.assertIn("NOW PROCESSING", text)
         self.assertIn("The Thing", text)
-        self.assertIn("Recent Discoveries", text)
-        self.assertIn("Archive Growth", text)
-        self.assertIn("Previous run", text)
-        self.assertIn("errors", text)
+        self.assertIn("RECENT ACTIVITY", text)
+        self.assertIn("ERRORS", text)
         self.assertIn("ETA", text)
 
     def test_error_drawer_lists_failed_fids(self):
@@ -67,27 +69,33 @@ class TestEnhancedCLIMonitor(unittest.TestCase):
 
     def test_new_only_view_lists_discoveries(self):
         text = self.render(self.sample_status(), view="new")
-        self.assertIn("New discoveries only", text)
+        self.assertIn("RECENT DISCOVERIES", text)
         self.assertIn("76,249", text)
         self.assertIn("The Thing", text)
 
     def test_command_center_exposes_unified_project_actions(self):
         data = self.sample_status()
         data["is_running"] = False
+        data["post_initial"] = {"next_fid": 76251}
         buf = io.StringIO()
         console = Console(file=buf, force_terminal=False, width=140)
         console.print(build_command_center_panel(data))
         text = buf.getvalue()
-        self.assertIn("DVD Rewind Command Center", text)
+        self.assertIn("ARCHIVE CONTROL CONSOLE", text)
+        self.assertIn("OPERATIONS", text)
+        self.assertIn("SYSTEM STATUS", text)
         self.assertIn("Run Update", text)
         self.assertIn("Catch Up Since 76,200", text)
-        self.assertIn("Watch Current Run", text)
+        self.assertIn("Watch Live Run", text)
         self.assertIn("Search Archive", text)
-        self.assertIn("Errors / Retry Failures", text)
-        self.assertIn("Poster Backfill", text)
-        self.assertIn("Database Maintenance", text)
+        self.assertIn("Errors / Retry", text)
+        self.assertIn("Last Run Report", text)
+        self.assertIn("Open Web Interface", text)
+        self.assertIn("Posters", text)
+        self.assertIn("Database maintenance", text)
+        self.assertIn("76,251", text)
 
-    def test_idle_dashboard_becomes_end_of_run_report(self):
+    def test_explicit_report_view_is_unambiguous_after_completion(self):
         data = self.sample_status()
         data["is_running"] = False
         data["last_sync"].update({
@@ -96,10 +104,14 @@ class TestEnhancedCLIMonitor(unittest.TestCase):
             "post_initial_next_fid": 76801,
             "posters_fetched": 4,
         })
-        text = self.render(data)
-        self.assertIn("Last Run Report", text)
+        text = self.render(data, view="report")
+        self.assertIn("RUN COMPLETE", text)
+        self.assertIn("LAST RUN", text)
         self.assertIn("Catch-up FIDs scanned", text)
         self.assertIn("Next FID", text)
+        idle = self.render(data)
+        self.assertIn("● IDLE", idle)
+        self.assertNotIn("RUN COMPLETE", idle)
 
 
 if __name__ == "__main__":

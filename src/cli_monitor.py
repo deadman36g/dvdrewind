@@ -239,58 +239,113 @@ def _previous_run_line(last_sync: Dict[str, Any], stats: Dict[str, Any]) -> Text
 
 
 def build_archive_status_panel(data: Dict[str, Any], view: str = "main") -> Panel:
+    """Render the compact DVD Rewind operations console."""
     running = bool(data.get("is_running"))
     stats = data.get("stats") or {}
+    metrics = data.get("metrics") or {}
     last_sync = data.get("last_sync") or {}
+    post_initial = data.get("post_initial") or {}
     elapsed = float(data.get("elapsed_seconds") or 0)
     phase_elapsed = float(data.get("phase_elapsed_seconds") or elapsed)
     phase = str(stats.get("phase") or ("idle" if not running else "starting"))
     phase_label = PHASE_LABELS.get(phase, phase.replace("_", " ").upper())
     current, total, pct, speed, eta = _phase_progress(stats, phase_elapsed)
 
-    header = Text()
-    header.append("DVDRewind  ", style="bold cyan")
-    header.append(f"[{phase_label}]", style="bold black on bright_cyan" if running else "bold white on bright_black")
-    header.append("  ")
-    header.append(data.get("status_message") or "Ready", style="bold white")
+    navy = "#071a2f"
+    panel_blue = "#0c2747"
+    line_blue = "#2f78b7"
+    accent = "#63c7ff"
+    green = "#55e39f"
+    muted = "#8aa7c1"
+
+    masthead = Text()
+    masthead.append("DVD REWIND", style=f"bold white on {panel_blue}")
+    masthead.append("  //  ARCHIVE OPERATIONS", style=f"bold {accent}")
+    masthead.append("\n")
+    if running:
+        masthead.append("● LIVE ", style=f"bold {green}")
+        masthead.append(phase_label, style="bold white")
+        masthead.append(f"  ·  {data.get('status_message') or 'Working'}", style=muted)
+    else:
+        masthead.append("● IDLE ", style=muted)
+        masthead.append("Archive worker is standing by", style="bold white")
+        if last_sync:
+            masthead.append(f"  ·  last run {str(last_sync.get('status') or 'complete').upper()}", style=muted)
 
     progress = Text()
-    if total:
-        progress.append_text(_progress_bar(pct))
-        progress.append(f"  {current:,}/{total:,}  {pct:5.1f}%", style="bold yellow")
+    if running and total:
+        progress.append_text(_progress_bar(pct, width=40))
+        progress.append(f"  {current:,}/{total:,}  {pct:5.1f}%", style=f"bold {accent}")
+        if speed:
+            progress.append(f"  {speed:.2f}/s", style=muted)
+        if eta is not None:
+            progress.append(f"  ETA {_fmt_duration(eta)}", style=green)
+    elif running:
+        progress.append("Preparing phase…", style=muted)
     else:
-        progress.append("Waiting for phase size…", style="dim")
-    if speed:
-        progress.append(f"  •  {speed:.2f} items/s", style="cyan")
-    if eta is not None:
-        progress.append(f"  •  ETA {_fmt_duration(eta)}", style="green")
+        progress.append("Worker idle", style=muted)
+
+    current_fid = int(stats.get("current_fid") or 0)
+    next_fid = int(
+        (stats.get("next_fid") if running else None)
+        or post_initial.get("next_fid")
+        or stats.get("next_fid")
+        or INITIAL_MAX_FID + 1
+    )
+
+    telemetry = Table.grid(expand=True, padding=(0, 1))
+    telemetry.add_column(ratio=1)
+    telemetry.add_column(ratio=1)
+    telemetry.add_column(ratio=1)
+    telemetry.add_column(ratio=1)
+    telemetry.add_row(
+        Text(f"CURRENT FID\n{current_fid:,}" if running and current_fid else "CURRENT FID\n—", style="bold white"),
+        Text(f"NEXT FID\n{next_fid:,}", style="bold white"),
+        Text(f"ELAPSED\n{_fmt_duration(elapsed) if running else '—'}", style="bold white"),
+        Text(f"ARCHIVE\n{int(metrics.get('titles') or data.get('db_titles') or 0):,} titles", style="bold white"),
+    )
+
+    counters = Table.grid(expand=True, padding=(0, 1))
+    counters.add_column(ratio=1)
+    counters.add_column(ratio=1)
+    counters.add_column(ratio=1)
+    counters.add_column(ratio=1)
+    counters.add_row(
+        Text(f"NEW\n{int(stats.get('new_titles') or 0):,}", style=green),
+        Text(f"REVISED\n{int(stats.get('revisions_updated') or 0):,}", style=accent),
+        Text(f"POSTERS\n{int(stats.get('posters_fetched') or 0):,}", style="#c7a7ff"),
+        Text(f"ERRORS\n{int(stats.get('errors') or 0):,}", style="bold #ff7d8a" if int(stats.get("errors") or 0) else green),
+    )
+
+    activity = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+    activity.add_column("Time", width=9, style=muted)
+    activity.add_column("Event", ratio=1)
+    logs = list(data.get("log_lines") or [])[-6:]
+    if logs:
+        for item in reversed(logs):
+            activity.add_row(str(item.get("ts") or "--:--:--"), str(item.get("msg") or "")[:110])
+    else:
+        activity.add_row("--:--:--", "No activity in this session yet.")
 
     if view == "errors":
-        body = Group(header, Text(""), _counter_strip(stats), Text(""), _errors_table(data.get("failed_fids") or []))
-        subtitle = "[dim]E returns to dashboard • R refresh • Q quit[/]"
+        body = Group(masthead, Text(""), Panel(_errors_table(data.get("failed_fids") or []), title="ERROR LOG", border_style="#d85c69", style=f"on {navy}"))
+        subtitle = "[dim]E dashboard • R refresh • Q back[/]"
     elif view == "help":
-        help_table = Table(box=box.SIMPLE, show_header=False, expand=True)
-        help_table.add_column("Key", style="bold cyan", width=8)
+        help_table = Table(box=None, show_header=False, expand=True)
+        help_table.add_column("Key", style=f"bold {accent}", width=8)
         help_table.add_column("Action")
-        for key, desc in [
-            ("Q", "Quit monitor only — the NAS task keeps running"),
-            ("R", "Refresh now"),
-            ("E", "Toggle recent errors"),
-            ("N", "Toggle new-discoveries-only view"),
-            ("S", "Search the DVDRewind archive"),
-            ("H", "Toggle this help"),
-        ]:
+        for key, desc in [("Q", "Back to Command Center / close monitor"), ("R", "Refresh now"), ("E", "Errors"), ("N", "New discoveries"), ("S", "Search archive"), ("H", "Help")]:
             help_table.add_row(key, desc)
-        body = Group(header, Text(""), help_table)
-        subtitle = "[dim]H returns to dashboard[/]"
+        body = Group(masthead, Text(""), Panel(help_table, title="CONTROLS", border_style=line_blue, style=f"on {navy}"))
+        subtitle = "[dim]H dashboard[/]"
     elif view == "new":
-        body = Group(header, Text(""), _counter_strip(stats), Text(""), _discoveries_table(data.get("recent_discoveries") or [], limit=14))
-        subtitle = "[dim]New discoveries only • N returns • S search • Q quit[/]"
-    elif not running and last_sync:
-        summary = Table(box=box.SIMPLE_HEAVY, show_header=False, expand=True)
-        summary.add_column("Metric", style="dim", width=24)
-        summary.add_column("Value", style="bold")
-        summary.add_row("Result", str(last_sync.get("status") or "complete").upper())
+        body = Group(masthead, Text(""), counters, Text(""), Panel(_discoveries_table(data.get("recent_discoveries") or [], limit=14), title="RECENT DISCOVERIES", border_style=green, style=f"on {navy}"))
+        subtitle = "[dim]N dashboard • S search • Q back[/]"
+    elif view == "report":
+        summary = Table(box=None, show_header=False, expand=True, padding=(0, 1))
+        summary.add_column("Metric", style=muted, width=25)
+        summary.add_column("Value", style="bold white")
+        summary.add_row("Result", str(last_sync.get("status") or "—").upper())
         summary.add_row("Duration", _fmt_duration(last_sync.get("elapsed_seconds")))
         summary.add_row("Homepage checked", f"{int(last_sync.get('homepage_checked') or 0):,}")
         summary.add_row("Catch-up FIDs scanned", f"{int(last_sync.get('post_initial_scanned_fids') or 0):,}")
@@ -298,40 +353,27 @@ def build_archive_status_panel(data: Dict[str, Any], view: str = "main") -> Pane
         summary.add_row("Revisions", f"{int(last_sync.get('revisions_updated') or 0):,}")
         summary.add_row("Posters fetched", f"{int(last_sync.get('posters_fetched') or 0):,}")
         summary.add_row("Errors", f"{int(last_sync.get('errors') or 0):,}")
-        summary.add_row("Next FID", f"{int(last_sync.get('post_initial_next_fid') or INITIAL_MAX_FID + 1):,}")
-        previous_sync = last_sync.get("previous_sync") or {}
-        body = Group(
-            Text("Last Run Report", style="bold green"),
-            summary,
-            Text(""),
-            _previous_run_line(previous_sync, {}),
-            Text(""),
-            Panel(_growth_table(data), title="Archive Size", border_style="bright_black"),
-        )
-        subtitle = "[dim]Run complete • R refresh • S search • Q quit[/]"
+        summary.add_row("Next FID", f"{int(last_sync.get('post_initial_next_fid') or next_fid):,}")
+        result_banner = Text("RUN COMPLETE", style=f"bold black on {green}" if str(last_sync.get("status") or "").lower() == "success" else "bold white on #a33b49")
+        body = Group(result_banner, Text(""), Panel(summary, title="LAST RUN", border_style=line_blue, style=f"on {navy}"), Panel(_growth_table(data), title="ARCHIVE GROWTH", border_style=line_blue, style=f"on {navy}"), _previous_run_line(last_sync.get("previous_sync") or {}, {}))
+        subtitle = "[dim]Q back • S search[/]"
     else:
-        body = Group(
-            header,
-            Text(""),
-            progress,
-            _counter_strip(stats),
-            Text(""),
-            _current_spotlight(stats, data.get("current_action") or ""),
-            Text(""),
-            Panel(_discoveries_table(data.get("recent_discoveries") or []), title="Recent Discoveries", border_style="green"),
-            Panel(_growth_table(data), title="Archive Growth", border_style="bright_black"),
-            _previous_run_line(last_sync, stats),
-        )
-        subtitle = "[dim]Q quit • R refresh • E errors • N new only • S search • H help[/]"
+        now_title = str(stats.get("current_title") or "")
+        now_line = Text()
+        now_line.append("NOW PROCESSING  ", style=f"bold {accent}")
+        if running:
+            now_line.append(now_title or data.get("current_action") or "Working…", style="bold white")
+            if current_fid:
+                now_line.append(f"  ·  FID {current_fid:,}", style=muted)
+        else:
+            now_line.append("No active task", style=muted)
+            if last_sync:
+                now_line.append(f"  ·  last completed in {_fmt_duration(last_sync.get('elapsed_seconds'))}", style=muted)
 
-    return Panel(
-        body,
-        title="[bold cyan]🎬 DVDRewind Live CLI[/]",
-        subtitle=subtitle,
-        border_style="green" if running else "cyan",
-        box=box.DOUBLE,
-        padding=(1, 2),
-    )
+        body = Group(masthead, Text(""), progress, Text(""), Panel(telemetry, title="SYSTEM STATUS", border_style=line_blue, style=f"on {navy}"), Panel(counters, title="THIS RUN", border_style=line_blue, style=f"on {navy}"), now_line, Text(""), Panel(activity, title="RECENT ACTIVITY", border_style=line_blue, style=f"on {navy}"))
+        subtitle = "[dim]Q back • R refresh • E errors • N discoveries • S search • H help[/]"
+
+    return Panel(body, title=f"[bold {accent}]DVD REWIND // LIVE CONSOLE[/]", subtitle=subtitle, border_style=line_blue, box=box.SQUARE, padding=(1, 2), style=f"white on {navy}")
 
 
 @contextmanager
@@ -445,65 +487,124 @@ def _post_archive_action(endpoint: str, payload: Optional[Dict[str, Any]] = None
 
 
 def build_command_center_panel(data: Dict[str, Any]) -> Panel:
+    """Main DVD Rewind menu: compact, status-first, and intentionally console-like."""
     running = bool(data.get("is_running"))
     stats = data.get("stats") or {}
     metrics = data.get("metrics") or {}
     last_sync = data.get("last_sync") or {}
     post_initial = data.get("post_initial") or {}
+    elapsed = float(data.get("elapsed_seconds") or 0)
+    phase_elapsed = float(data.get("phase_elapsed_seconds") or elapsed)
+    phase = str(stats.get("phase") or ("idle" if not running else "starting"))
+    phase_label = PHASE_LABELS.get(phase, phase.replace("_", " ").upper())
+    phase_current, phase_total, pct, speed, eta = _phase_progress(stats, phase_elapsed)
 
-    status = Text()
-    status.append("RUNNING", style="bold black on bright_green" if running else "bold white on bright_black") if running else status.append("IDLE", style="bold white on bright_black")
-    if running:
-        status.append(f"  {data.get('status_message') or ''}", style="bold green")
+    navy = "#071a2f"
+    panel_blue = "#0c2747"
+    line_blue = "#2f78b7"
+    accent = "#63c7ff"
+    green = "#55e39f"
+    muted = "#8aa7c1"
+    warning = "#ffd166"
 
-    overview = Table(box=box.SIMPLE, show_header=False, expand=True, padding=(0, 1))
-    overview.add_column("Label", style="dim", width=16)
-    overview.add_column("Value", style="bold", width=20)
-    overview.add_column("Label2", style="dim", width=16)
-    overview.add_column("Value2", style="bold")
-    if running:
-        next_fid = int(stats.get("next_fid") or post_initial.get("next_fid") or INITIAL_MAX_FID + 1)
-    else:
-        next_fid = int(post_initial.get("next_fid") or stats.get("next_fid") or INITIAL_MAX_FID + 1)
-    overview.add_row("Archive titles", f"{int(metrics.get('titles') or data.get('db_titles') or 0):,}", "Next FID", f"{next_fid:,}")
-    overview.add_row("Releases", f"{int(metrics.get('releases') or 0):,}", "Database", f"{float(metrics.get('db_size_mb') or data.get('db_size_mb') or 0):.2f} MB")
-    overview.add_row("Last run", _fmt_duration(last_sync.get("elapsed_seconds")) if last_sync else "—", "Last result", str(last_sync.get("status") or "—").upper())
+    next_fid = int(
+        (stats.get("next_fid") if running else None)
+        or post_initial.get("next_fid")
+        or stats.get("next_fid")
+        or INITIAL_MAX_FID + 1
+    )
 
-    menu = Table(box=box.ROUNDED, expand=True, show_header=False, padding=(0, 1))
-    menu.add_column("Key", width=5, style="bold cyan", justify="center")
-    menu.add_column("Action", ratio=1, style="bold")
-    menu.add_column("What it does", ratio=2, style="dim")
+    header = Text()
+    header.append("DVD REWIND", style=f"bold white on {panel_blue}")
+    header.append("  //  PRIVATE DISC ARCHIVE", style=f"bold {accent}")
+    header.append("\n")
+    header.append("ARCHIVE CONTROL CONSOLE", style="bold white")
+    header.append("  ·  one terminal, one archive, no command memorization", style=muted)
+
+    menu = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+    menu.add_column("Key", width=4, justify="center")
+    menu.add_column("Action", ratio=1)
+    menu.add_column("State", width=12, justify="right")
     options = [
-        ("1", "Run Update", "Normal DVDCompare revision check + resume catch-up"),
-        ("2", "Catch Up Since 76,200", "Full post-initial pass from FID 76,201"),
-        ("3", "Watch Current Run", "Open the live progress dashboard"),
-        ("4", "Recent Discoveries", "Show only titles found by the current run"),
-        ("5", "Search Archive", "Search titles, years, formats, FIDs and releases"),
-        ("6", "Errors / Retry Failures", "Inspect failures and retry only failed FIDs"),
-        ("7", "Last Run Report", "Summary, archive growth and previous-run comparison"),
-        ("8", "Open DVD Rewind", "Open the web interface on this Windows PC"),
-        ("P", "Poster Backfill", "Fetch missing artwork through the web-managed worker"),
-        ("D", "Database Maintenance", "Integrity check, FTS optimization and VACUUM"),
-        ("Q", "Quit", "Leave DVD Rewind Command Center"),
+        ("1", "Run Update", "BUSY" if running else "READY"),
+        ("2", "Catch Up Since 76,200", "BUSY" if running else "READY"),
+        ("3", "Watch Live Run", "LIVE" if running else "IDLE"),
+        ("4", "Recent Discoveries", "VIEW"),
+        ("5", "Search Archive", "SEARCH"),
+        ("6", "Errors / Retry", f"{int(stats.get('errors') or 0)} ERR"),
+        ("7", "Last Run Report", "VIEW"),
+        ("8", "Open Web Interface", "OPEN"),
     ]
-    for key, action, detail in options:
-        menu.add_row(key, action, detail)
+    for key, action, state in options:
+        key_text = Text(key, style=f"bold {accent}")
+        action_style = "dim" if running and key in {"1", "2"} else "bold white"
+        state_style = warning if state == "BUSY" else green if state in {"READY", "LIVE"} else muted
+        menu.add_row(key_text, Text(action, style=action_style), Text(state, style=state_style))
+
+    maintenance = Text()
+    maintenance.append("P", style=f"bold {accent}")
+    maintenance.append("  Posters   ", style="white")
+    maintenance.append("D", style=f"bold {accent}")
+    maintenance.append("  Database maintenance   ", style="white")
+    maintenance.append("Q", style=f"bold {accent}")
+    maintenance.append("  Quit", style="white")
+
+    state_panel = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+    state_panel.add_column("Label", width=17, style=muted)
+    state_panel.add_column("Value", ratio=1, style="bold white")
+    if running:
+        state_panel.add_row("STATUS", Text("● RUNNING", style=green))
+        state_panel.add_row("PHASE", phase_label)
+        state_panel.add_row("CURRENT FID", f"{int(stats.get('current_fid') or 0):,}")
+        state_panel.add_row("PHASE PROGRESS", f"{phase_current:,}/{phase_total:,}  ({pct:.1f}%)" if phase_total else "starting…")
+        state_panel.add_row("ELAPSED", _fmt_duration(elapsed))
+        state_panel.add_row("ETA", _fmt_duration(eta) if eta is not None else "calculating…")
+        state_panel.add_row("THIS RUN", f"{int(stats.get('new_titles') or 0)} new  /  {int(stats.get('revisions_updated') or 0)} revised  /  {int(stats.get('errors') or 0)} errors")
+    else:
+        state_panel.add_row("STATUS", Text("● IDLE", style=muted))
+        state_panel.add_row("LAST RESULT", str(last_sync.get("status") or "—").upper())
+        state_panel.add_row("LAST DURATION", _fmt_duration(last_sync.get("elapsed_seconds")) if last_sync else "—")
+        state_panel.add_row("LAST CHANGES", f"{int(last_sync.get('new_titles_ingested') or 0)} new  /  {int(last_sync.get('revisions_updated') or 0)} revised  /  {int(last_sync.get('errors') or 0)} errors" if last_sync else "—")
+        state_panel.add_row("NEXT FID", f"{next_fid:,}")
+    state_panel.add_row("ARCHIVE", f"{int(metrics.get('titles') or data.get('db_titles') or 0):,} titles  /  {int(metrics.get('releases') or 0):,} releases")
+    state_panel.add_row("DATABASE", f"{float(metrics.get('db_size_mb') or data.get('db_size_mb') or 0):.2f} MB")
+
+    if running and phase_total:
+        state_panel.add_row("PROGRESS", _progress_bar(pct, width=28))
+
+    activity = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+    activity.add_column("Time", width=9, style=muted)
+    activity.add_column("Event", ratio=1)
+    logs = list(data.get("log_lines") or [])[-4:]
+    if logs:
+        for item in reversed(logs):
+            activity.add_row(str(item.get("ts") or "--:--:--"), str(item.get("msg") or "")[:82])
+    else:
+        activity.add_row("--:--:--", "No active-session events yet.")
+
+    split = Table.grid(expand=True, padding=(0, 1))
+    split.add_column(ratio=5)
+    split.add_column(ratio=6)
+    split.add_row(
+        Panel(Group(menu, Text(""), maintenance), title="OPERATIONS", border_style=line_blue, box=box.SQUARE, style=f"on {navy}"),
+        Panel(state_panel, title="SYSTEM STATUS", border_style=line_blue, box=box.SQUARE, style=f"on {navy}"),
+    )
+
+    body = Group(
+        header,
+        Text(""),
+        split,
+        Panel(activity, title="RECENT ACTIVITY", border_style=line_blue, box=box.SQUARE, style=f"on {navy}"),
+    )
 
     return Panel(
-        Group(
-            Text("DVD Rewind Command Center", style="bold cyan"),
-            Text("One program for the archive — no Docker or SSH commands to remember.", style="dim"),
-            Text(""),
-            status,
-            overview,
-            Text(""),
-            menu,
-        ),
-        title="[bold cyan]📀 DVD REWIND[/]",
-        subtitle="[dim]Choose a key • running jobs stay on the NAS if you leave[/]",
-        border_style="green" if running else "cyan",
-        box=box.DOUBLE,
+        body,
+        title=f"[bold {accent}]DVD REWIND // ARCHIVE CONSOLE[/]",
+        subtitle="[dim]Select a key • active jobs keep running on the NAS[/]",
+        border_style=line_blue,
+        box=box.SQUARE,
         padding=(1, 2),
+        style=f"white on {navy}",
     )
 
 
@@ -526,7 +627,10 @@ def _read_menu_key() -> str:
 
 
 def _pause_command_center(message: str = "Press Enter to return to the Command Center…") -> None:
-    console.input(f"\n[dim]{message}[/]")
+    try:
+        console.input(f"\n[dim]{message}[/]")
+    except EOFError:
+        pass
 
 
 def _watch_after_start() -> int:
@@ -534,6 +638,13 @@ def _watch_after_start() -> int:
         run_archive_status_monitor(watch=True, exit_on_complete=True)
     except SystemExit as exc:
         if exc.code == 20:
+            console.clear()
+            try:
+                completed = fetch_archive_status()
+                console.print(build_archive_status_panel(completed, view="report"))
+            except Exception:
+                console.print("[bold green]RUN COMPLETE[/]")
+            _pause_command_center("Run complete. Press Enter to return to DVD Rewind…")
             return 20
         raise
     return 0
@@ -558,19 +669,31 @@ def run_command_center() -> int:
         if choice == "q":
             return 0
         if choice == "1":
+            if data.get("is_running"):
+                run_archive_status_monitor(watch=True)
+                continue
             result = _post_archive_action("sync", {"since_initial": False})
             if not result.get("ok"):
                 console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
                 _pause_command_center()
                 continue
-            return _watch_after_start()
+            code = _watch_after_start()
+            if code == 20:
+                return 20
+            continue
         if choice == "2":
+            if data.get("is_running"):
+                run_archive_status_monitor(watch=True)
+                continue
             result = _post_archive_action("sync", {"since_initial": True})
             if not result.get("ok"):
                 console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
                 _pause_command_center()
                 continue
-            return _watch_after_start()
+            code = _watch_after_start()
+            if code == 20:
+                return 20
+            continue
         if choice == "3":
             run_archive_status_monitor(watch=True)
             continue
@@ -598,26 +721,38 @@ def run_command_center() -> int:
             continue
         if choice == "7":
             console.clear()
-            console.print(build_archive_status_panel(data, view="main"))
+            console.print(build_archive_status_panel(data, view="report"))
             _pause_command_center()
             continue
         if choice == "8":
             console.print(f"[cyan]Opening {WEB_URL}…[/]")
             return 81
         if choice == "p":
+            if data.get("is_running"):
+                run_archive_status_monitor(watch=True)
+                continue
             result = _post_archive_action("posters")
             if not result.get("ok"):
                 console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
                 _pause_command_center()
                 continue
-            return _watch_after_start()
+            code = _watch_after_start()
+            if code == 20:
+                return 20
+            continue
         if choice == "d":
+            if data.get("is_running"):
+                run_archive_status_monitor(watch=True)
+                continue
             result = _post_archive_action("vacuum")
             if not result.get("ok"):
                 console.print(f"[yellow]{result.get('message') or 'A task is already running.'}[/]")
                 _pause_command_center()
                 continue
-            return _watch_after_start()
+            code = _watch_after_start()
+            if code == 20:
+                return 20
+            continue
 
 
 def search_archive(query: str, limit: int = 25) -> List[Dict[str, Any]]:

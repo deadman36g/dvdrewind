@@ -60,7 +60,7 @@ python -m src.cli serve --host 127.0.0.1 --port 8088
 
 ## Archive Maintenance & Ingestion Engine
 
-You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The enhanced terminal dashboard mirrors the live NAS job with phase-specific progress, speed/ETA, current-title spotlight, discovery/error views, archive growth, run comparisons, and keyboard hotkeys.
+You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The terminal interface uses a compact blue operations-console layout: persistent RUNNING/IDLE state, phase progress, current/next FID, speed/ETA, run counters, activity feed, discovery/error views, explicit end-of-run reports, and keyboard hotkeys.
 
 Windows users can install the NAS-aware `dvdrewind` PowerShell command with:
 
@@ -68,7 +68,7 @@ Windows users can install the NAS-aware `dvdrewind` PowerShell command with:
 irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_windows_cli.ps1 | iex
 ```
 
-Then use `dvdrewind` to open the unified interactive **DVD Rewind Command Center**. From that one menu you can start a normal update, force the post-76,200 catch-up, watch live progress, view discoveries, search the archive, inspect/retry failures, view the last-run report, start poster/database maintenance, or open the web UI. Legacy shortcuts such as `dvdrewind new`, `dvdrewind search "The Thing"`, and `dvdrewind status` remain available. The Windows launcher sends a desktop notification when a menu-started NAS task completes.
+Then use `dvdrewind` to open the unified interactive **DVD Rewind Archive Console**. Its split layout keeps operations on the left and live system state on the right, so it is always obvious whether the NAS worker is RUNNING or IDLE. From that one interface you can start a normal update, force the post-76,200 catch-up, watch progress, view discoveries, search, inspect/retry failures, open the last-run report, start poster/database maintenance, or open the web UI. A completed menu-started job gets a dedicated **RUN COMPLETE** screen before returning to the console, and the Windows launcher still sends the desktop completion notification. Legacy shortcuts such as `dvdrewind new`, `dvdrewind search "The Thing"`, and `dvdrewind status` remain available.
 
 The same operations are also available from the Python command line:
 
