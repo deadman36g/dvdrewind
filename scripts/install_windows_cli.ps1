@@ -17,20 +17,72 @@ $existing = [regex]::Replace($existing, $pattern, '')
 
 $block = @'
 # >>> DVDREWIND CLI >>>
+function Show-DVDRewindNotification {
+    param([string]$Message)
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+        $notify = New-Object System.Windows.Forms.NotifyIcon
+        $notify.Icon = [System.Drawing.SystemIcons]::Information
+        $notify.BalloonTipTitle = 'DVD Rewind'
+        $notify.BalloonTipText = $Message
+        $notify.Visible = $true
+        $notify.ShowBalloonTip(10000)
+        Start-Sleep -Seconds 5
+        $notify.Dispose()
+    }
+    catch {
+        Write-Host "DVD Rewind: $Message" -ForegroundColor Green
+    }
+}
+
+function Invoke-DVDRewindWatch {
+    param(
+        [string]$Nas,
+        [switch]$NewOnly
+    )
+    $mode = if ($NewOnly) { '--watch-new' } else { '--watch' }
+    ssh -t $Nas "docker exec -it dvdrewind python populate_all.py $mode --exit-on-complete"
+    $code = $LASTEXITCODE
+    if ($code -eq 20) {
+        $summary = ssh $Nas 'docker exec dvdrewind python populate_all.py --completion-message'
+        if (-not $summary) { $summary = 'DVD Rewind task finished.' }
+        Show-DVDRewindNotification -Message ($summary -join ' ')
+    }
+    elseif ($code -ne 0) {
+        Write-Warning "DVD Rewind monitor exited with code $code"
+    }
+}
+
 function dvdrewind {
     param(
         [Parameter(Position = 0)]
-        [ValidateSet('watch','status','help','web','shell')]
-        [string]$Command = 'watch'
+        [string]$Command = 'watch',
+        [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
+        [string[]]$Rest
     )
 
     $nas = 'deadman36g@192.168.50.39'
-    switch ($Command) {
+    switch ($Command.ToLowerInvariant()) {
         'watch' {
-            ssh -t $nas 'docker exec -it dvdrewind python populate_all.py --watch'
+            Invoke-DVDRewindWatch -Nas $nas
+        }
+        'new' {
+            Invoke-DVDRewindWatch -Nas $nas -NewOnly
         }
         'status' {
             ssh $nas 'docker exec dvdrewind python populate_all.py --status'
+        }
+        'search' {
+            $query = ($Rest -join ' ').Trim()
+            if (-not $query) {
+                $query = Read-Host 'Search DVDRewind'
+            }
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($query))
+            ssh -t $nas "docker exec -it dvdrewind python populate_all.py --search-b64 $encoded"
+        }
+        'retry' {
+            ssh -t $nas 'docker exec -it dvdrewind python populate_all.py --retry-failed'
         }
         'help' {
             ssh -t $nas 'docker exec -it dvdrewind python populate_all.py --help'
@@ -40,6 +92,17 @@ function dvdrewind {
         }
         'shell' {
             ssh -t $nas 'docker exec -it dvdrewind bash'
+        }
+        default {
+            Write-Host 'DVDRewind commands:' -ForegroundColor Cyan
+            Write-Host '  dvdrewind                  Live dashboard + completion notification'
+            Write-Host '  dvdrewind new              Watch only new discoveries'
+            Write-Host '  dvdrewind status           One status snapshot'
+            Write-Host '  dvdrewind search "Title"  Search the archive'
+            Write-Host '  dvdrewind retry            Retry saved failed FIDs'
+            Write-Host '  dvdrewind web              Open the web UI'
+            Write-Host '  dvdrewind shell            Enter the NAS container'
+            Write-Host '  dvdrewind help             Show Python CLI options'
         }
     }
 }
@@ -51,9 +114,12 @@ Set-Content -Path $profilePath -Value $newProfile -Encoding UTF8
 . $profilePath
 
 Write-Host ''
-Write-Host 'DVDRewind CLI installed.' -ForegroundColor Green
-Write-Host 'Run:  dvdrewind          # live read-only monitor' -ForegroundColor Cyan
-Write-Host '      dvdrewind status   # one status snapshot'
-Write-Host '      dvdrewind help     # population script options'
-Write-Host '      dvdrewind web      # open DVDRewind in your browser'
-Write-Host '      dvdrewind shell    # enter the NAS container'
+Write-Host 'DVDRewind CLI installed/upgraded.' -ForegroundColor Green
+Write-Host 'Run:  dvdrewind                  # enhanced live dashboard' -ForegroundColor Cyan
+Write-Host '      dvdrewind new              # only new discoveries'
+Write-Host '      dvdrewind search "The Thing"'
+Write-Host '      dvdrewind retry            # retry previous failures'
+Write-Host '      dvdrewind status           # one status snapshot'
+Write-Host '      dvdrewind web              # open DVDRewind'
+Write-Host ''
+Write-Host 'Dashboard hotkeys: Q quit, R refresh, E errors, N new-only, S search, H help.' -ForegroundColor DarkGray

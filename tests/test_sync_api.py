@@ -26,7 +26,18 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertIn("db_size_mb", data)
         self.assertIn("log_lines", data)
         self.assertIn("post_initial", data)
+        self.assertIn("metrics", data)
+        self.assertIn("growth", data)
+        self.assertIn("recent_discoveries", data)
+        self.assertIn("failed_fids", data)
+        self.assertIn("phase", data["stats"])
+        self.assertIn("phase_current", data["stats"])
+        self.assertIn("phase_total", data["stats"])
+        self.assertIn("current_title", data["stats"])
+        self.assertIn("posters_fetched", data["stats"])
         self.assertIsInstance(data["log_lines"], list)
+        self.assertIsInstance(data["recent_discoveries"], list)
+        self.assertIsInstance(data["failed_fids"], list)
         self.assertIsInstance(data["db_titles"], int)
 
     @unittest_run_loop

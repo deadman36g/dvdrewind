@@ -21,6 +21,7 @@ POST_INITIAL_TAIL_FIDS = 100
 POST_INITIAL_FALLBACK_WINDOW = 500
 SYNC_STATUS_FILE = ARCHIVE_DIR / "sync_status.json"
 POST_INITIAL_STATE_FILE = ARCHIVE_DIR / "post_initial_sync.json"
+FAILED_FIDS_FILE = ARCHIVE_DIR / "sync_failed_fids.json"
 POSTERS_DIR = ARCHIVE_DIR / "posters"
 
 
@@ -47,16 +48,116 @@ class ArchiveSyncManager:
         self.cancel_requested = False
         self.start_time: Optional[float] = None
         self.log_lines: List[Dict[str, str]] = []
-        self.stats = {
+        self.recent_discoveries: List[Dict[str, Any]] = []
+        self.failed_fids: List[Dict[str, Any]] = []
+        self.start_metrics: Dict[str, Any] = {}
+        self._metrics_cache: Dict[str, Any] = {}
+        self._metrics_cache_at = 0.0
+        self.stats = self._blank_stats()
+        self.thread: Optional[threading.Thread] = None
+
+    def _blank_stats(self) -> Dict[str, Any]:
+        return {
             "new_titles": 0,
             "revisions_updated": 0,
+            "posters_fetched": 0,
             "checked": 0,
             "scanned_fids": 0,
             "errors": 0,
             "current_fid": 0,
             "next_fid": INITIAL_MAX_FID + 1,
+            "phase": "idle",
+            "phase_current": 0,
+            "phase_total": 0,
+            "current_title": "",
+            "current_format": "",
+            "current_year": None,
+            "poster_found": False,
         }
-        self.thread: Optional[threading.Thread] = None
+
+    def _snapshot_metrics(self, force: bool = False) -> Dict[str, Any]:
+        now = time.time()
+        if not force and self._metrics_cache and (now - self._metrics_cache_at) < 5:
+            return dict(self._metrics_cache)
+
+        metrics = {
+            "titles": 0,
+            "releases": 0,
+            "posters": 0,
+            "raw_html": 0,
+            "db_size_mb": 0.0,
+        }
+        try:
+            repo = ArchiveRepository()
+            metrics["titles"] = repo.conn.execute("SELECT COUNT(*) FROM titles WHERE is_missing = 0").fetchone()[0]
+            metrics["releases"] = repo.conn.execute("SELECT COUNT(*) FROM releases").fetchone()[0]
+            metrics["posters"] = repo.conn.execute(
+                "SELECT COUNT(*) FROM titles WHERE is_missing = 0 AND poster_url IS NOT NULL "
+                "AND poster_url != '' AND poster_url != '/static/images/missing_poster.svg'"
+            ).fetchone()[0]
+            repo.close()
+        except Exception:
+            pass
+        try:
+            metrics["raw_html"] = sum(1 for p in RAW_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".html")
+        except Exception:
+            pass
+        try:
+            if DB_PATH.exists():
+                metrics["db_size_mb"] = round(DB_PATH.stat().st_size / (1024 * 1024), 2)
+        except Exception:
+            pass
+
+        self._metrics_cache = metrics
+        self._metrics_cache_at = now
+        return dict(metrics)
+
+    def _reset_task_state(self, phase: str = "starting", clear_failures: bool = False) -> None:
+        self.stats = self._blank_stats()
+        self.stats["phase"] = phase
+        self.recent_discoveries = []
+        self.start_metrics = self._snapshot_metrics(force=True)
+        if clear_failures:
+            self.failed_fids = []
+            try:
+                FAILED_FIDS_FILE.write_text("[]\n", encoding="utf-8")
+            except Exception:
+                pass
+
+    def _set_current_title(self, fid: int, parsed: Dict[str, Any], poster_found: bool = False) -> None:
+        self.stats["current_fid"] = fid
+        self.stats["current_title"] = parsed.get("clean_title") or f"FID-{fid}"
+        self.stats["current_format"] = parsed.get("format_category") or "?"
+        self.stats["current_year"] = parsed.get("year")
+        self.stats["poster_found"] = bool(poster_found)
+
+    def _record_discovery(self, fid: int, parsed: Dict[str, Any], poster_found: bool = False) -> None:
+        entry = {
+            "fid": fid,
+            "title": parsed.get("clean_title") or f"FID-{fid}",
+            "year": parsed.get("year"),
+            "format": parsed.get("format_category") or "?",
+            "releases": len(parsed.get("releases", [])),
+            "poster_found": bool(poster_found),
+            "ts": datetime.now().strftime("%H:%M:%S"),
+        }
+        self.recent_discoveries.append(entry)
+        self.recent_discoveries = self.recent_discoveries[-20:]
+
+    def _record_error(self, fid: int, error: Exception | str, phase: str) -> None:
+        self.stats["errors"] += 1
+        entry = {
+            "fid": int(fid),
+            "phase": phase,
+            "error": str(error)[:500],
+            "ts": datetime.now().isoformat(),
+        }
+        self.failed_fids.append(entry)
+        self.failed_fids = self.failed_fids[-200:]
+        try:
+            FAILED_FIDS_FILE.write_text(json.dumps(self.failed_fids, indent=2), encoding="utf-8")
+        except Exception:
+            pass
 
     def log(self, msg: str, style: str = ""):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -73,17 +174,7 @@ class ArchiveSyncManager:
             except Exception:
                 pass
 
-        db_titles = 0
-        db_size_mb = 0.0
-        try:
-            repo = ArchiveRepository()
-            db_titles = repo.conn.execute("SELECT COUNT(*) FROM titles WHERE is_missing = 0").fetchone()[0]
-            repo.close()
-            if DB_PATH.exists():
-                db_size_mb = round(DB_PATH.stat().st_size / (1024 * 1024), 2)
-        except Exception:
-            pass
-
+        metrics = self._snapshot_metrics()
         elapsed = None
         if self.start_time and self.is_running:
             elapsed = round(time.time() - self.start_time, 1)
@@ -95,18 +186,30 @@ class ArchiveSyncManager:
             except Exception:
                 pass
 
+        growth = {}
+        if self.start_metrics:
+            for key, value in metrics.items():
+                start_value = self.start_metrics.get(key)
+                if isinstance(value, (int, float)) and isinstance(start_value, (int, float)):
+                    growth[key] = round(value - start_value, 2) if isinstance(value, float) else value - start_value
+
         return {
             "is_running": self.is_running,
             "task_type": self.task_type,
             "status_message": self.status_message,
             "current_action": self.current_action,
-            "stats": self.stats,
+            "stats": dict(self.stats),
             "elapsed_seconds": elapsed,
-            "log_lines": self.log_lines[-60:],
+            "log_lines": self.log_lines[-80:],
+            "recent_discoveries": list(self.recent_discoveries[-12:]),
+            "failed_fids": list(self.failed_fids[-25:]),
             "last_sync": last_sync,
             "post_initial": post_initial,
-            "db_titles": db_titles,
-            "db_size_mb": db_size_mb,
+            "metrics": metrics,
+            "start_metrics": dict(self.start_metrics),
+            "growth": growth,
+            "db_titles": metrics.get("titles", 0),
+            "db_size_mb": metrics.get("db_size_mb", 0.0),
         }
 
     def start_sync(self, limit: Optional[int] = None, force_from_initial: bool = False) -> bool:
@@ -123,15 +226,7 @@ class ArchiveSyncManager:
             )
             self.current_action = "Initializing"
             self.start_time = time.time()
-            self.stats = {
-                "new_titles": 0,
-                "revisions_updated": 0,
-                "checked": 0,
-                "scanned_fids": 0,
-                "errors": 0,
-                "current_fid": 0,
-                "next_fid": INITIAL_MAX_FID + 1,
-            }
+            self._reset_task_state("starting", clear_failures=True)
             if force_from_initial:
                 self.log("🚀 Starting complete catch-up from FID 76,201...", "cyan")
             else:
@@ -151,7 +246,7 @@ class ArchiveSyncManager:
             self.status_message = "Starting poster backfill..."
             self.current_action = "Initializing"
             self.start_time = time.time()
-            self.stats = {"new_titles": 0, "revisions_updated": 0, "checked": 0, "scanned_fids": 0, "errors": 0, "current_fid": 0, "next_fid": INITIAL_MAX_FID + 1}
+            self._reset_task_state("posters")
             self.log("🖼 Starting offline poster backfill pass...", "cyan")
 
             self.thread = threading.Thread(target=self._run_posters, args=(limit,), daemon=True)
@@ -168,7 +263,7 @@ class ArchiveSyncManager:
             self.status_message = "Starting database optimization..."
             self.current_action = "Optimizing"
             self.start_time = time.time()
-            self.stats = {"new_titles": 0, "revisions_updated": 0, "checked": 0, "scanned_fids": 0, "errors": 0, "current_fid": 0, "next_fid": INITIAL_MAX_FID + 1}
+            self._reset_task_state("maintenance")
             self.log("🧹 Starting SQLite database maintenance...", "cyan")
 
             self.thread = threading.Thread(target=self._run_vacuum_task, daemon=True)
@@ -192,6 +287,9 @@ class ArchiveSyncManager:
             cur = repo.conn.cursor()
 
             # 1. Check DVDCompare homepage
+            self.stats["phase"] = "homepage"
+            self.stats["phase_current"] = 0
+            self.stats["phase_total"] = 0
             self.status_message = "Checking DVDCompare homepage for revisions..."
             self.current_action = "Fetching homepage"
             self.log("Checking DVDCompare homepage for recent reviews & revisions...", "cyan")
@@ -206,20 +304,34 @@ class ArchiveSyncManager:
                 if r.status_code == 200:
                     found = set(int(m) for m in re.findall(r"film\.php\?fid=(\d+)", r.text))
                     homepage_fids = sorted(list(found))
+                    self.stats["phase_total"] = len(homepage_fids)
                     self.log(f"Found {len(homepage_fids)} comparison links on homepage.", "dim")
             except Exception as e:
                 self.log(f"Homepage fetch error: {e}", "red")
 
-            for fid in homepage_fids:
+            for homepage_index, fid in enumerate(homepage_fids, start=1):
                 if self.cancel_requested:
                     break
                 self.stats["checked"] += 1
+                self.stats["phase_current"] = homepage_index
                 self.stats["current_fid"] = fid
+                self.stats["current_title"] = ""
+                self.stats["current_format"] = ""
+                self.stats["current_year"] = None
+                self.stats["poster_found"] = False
                 self.current_action = f"Checking FID {fid}"
 
-                cur.execute("SELECT source_hash FROM titles WHERE fid = ?", (fid,))
+                cur.execute(
+                    "SELECT source_hash, clean_title, year, format_category, poster_url FROM titles WHERE fid = ?",
+                    (fid,),
+                )
                 row = cur.fetchone()
                 stored_hash = row[0] if row else None
+                if row:
+                    self.stats["current_title"] = row[1] or ""
+                    self.stats["current_year"] = row[2]
+                    self.stats["current_format"] = row[3] or "?"
+                    self.stats["poster_found"] = bool(row[4] and row[4] != "/static/images/missing_poster.svg")
 
                 try:
                     status, content, meta = client.fetch_film(fid, save_to_raw=True)
@@ -234,19 +346,28 @@ class ArchiveSyncManager:
                         repo.save_parsed_comparison(parsed, source_hash=sha256, raw_html_path=str(raw_path))
 
                         # Check poster
+                        p_url = None
                         cur.execute("SELECT poster_url FROM titles WHERE fid = ?", (fid,))
                         p_row = cur.fetchone()
                         if not p_row or not p_row[0] or p_row[0] == "/static/images/missing_poster.svg":
                             p_url = fetch_poster_from_tmdb(parsed.get("imdb_id"), clean_title, parsed.get("year"))
                             if p_url:
                                 repo.update_poster_url(fid, p_url)
+                                self.stats["posters_fetched"] += 1
+                        else:
+                            p_url = p_row[0]
 
-                        self.stats["revisions_updated"] += 1
+                        self._set_current_title(fid, parsed, poster_found=bool(p_url))
                         action = "Ingested new" if stored_hash is None else "Updated revised"
+                        if stored_hash is None:
+                            self.stats["new_titles"] += 1
+                            self._record_discovery(fid, parsed, poster_found=bool(p_url))
+                        else:
+                            self.stats["revisions_updated"] += 1
                         self.log(f"✅ {action} FID {fid}: {clean_title} ({num_releases} releases)", "green")
                     time.sleep(1.0)
                 except Exception as e:
-                    self.stats["errors"] += 1
+                    self._record_error(fid, e, "homepage")
                     self.log(f"Error checking FID {fid}: {e}", "red")
 
             # 2. Resume the durable post-initial catch-up scan.
@@ -290,6 +411,10 @@ class ArchiveSyncManager:
                 if limit and limit > 0:
                     probe_end = min(probe_end, current_probe + limit - 1)
 
+                catchup_start = current_probe
+                self.stats["phase"] = "catchup"
+                self.stats["phase_current"] = 0
+                self.stats["phase_total"] = max(0, probe_end - catchup_start + 1)
                 self.status_message = f"Catching up FIDs {current_probe:,} through {probe_end:,}..."
                 self.log(
                     f"Post-initial catch-up: scanning FIDs {current_probe:,} -> {probe_end:,} "
@@ -300,6 +425,12 @@ class ArchiveSyncManager:
                 while not self.cancel_requested and current_probe <= probe_end:
                     self.stats["current_fid"] = current_probe
                     self.stats["next_fid"] = current_probe
+                    self.stats["phase_current"] = self.stats["scanned_fids"] + 1
+                    self.stats["phase_total"] = max(self.stats["phase_total"], probe_end - catchup_start + 1)
+                    self.stats["current_title"] = ""
+                    self.stats["current_format"] = ""
+                    self.stats["current_year"] = None
+                    self.stats["poster_found"] = False
                     self.current_action = f"Scanning FID {current_probe}"
 
                     if current_probe in existing_fids:
@@ -322,19 +453,23 @@ class ArchiveSyncManager:
                                     p_url = fetch_poster_from_tmdb(parsed.get("imdb_id"), clean_title, parsed.get("year"))
                                     if p_url:
                                         repo.update_poster_url(current_probe, p_url)
+                                        self.stats["posters_fetched"] += 1
 
                                     existing_fids.add(current_probe)
                                     self.stats["new_titles"] += 1
+                                    self._set_current_title(current_probe, parsed, poster_found=bool(p_url))
+                                    self._record_discovery(current_probe, parsed, poster_found=bool(p_url))
                                     highest_seen_fid = max(highest_seen_fid, current_probe)
                                     if not limit:
                                         probe_end = max(probe_end, current_probe + POST_INITIAL_TAIL_FIDS)
+                                        self.stats["phase_total"] = max(self.stats["phase_total"], probe_end - catchup_start + 1)
                                     self.log(
                                         f"🎉 New Title! FID {current_probe}: {clean_title} [{fmt}] ({num_releases} releases)",
                                         "green",
                                     )
                             time.sleep(1.0)
                         except Exception as e:
-                            self.stats["errors"] += 1
+                            self._record_error(current_probe, e, "catchup")
                             self.log(f"Error scanning FID {current_probe}: {e}", "red")
 
                     self.stats["scanned_fids"] += 1
@@ -363,11 +498,15 @@ class ArchiveSyncManager:
                 "homepage_checked": len(homepage_fids),
                 "revisions_updated": self.stats["revisions_updated"],
                 "new_titles_ingested": self.stats["new_titles"],
+                "posters_fetched": self.stats["posters_fetched"],
+                "errors": self.stats["errors"],
                 "post_initial_scanned_fids": self.stats["scanned_fids"],
                 "post_initial_next_fid": current_probe,
                 "highest_seen_fid": highest_seen_fid,
                 "total_db_titles": total_db,
                 "elapsed_seconds": elapsed,
+                "start_metrics": dict(self.start_metrics),
+                "end_metrics": self._snapshot_metrics(force=True),
             }
             try:
                 SYNC_STATUS_FILE.write_text(json.dumps(status_data, indent=2), encoding="utf-8")
@@ -411,6 +550,9 @@ class ArchiveSyncManager:
             if limit and limit > 0:
                 missing = missing[:limit]
 
+            self.stats["phase"] = "posters"
+            self.stats["phase_current"] = 0
+            self.stats["phase_total"] = len(missing)
             self.log(f"Found {total_missing:,} titles needing posters. Processing {len(missing):,}...", "cyan")
 
             fetched = 0
@@ -418,7 +560,12 @@ class ArchiveSyncManager:
                 if self.cancel_requested:
                     break
                 self.stats["checked"] += 1
+                self.stats["phase_current"] = idx
                 self.stats["current_fid"] = fid
+                self.stats["current_title"] = title
+                self.stats["current_format"] = fmt or "?"
+                self.stats["current_year"] = year
+                self.stats["poster_found"] = False
                 self.status_message = f"Fetching poster {idx}/{len(missing)}: {title}"
                 self.current_action = f"Poster for FID {fid}"
 
@@ -427,17 +574,19 @@ class ArchiveSyncManager:
                     if p_url:
                         repo.update_poster_url(fid, p_url)
                         fetched += 1
-                        self.stats["new_titles"] += 1
+                        self.stats["posters_fetched"] += 1
+                        self.stats["poster_found"] = True
                         self.log(f"🖼 ({idx}/{len(missing)}) FID {fid}: Found poster for '{title}'", "green")
                     else:
                         self.log(f"• ({idx}/{len(missing)}) FID {fid}: No poster found for '{title}'", "dim")
                     time.sleep(1.0)
                 except Exception as e:
-                    self.stats["errors"] += 1
+                    self._record_error(fid, e, "posters")
                     self.log(f"Error fetching poster for FID {fid}: {e}", "red")
 
             repo.close()
             final_status = "Poster backfill canceled" if self.cancel_requested else "Poster backfill complete"
+            self.stats["phase"] = "complete"
             self.log(f"🏁 {final_status}. Successfully fetched: {fetched} posters.", "bold")
             self.status_message = final_status
 
@@ -450,6 +599,9 @@ class ArchiveSyncManager:
 
     def _run_vacuum_internal(self):
         try:
+            self.stats["phase"] = "maintenance"
+            self.stats["phase_current"] = 1
+            self.stats["phase_total"] = 1
             self.status_message = "Optimizing database & running VACUUM..."
             self.current_action = "Database VACUUM"
             self.log("🧹 Verifying SQLite integrity & defragmenting database...", "cyan")

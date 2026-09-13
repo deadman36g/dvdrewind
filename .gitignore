@@ -25,6 +25,8 @@ archive/*.db-journal
 archive/*.db-wal
 archive/*.db-shm
 archive/sync_status.json
+archive/sync_failed_fids.json
+archive/post_initial_sync.json
 archive/populate_progress.json
 archive/*.html
 

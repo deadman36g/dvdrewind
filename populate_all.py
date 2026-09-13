@@ -21,6 +21,7 @@
 """
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -56,6 +57,12 @@ from src.db.repository import ArchiveRepository
 from src.parser.html_parser import DVDCompareParser
 from src.parser.warnings import WarningCollector
 from src.scraper.client import ScraperClient
+from src.cli_monitor import (
+    completion_message as cli_completion_message,
+    retry_failed_fids as cli_retry_failed_fids,
+    run_archive_status_monitor as cli_run_archive_status_monitor,
+    search_archive as cli_search_archive,
+)
 
 import requests
 
@@ -879,8 +886,11 @@ Examples:
   python populate_all.py                     Interactive full catalog sweep (dashboard)
   python populate_all.py --sync              Resume post-76,200 catch-up + check current revisions
   python populate_all.py --since-initial     Re-scan everything added after the original 76,200 cutoff
-  python populate_all.py --watch             Watch the live web-managed sync without starting another crawler
+  python populate_all.py --watch             Watch the live web-managed sync with hotkeys and live dashboard
+  python populate_all.py --watch-new         Watch only newly discovered titles
   python populate_all.py --status            Show one live Archive Control Center status snapshot
+  python populate_all.py --search "The Thing" Search the local DVDRewind archive
+  python populate_all.py --retry-failed      Retry only FIDs that failed on the previous web sync
   python populate_all.py --cron --sync       Automated headless daily sync (ideal for NAS crontab)
   python populate_all.py --posters-only      Backfill missing movie posters from TMDB / Wikipedia
   python populate_all.py --vacuum            Check DB integrity, optimize search index & VACUUM
@@ -889,7 +899,13 @@ Examples:
     parser.add_argument("--sync", "--update", action="store_true", help="Incremental sync: check current revisions and resume scanning FIDs added after the original catalog cutoff")
     parser.add_argument("--since-initial", action="store_true", help="Force a complete catch-up scan from FID 76,201 onward, skipping titles already in the database")
     parser.add_argument("--status", action="store_true", help="Show a one-time status snapshot of the web-managed archive task")
-    parser.add_argument("--watch", action="store_true", help="Continuously watch the web-managed archive task in a read-only live dashboard")
+    parser.add_argument("--watch", action="store_true", help="Continuously watch the web-managed archive task in the enhanced live dashboard")
+    parser.add_argument("--watch-new", action="store_true", help="Continuously watch only newly discovered titles")
+    parser.add_argument("--exit-on-complete", action="store_true", help="When watching, exit after the active NAS task finishes")
+    parser.add_argument("--search", type=str, default=None, metavar="QUERY", help="Search the local DVDRewind archive by title/metadata")
+    parser.add_argument("--search-b64", type=str, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--retry-failed", action="store_true", help="Retry only FIDs saved as failures from the previous web-managed sync")
+    parser.add_argument("--completion-message", action="store_true", help="Print a one-line summary suitable for a Windows completion notification")
     parser.add_argument("--cron", "--headless", action="store_true", help="Run in headless logging mode (auto-detected if no TTY)")
     parser.add_argument("--posters-only", action="store_true", help="Backfill missing posters for existing titles without re-scraping HTML")
     parser.add_argument("--vacuum", "--health", action="store_true", help="Run database integrity check, FTS5 index optimization, and VACUUM")
@@ -901,10 +917,26 @@ Examples:
     is_headless = args.cron or (not sys.stdout.isatty())
     state.headless = is_headless
 
-    if args.watch:
-        run_archive_status_monitor(watch=True)
+    if args.completion_message:
+        print(cli_completion_message())
+    elif args.search or args.search_b64:
+        query = args.search
+        if args.search_b64:
+            try:
+                query = base64.b64decode(args.search_b64).decode("utf-8")
+            except Exception as exc:
+                raise SystemExit(f"Invalid encoded search query: {exc}")
+        cli_search_archive(query or "")
+    elif args.retry_failed:
+        raise SystemExit(cli_retry_failed_fids())
+    elif args.watch or args.watch_new:
+        cli_run_archive_status_monitor(
+            watch=True,
+            new_only=args.watch_new,
+            exit_on_complete=args.exit_on_complete,
+        )
     elif args.status:
-        run_archive_status_monitor(watch=False)
+        cli_run_archive_status_monitor(watch=False)
     elif args.vacuum:
         run_vacuum(headless=is_headless)
     elif args.posters_only:

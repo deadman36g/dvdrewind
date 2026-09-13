@@ -60,11 +60,33 @@ python -m src.cli serve --host 127.0.0.1 --port 8088
 
 ## Archive Maintenance & Ingestion Engine
 
-You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The same operations are also available from the command line:
+You can manage and update your archive directly in the **Web UI** from the **Archive Control Center**. Use **Sync with DVDCompare** for normal updates, or **Catch Up Since 76,200** to re-scan everything added after the original full-catalog cutoff. The enhanced terminal dashboard mirrors the live NAS job with phase-specific progress, speed/ETA, current-title spotlight, discovery/error views, archive growth, run comparisons, and keyboard hotkeys.
+
+Windows users can install the NAS-aware `dvdrewind` PowerShell command with:
+
+```powershell
+irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_windows_cli.ps1 | iex
+```
+
+Then use `dvdrewind` for the live dashboard, `dvdrewind new` for discoveries only, `dvdrewind search "The Thing"` for local archive search, and `dvdrewind retry` to retry saved failed FIDs. The Windows launcher sends a desktop notification when a watched NAS task completes.
+
+The same operations are also available from the Python command line:
 
 ```bash
 # Interactive full catalog sweep with live curses dashboard
 python populate_all.py
+
+# Enhanced read-only live monitor (Q/R/E/N/S/H hotkeys)
+python populate_all.py --watch
+
+# Watch only newly discovered titles
+python populate_all.py --watch-new
+
+# Search the local archive
+python populate_all.py --search "The Thing"
+
+# Retry only FIDs saved as failures from the previous web-managed sync
+python populate_all.py --retry-failed
 
 # Incremental update: checks current revisions and resumes the post-76,200 catch-up cursor
 python populate_all.py --sync
