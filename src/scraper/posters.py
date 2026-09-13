@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 import requests
 
 from src.config import ARCHIVE_DIR, DEFAULT_USER_AGENT
@@ -52,13 +52,98 @@ def save_tmdb_key(api_key: str):
 import re
 
 def normalize_title_for_search(title: str) -> str:
-    """Normalizes titles like 'Brides of Dracula (The)' to 'The Brides of Dracula'"""
+    """Normalizes titles like 'Brides of Dracula (The)' to 'The Brides of Dracula'."""
     t = title.strip()
     t = re.sub(r"\s*\(\d{4}(?:-\d{4})?\)\s*$", "", t).strip()
     m = re.match(r"^(.*?)(?:,\s*|\s+\()(The|A|An)\)?$", t, re.IGNORECASE)
     if m:
         t = f"{m.group(2)} {m.group(1)}".strip()
     return t
+
+
+def _match_title_key(title: str) -> str:
+    normalized = normalize_title_for_search(title or "")
+    return re.sub(r"[^a-z0-9]+", " ", normalized.lower()).strip()
+
+
+def find_imdb_match(clean_title: str, year: Optional[int] = None, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Return a conservative TMDB-backed IMDb match for a title.
+
+    Automatic repair only accepts an exact normalized title match. When a source
+    year exists, TMDB must also report the same release year. This intentionally
+    leaves ambiguous records for manual review instead of silently attaching the
+    wrong IMDb title.
+    """
+    key = api_key or get_saved_tmdb_key()
+    if not key or not clean_title:
+        return None
+
+    headers = {"User-Agent": DEFAULT_USER_AGENT}
+    query = normalize_title_for_search(clean_title)
+    wanted_key = _match_title_key(query)
+    wanted_year = int(year) if isinstance(year, int) or (str(year).isdigit() if year is not None else False) else None
+
+    try:
+        params = {"api_key": key, "query": query}
+        if wanted_year:
+            params["year"] = str(wanted_year)
+        response = requests.get(
+            "https://api.themoviedb.org/3/search/movie",
+            params=params,
+            headers=headers,
+            timeout=8,
+        )
+        if response.status_code != 200:
+            return None
+        results = response.json().get("results", [])
+    except Exception:
+        return None
+
+    candidates = []
+    for result in results[:12]:
+        result_titles = [result.get("title") or "", result.get("original_title") or ""]
+        if not any(_match_title_key(value) == wanted_key for value in result_titles if value):
+            continue
+        release_date = str(result.get("release_date") or "")
+        result_year = int(release_date[:4]) if len(release_date) >= 4 and release_date[:4].isdigit() else None
+        if wanted_year and result_year != wanted_year:
+            continue
+        candidates.append((result, result_year))
+
+    if not candidates:
+        return None
+
+    result, result_year = candidates[0]
+    movie_id = result.get("id")
+    if not movie_id:
+        return None
+
+    try:
+        details_response = requests.get(
+            f"https://api.themoviedb.org/3/movie/{movie_id}",
+            params={"api_key": key},
+            headers=headers,
+            timeout=8,
+        )
+        if details_response.status_code != 200:
+            return None
+        details = details_response.json()
+    except Exception:
+        return None
+
+    imdb_id = str(details.get("imdb_id") or "").strip()
+    if not re.fullmatch(r"tt\d+", imdb_id):
+        return None
+
+    return {
+        "imdb_id": imdb_id,
+        "tmdb_id": movie_id,
+        "title": details.get("title") or result.get("title") or clean_title,
+        "year": result_year,
+        "poster_path": details.get("poster_path") or result.get("poster_path"),
+        "confidence": "exact-title-year" if wanted_year else "exact-title",
+    }
+
 
 def fetch_poster_from_wikipedia(clean_title: str, imdb_id: Optional[str] = None) -> Optional[str]:
     """

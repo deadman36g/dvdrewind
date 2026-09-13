@@ -291,6 +291,7 @@ class TestSecurityHTTP(AioHTTPTestCase):
         for path in (
             "/api/archive/sync",
             "/api/archive/posters",
+            "/api/archive/imdb",
             "/api/archive/vacuum",
             "/api/archive/cancel",
         ):

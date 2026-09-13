@@ -439,13 +439,43 @@ class ArchiveRepository:
     def update_poster_url(self, fid: int, poster_url: str) -> None:
         """Updates the cached poster URL for a title and all sibling formats with the same IMDb ID."""
         with self.conn:
-            # Find IMDb ID
             row = self.conn.execute("SELECT id, imdb_id, clean_title, year FROM titles WHERE fid = ?", (fid,)).fetchone()
             if not row:
                 return
-            title_id, imdb_id, clean_title, year = row["id"], row["imdb_id"], row["clean_title"], row["year"]
+            _title_id, imdb_id, clean_title, year = row["id"], row["imdb_id"], row["clean_title"], row["year"]
 
             if imdb_id:
                 self.conn.execute("UPDATE titles SET poster_url = ? WHERE imdb_id = ?", (poster_url, imdb_id))
-            else:
+            elif year is not None:
                 self.conn.execute("UPDATE titles SET poster_url = ? WHERE clean_title = ? AND year = ?", (poster_url, clean_title, year))
+            else:
+                self.conn.execute("UPDATE titles SET poster_url = ? WHERE fid = ?", (poster_url, fid))
+
+    def update_imdb_id(self, fid: int, imdb_id: str) -> int:
+        """Attach a verified IMDb ID and propagate it to same-title/year format siblings."""
+        imdb_id = (imdb_id or "").strip()
+        if not imdb_id.startswith("tt"):
+            raise ValueError("IMDb ID must start with 'tt'")
+
+        with self.conn:
+            row = self.conn.execute(
+                "SELECT clean_title, year FROM titles WHERE fid = ? AND is_missing = 0",
+                (fid,),
+            ).fetchone()
+            if not row:
+                return 0
+
+            clean_title, year = row[0], row[1]
+            if year is None:
+                cur = self.conn.execute(
+                    "UPDATE titles SET imdb_id = ? WHERE fid = ? AND (imdb_id IS NULL OR TRIM(imdb_id) = '')",
+                    (imdb_id, fid),
+                )
+            else:
+                cur = self.conn.execute(
+                    "UPDATE titles SET imdb_id = ? "
+                    "WHERE is_missing = 0 AND (fid = ? OR (clean_title = ? AND year = ?)) "
+                    "AND (imdb_id IS NULL OR TRIM(imdb_id) = '')",
+                    (imdb_id, fid, clean_title, year),
+                )
+            return int(cur.rowcount or 0)

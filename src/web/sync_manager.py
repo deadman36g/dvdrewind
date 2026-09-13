@@ -14,7 +14,7 @@ from src.db.repository import ArchiveRepository
 from src.parser.html_parser import DVDCompareParser
 from src.parser.warnings import WarningCollector
 from src.scraper.client import ScraperClient
-from src.scraper.posters import fetch_poster_from_tmdb
+from src.scraper.posters import fetch_poster_from_tmdb, find_imdb_match
 
 INITIAL_MAX_FID = 76200
 POST_INITIAL_TAIL_FIDS = 100
@@ -42,7 +42,7 @@ class ArchiveSyncManager:
 
     def _init_state(self):
         self.is_running = False
-        self.task_type = "idle"  # "sync", "posters", "vacuum", "idle"
+        self.task_type = "idle"  # "sync", "posters", "imdb", "vacuum", "idle"
         self.status_message = "Ready"
         self.current_action = ""
         self.cancel_requested = False
@@ -62,6 +62,8 @@ class ArchiveSyncManager:
             "new_titles": 0,
             "revisions_updated": 0,
             "posters_fetched": 0,
+            "matches_found": 0,
+            "unmatched": 0,
             "checked": 0,
             "scanned_fids": 0,
             "errors": 0,
@@ -258,6 +260,23 @@ class ArchiveSyncManager:
             self.log("🖼 Starting offline poster backfill pass...", "cyan")
 
             self.thread = threading.Thread(target=self._run_posters, args=(limit,), daemon=True)
+            self.thread.start()
+            return True
+
+    def start_imdb_match(self, limit: Optional[int] = None, fid: Optional[int] = None) -> bool:
+        with self._lock:
+            if self.is_running:
+                return False
+            self.is_running = True
+            self.task_type = "imdb"
+            self.cancel_requested = False
+            self.status_message = "Starting IMDb repair..."
+            self.current_action = "Initializing"
+            self.start_time = time.time()
+            self._reset_task_state("imdb")
+            self.log("Starting conservative IMDb matching pass...", "cyan")
+
+            self.thread = threading.Thread(target=self._run_imdb_matches, args=(limit, fid), daemon=True)
             self.thread.start()
             return True
 
@@ -555,6 +574,96 @@ class ArchiveSyncManager:
             self.log(f"❌ Sync error: {e}", "red")
             self.status_message = f"Error: {e}"
         finally:
+            self.is_running = False
+            self.current_action = ""
+
+    def _run_imdb_matches(self, limit: Optional[int] = None, fid: Optional[int] = None):
+        repo = None
+        try:
+            repo = ArchiveRepository()
+            cur = repo.conn.cursor()
+            params: list[Any] = []
+            sql = (
+                "SELECT fid, clean_title, year, format_category, poster_url FROM titles "
+                "WHERE is_missing = 0 AND (imdb_id IS NULL OR TRIM(imdb_id) = '') "
+            )
+            if fid is not None:
+                sql += "AND fid = ? "
+                params.append(int(fid))
+            sql += "ORDER BY fid DESC"
+            rows = cur.execute(sql, params).fetchall()
+            total_missing = len(rows)
+            if limit and limit > 0:
+                rows = rows[:limit]
+
+            self.stats["phase"] = "imdb"
+            self.phase_start_time = time.time()
+            self.stats["phase_current"] = 0
+            self.stats["phase_total"] = len(rows)
+            self.log(f"Found {total_missing:,} titles needing IMDb IDs. Processing {len(rows):,}...", "cyan")
+
+            for idx, (row_fid, title, year, fmt, poster_url) in enumerate(rows, start=1):
+                if self.cancel_requested:
+                    break
+                self.stats["checked"] += 1
+                self.stats["phase_current"] = idx
+                self.stats["current_fid"] = int(row_fid)
+                self.stats["current_title"] = title or f"FID-{row_fid}"
+                self.stats["current_format"] = fmt or "?"
+                self.stats["current_year"] = year
+                self.stats["poster_found"] = bool(poster_url and poster_url != "/static/images/missing_poster.svg")
+                self.status_message = f"Matching IMDb {idx}/{len(rows)}: {title}"
+                self.current_action = f"IMDb match for FID {row_fid}"
+
+                try:
+                    current_row = cur.execute("SELECT imdb_id FROM titles WHERE fid = ?", (row_fid,)).fetchone()
+                    if current_row and str(current_row[0] or "").strip():
+                        # A previous same-title/year match may already have
+                        # propagated to this format sibling.
+                        continue
+
+                    match = find_imdb_match(title, year)
+                    if not match:
+                        self.stats["unmatched"] += 1
+                        self.log(f"No confident IMDb match for FID {row_fid}: {title}", "dim")
+                        time.sleep(0.25)
+                        continue
+
+                    imdb_id = str(match["imdb_id"])
+                    affected = repo.update_imdb_id(int(row_fid), imdb_id)
+                    self.stats["matches_found"] += max(1, affected)
+                    self.log(
+                        f"IMDb matched FID {row_fid}: {title} -> {imdb_id} ({match.get('confidence', 'verified')})",
+                        "green",
+                    )
+
+                    if not poster_url or poster_url == "/static/images/missing_poster.svg":
+                        p_url = fetch_poster_from_tmdb(imdb_id, title, year)
+                        if p_url:
+                            repo.update_poster_url(int(row_fid), p_url)
+                            self.stats["posters_fetched"] += 1
+                            self.stats["poster_found"] = True
+                            self.log(f"Artwork filled from matched IMDb record for FID {row_fid}: {title}", "green")
+                except Exception as exc:
+                    self._record_error(int(row_fid), exc, "imdb")
+                    self.log(f"IMDb repair error for FID {row_fid}: {exc}", "red")
+
+                time.sleep(0.35)
+
+            final_status = "IMDb repair canceled" if self.cancel_requested else "IMDb repair complete"
+            self.stats["phase"] = "complete"
+            self.log(
+                f"{final_status}. Matched: {self.stats['matches_found']}, "
+                f"unmatched: {self.stats['unmatched']}, errors: {self.stats['errors']}.",
+                "bold",
+            )
+            self.status_message = final_status
+        except Exception as exc:
+            self.log(f"IMDb repair error: {exc}", "red")
+            self.status_message = f"Error: {exc}"
+        finally:
+            if repo is not None:
+                repo.close()
             self.is_running = False
             self.current_action = ""
 

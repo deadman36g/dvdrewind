@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from textual.widgets import DataTable, Input, Static
 
-from src.tui_app import DVDRewindTUI, KeysScreen
+from src.tui_app import DVDRewindTUI, KeysScreen, STATE_FILE
 
 
 SAMPLE_STATUS = {
@@ -29,14 +29,38 @@ SAMPLE_STATUS = {
 }
 
 INSIGHTS = {
+    "total_titles": 26709,
+    "with_art": 26699,
+    "with_imdb": 26689,
+    "ready_titles": 26685,
     "missing_art": 10,
     "missing_imdb": 20,
+    "missing_both": 4,
     "missing_records": 30,
+    "format_mix": {"4K UHD": 5000, "Blu-ray": 12000, "DVD": 9500, "Other": 209},
+    "missing_imdb_rows": [
+        {"fid": 76001, "clean_title": "Needs Match", "year": 1985, "format_category": "Blu-ray", "poster_url": "/static/posters/example.jpg", "imdb_id": None},
+    ],
+    "missing_art_rows": [
+        {"fid": 76002, "clean_title": "Needs Art", "year": 1990, "format_category": "4K UHD", "poster_url": None, "imdb_id": "tt1234567"},
+    ],
     "newest": [],
 }
 
 
 class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        try:
+            STATE_FILE.unlink()
+        except FileNotFoundError:
+            pass
+
+    async def asyncTearDown(self):
+        try:
+            STATE_FILE.unlink()
+        except FileNotFoundError:
+            pass
+
     async def test_main_layout_is_three_column_and_quiet_footer(self):
         with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
             "src.tui_app._library_insights", return_value=INSIGHTS
@@ -48,6 +72,12 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNotNone(app.query_one("#center"))
                 self.assertIsNotNone(app.query_one("#right"))
                 self.assertEqual(app.query_one("#work_table", DataTable).row_count, 4)
+                health = str(app.query_one("#health_graphs", Static).content)
+                mix = str(app.query_one("#catalog_mix", Static).content)
+                self.assertIn("LIBRARY HEALTH", health)
+                self.assertIn("20 left", health)
+                self.assertIn("CATALOG MIX", mix)
+                self.assertIn("Blu-ray", mix)
                 footer = str(app.query_one("#footer_keys", Static).content)
                 self.assertIn("N Best Next", footer)
                 self.assertIn("F Find", footer)
@@ -98,6 +128,52 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("CATCHUP", brand.replace(" ", ""))
                 self.assertIn("BEST NEXT", best)
                 self.assertIn("current population job", best)
+
+    async def test_repair_sections_expose_real_queues_and_actions(self):
+        with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                await pilot.press("i")
+                await pilot.pause()
+                self.assertEqual(app.section, "imdb")
+                title = str(app.query_one("#work_title", Static).content)
+                self.assertIn("IMDb Repair", title)
+                self.assertGreaterEqual(app.query_one("#work_table", DataTable).row_count, 2)
+                await pilot.press("a")
+                await pilot.pause()
+                self.assertEqual(app.section, "artwork")
+                title = str(app.query_one("#work_title", Static).content)
+                self.assertIn("Artwork Repair", title)
+                self.assertGreaterEqual(app.query_one("#work_table", DataTable).row_count, 2)
+
+    async def test_active_job_graph_shows_progress_and_remaining(self):
+        live = dict(SAMPLE_STATUS)
+        live["is_running"] = True
+        live["task_type"] = "imdb"
+        live["stats"] = {
+            "errors": 0,
+            "phase": "imdb",
+            "phase_current": 25,
+            "phase_total": 100,
+            "current_fid": 76000,
+            "next_fid": 76305,
+            "matches_found": 20,
+            "unmatched": 5,
+        }
+        with patch("src.tui_app._fetch_status", return_value=live), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                graph = str(app.query_one("#job_graph", Static).content)
+                self.assertIn("ACTIVE JOB", graph)
+                self.assertIn("25/100", graph)
+                self.assertIn("75 left", graph)
+                self.assertIn("20 matched", graph)
 
     async def test_f5_returns_reload_code_for_wrapper_restart(self):
         with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(

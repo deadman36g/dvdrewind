@@ -36,6 +36,8 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertIn("phase_total", data["stats"])
         self.assertIn("current_title", data["stats"])
         self.assertIn("posters_fetched", data["stats"])
+        self.assertIn("matches_found", data["stats"])
+        self.assertIn("unmatched", data["stats"])
         self.assertIsInstance(data["log_lines"], list)
         self.assertIsInstance(data["recent_discoveries"], list)
         self.assertIsInstance(data["failed_fids"], list)
@@ -54,6 +56,20 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertTrue(data["ok"])
         self.assertIn("76,200", data["message"])
         start_sync.assert_called_once_with(limit=25, force_from_initial=True)
+
+    @unittest_run_loop
+    async def test_api_archive_imdb_can_target_one_title(self):
+        with patch.object(ArchiveSyncManager, "start_imdb_match", return_value=True) as start_imdb:
+            resp = await self.client.request(
+                "POST",
+                "/api/archive/imdb",
+                json={"fid": 76145, "limit": 1},
+            )
+        self.assertEqual(resp.status, 200)
+        data = await resp.json()
+        self.assertTrue(data["ok"])
+        self.assertIn("IMDb repair", data["message"])
+        start_imdb.assert_called_once_with(limit=1, fid=76145)
 
     @unittest_run_loop
     async def test_archive_control_center_exposes_post_initial_catchup(self):

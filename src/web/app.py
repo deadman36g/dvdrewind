@@ -622,6 +622,22 @@ async def handle_api_archive_posters(request: web.Request) -> web.Response:
     started = manager.start_posters_backfill(limit=limit)
     return web.json_response({"ok": started, "message": "Poster backfill started" if started else "A task is already running"})
 
+async def handle_api_archive_imdb(request: web.Request) -> web.Response:
+    manager = ArchiveSyncManager()
+    limit = None
+    fid = None
+    try:
+        data = await request.json()
+        limit = data.get("limit")
+        fid = data.get("fid")
+        if fid is not None:
+            fid = int(fid)
+    except Exception:
+        pass
+    started = manager.start_imdb_match(limit=limit, fid=fid)
+    message = "IMDb repair started" if started else "A task is already running"
+    return web.json_response({"ok": started, "message": message})
+
 async def handle_api_archive_vacuum(request: web.Request) -> web.Response:
     manager = ArchiveSyncManager()
     started = manager.start_vacuum()
@@ -1154,6 +1170,7 @@ def create_app() -> web.Application:
     app.router.add_get("/api/archive/status", handle_api_archive_status)
     app.router.add_post("/api/archive/sync", handle_api_archive_sync)
     app.router.add_post("/api/archive/posters", handle_api_archive_posters)
+    app.router.add_post("/api/archive/imdb", handle_api_archive_imdb)
     app.router.add_post("/api/archive/vacuum", handle_api_archive_vacuum)
     app.router.add_post("/api/archive/cancel", handle_api_archive_cancel)
 
