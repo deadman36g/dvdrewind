@@ -461,7 +461,10 @@ def build_command_center_panel(data: Dict[str, Any]) -> Panel:
     overview.add_column("Value", style="bold", width=20)
     overview.add_column("Label2", style="dim", width=16)
     overview.add_column("Value2", style="bold")
-    next_fid = int(stats.get("next_fid") or post_initial.get("next_fid") or INITIAL_MAX_FID + 1)
+    if running:
+        next_fid = int(stats.get("next_fid") or post_initial.get("next_fid") or INITIAL_MAX_FID + 1)
+    else:
+        next_fid = int(post_initial.get("next_fid") or stats.get("next_fid") or INITIAL_MAX_FID + 1)
     overview.add_row("Archive titles", f"{int(metrics.get('titles') or data.get('db_titles') or 0):,}", "Next FID", f"{next_fid:,}")
     overview.add_row("Releases", f"{int(metrics.get('releases') or 0):,}", "Database", f"{float(metrics.get('db_size_mb') or data.get('db_size_mb') or 0):.2f} MB")
     overview.add_row("Last run", _fmt_duration(last_sync.get("elapsed_seconds")) if last_sync else "—", "Last result", str(last_sync.get("status") or "—").upper())
@@ -543,6 +546,8 @@ def run_command_center() -> int:
         except Exception as exc:
             console.clear()
             console.print(Panel(f"[bold red]DVD Rewind web service is unavailable.[/]\n{exc}", border_style="red"))
+            if not sys.stdin.isatty():
+                return 1
             _pause_command_center()
             continue
 
