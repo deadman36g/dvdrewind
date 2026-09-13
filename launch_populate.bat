@@ -1,11 +1,13 @@
 @echo off
-title DVDRewind - Catalog Population Engine
-cd /d "C:\Users\deadman36g\.gemini\antigravity\scratch\dvdrewind"
+setlocal
+title DVDRewind - NAS Catalog Monitor
 echo ===================================================
-echo   DVDRewind Catalog Population & Ingestion Engine
+echo   DVDRewind NAS Catalog Monitor
 echo ===================================================
-echo Starting live dashboard...
-python populate_all.py
+echo Connecting to the live DVDRewind archive on 192.168.50.39...
+echo Press Ctrl+C to close the monitor. The NAS sync keeps running.
 echo.
-echo Process exited with code %ERRORLEVEL%.
+ssh -t deadman36g@192.168.50.39 "docker exec -it dvdrewind python populate_all.py --watch"
+echo.
+echo Monitor closed with code %ERRORLEVEL%.
 pause

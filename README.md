@@ -73,6 +73,12 @@ python populate_all.py --sync
 # (already-ingested titles are skipped)
 python populate_all.py --since-initial
 
+# Watch the live Archive Control Center task without starting another crawler
+python populate_all.py --watch
+
+# Show one live status snapshot
+python populate_all.py --status
+
 # Headless daily sync with auto-vacuum (ideal for crontab on a NAS/server)
 python populate_all.py --cron --sync
 
@@ -82,6 +88,26 @@ python populate_all.py --posters-only
 # Check SQLite integrity, optimize FTS5 full-text search index, and VACUUM
 python populate_all.py --vacuum
 ```
+
+### Windows PowerShell helper
+
+DVDRewind runs on the NAS, so Windows should not call the local Docker Desktop daemon. Install the PowerShell helper once:
+
+```powershell
+irm https://raw.githubusercontent.com/deadman36g/dvdrewind/main/scripts/install_windows_cli.ps1 | iex
+```
+
+Then use:
+
+```powershell
+dvdrewind          # live read-only CLI monitor
+dvdrewind status   # one status snapshot
+dvdrewind help     # populate_all.py options
+dvdrewind web      # open the web UI
+dvdrewind shell    # enter the NAS container
+```
+
+The helper connects to `deadman36g@192.168.50.39` over SSH and executes inside the NAS `dvdrewind` container, so Docker Desktop on Windows is not required.
 
 ---
 

@@ -505,6 +505,87 @@ def run_posters_backfill(headless=False, limit=None):
     repo.close()
 
 
+def _fetch_archive_status():
+    """Read the live Archive Control Center status from the local DVDRewind web app."""
+    response = requests.get("http://127.0.0.1:8088/api/archive/status", timeout=5)
+    response.raise_for_status()
+    return response.json()
+
+
+def _build_archive_status_panel(data):
+    running = bool(data.get("is_running"))
+    stats = data.get("stats") or {}
+    post_initial = data.get("post_initial") or {}
+    last_sync = data.get("last_sync") or {}
+
+    status = Table(box=box.SIMPLE, show_header=False, expand=True, padding=(0, 1))
+    status.add_column("label", style="dim", width=18)
+    status.add_column("value", style="bold")
+    status.add_row("Task", data.get("task_type", "idle").upper() if running else "IDLE")
+    status.add_row("Status", data.get("status_message") or "Ready")
+    status.add_row("Current action", data.get("current_action") or "—")
+    status.add_row("Current FID", f"{int(stats.get('current_fid') or 0):,}")
+    status.add_row("Next catch-up FID", f"{int(stats.get('next_fid') or post_initial.get('next_fid') or INITIAL_MAX_FID + 1):,}")
+    status.add_row("FIDs scanned", f"{int(stats.get('scanned_fids') or 0):,}")
+    status.add_row("New titles", f"{int(stats.get('new_titles') or 0):,}")
+    status.add_row("Revisions", f"{int(stats.get('revisions_updated') or 0):,}")
+    status.add_row("Errors", f"{int(stats.get('errors') or 0):,}")
+    status.add_row("Archive titles", f"{int(data.get('db_titles') or 0):,}")
+    if data.get("elapsed_seconds") is not None:
+        status.add_row("Elapsed", f"{float(data.get('elapsed_seconds') or 0):.1f}s")
+    if last_sync.get("last_sync"):
+        status.add_row("Last completed sync", str(last_sync.get("last_sync")))
+
+    log_text = Text()
+    logs = data.get("log_lines") or []
+    for line in logs[-12:]:
+        ts = str(line.get("ts") or "--:--:--")
+        log_text.append(f"{ts} ", style="dim")
+        log_text.append(str(line.get("msg") or ""))
+        log_text.append("\n")
+    if not logs:
+        log_text.append("No live activity yet.", style="dim")
+
+    title_style = "bold green" if running else "bold cyan"
+    return Panel(
+        Group(
+            Text("DVDRewind NAS Archive Monitor", style=title_style),
+            Text(""),
+            status,
+            Text("─" * 64, style="dim"),
+            Text("Recent activity", style="bold"),
+            log_text,
+        ),
+        title="[bold cyan]DVDRewind Live CLI[/]",
+        subtitle="[dim]Read-only monitor • Ctrl+C exits the monitor only[/]",
+        border_style="green" if running else "cyan",
+        box=box.DOUBLE,
+        padding=(1, 2),
+    )
+
+
+def run_archive_status_monitor(watch=False):
+    """Show or continuously watch the web-managed archive sync without starting another crawler."""
+    if not watch:
+        try:
+            console.print(_build_archive_status_panel(_fetch_archive_status()))
+        except Exception as exc:
+            console.print(f"[bold red]Could not read DVDRewind status:[/] {exc}")
+            raise SystemExit(1)
+        return
+
+    try:
+        with Live(console=console, refresh_per_second=2, screen=False) as live:
+            while True:
+                try:
+                    live.update(_build_archive_status_panel(_fetch_archive_status()))
+                except Exception as exc:
+                    live.update(Panel(f"[red]Waiting for DVDRewind web service...[/]\n{exc}", border_style="red"))
+                time.sleep(1.5)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Monitor closed. The DVDRewind sync, if running, continues on the NAS.[/]")
+
+
 def run_incremental_sync(headless=False, limit=None, force_from_initial=False):
     """
     Checks DVDCompare for newly updated/reviewed comparisons and catches up every
@@ -798,6 +879,8 @@ Examples:
   python populate_all.py                     Interactive full catalog sweep (dashboard)
   python populate_all.py --sync              Resume post-76,200 catch-up + check current revisions
   python populate_all.py --since-initial     Re-scan everything added after the original 76,200 cutoff
+  python populate_all.py --watch             Watch the live web-managed sync without starting another crawler
+  python populate_all.py --status            Show one live Archive Control Center status snapshot
   python populate_all.py --cron --sync       Automated headless daily sync (ideal for NAS crontab)
   python populate_all.py --posters-only      Backfill missing movie posters from TMDB / Wikipedia
   python populate_all.py --vacuum            Check DB integrity, optimize search index & VACUUM
@@ -805,6 +888,8 @@ Examples:
     )
     parser.add_argument("--sync", "--update", action="store_true", help="Incremental sync: check current revisions and resume scanning FIDs added after the original catalog cutoff")
     parser.add_argument("--since-initial", action="store_true", help="Force a complete catch-up scan from FID 76,201 onward, skipping titles already in the database")
+    parser.add_argument("--status", action="store_true", help="Show a one-time status snapshot of the web-managed archive task")
+    parser.add_argument("--watch", action="store_true", help="Continuously watch the web-managed archive task in a read-only live dashboard")
     parser.add_argument("--cron", "--headless", action="store_true", help="Run in headless logging mode (auto-detected if no TTY)")
     parser.add_argument("--posters-only", action="store_true", help="Backfill missing posters for existing titles without re-scraping HTML")
     parser.add_argument("--vacuum", "--health", action="store_true", help="Run database integrity check, FTS5 index optimization, and VACUUM")
@@ -816,7 +901,11 @@ Examples:
     is_headless = args.cron or (not sys.stdout.isatty())
     state.headless = is_headless
 
-    if args.vacuum:
+    if args.watch:
+        run_archive_status_monitor(watch=True)
+    elif args.status:
+        run_archive_status_monitor(watch=False)
+    elif args.vacuum:
         run_vacuum(headless=is_headless)
     elif args.posters_only:
         run_posters_backfill(headless=is_headless, limit=args.limit)
