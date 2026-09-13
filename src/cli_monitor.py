@@ -241,9 +241,10 @@ def build_archive_status_panel(data: Dict[str, Any], view: str = "main") -> Pane
     stats = data.get("stats") or {}
     last_sync = data.get("last_sync") or {}
     elapsed = float(data.get("elapsed_seconds") or 0)
+    phase_elapsed = float(data.get("phase_elapsed_seconds") or elapsed)
     phase = str(stats.get("phase") or ("idle" if not running else "starting"))
     phase_label = PHASE_LABELS.get(phase, phase.replace("_", " ").upper())
-    current, total, pct, speed, eta = _phase_progress(stats, elapsed)
+    current, total, pct, speed, eta = _phase_progress(stats, phase_elapsed)
 
     header = Text()
     header.append("DVDRewind  ", style="bold cyan")

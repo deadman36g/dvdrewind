@@ -28,6 +28,7 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertIn("post_initial", data)
         self.assertIn("metrics", data)
         self.assertIn("growth", data)
+        self.assertIn("phase_elapsed_seconds", data)
         self.assertIn("recent_discoveries", data)
         self.assertIn("failed_fids", data)
         self.assertIn("phase", data["stats"])

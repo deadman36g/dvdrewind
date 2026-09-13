@@ -51,6 +51,7 @@ class ArchiveSyncManager:
         self.recent_discoveries: List[Dict[str, Any]] = []
         self.failed_fids: List[Dict[str, Any]] = []
         self.start_metrics: Dict[str, Any] = {}
+        self.phase_start_time: Optional[float] = None
         self._metrics_cache: Dict[str, Any] = {}
         self._metrics_cache_at = 0.0
         self.stats = self._blank_stats()
@@ -117,6 +118,7 @@ class ArchiveSyncManager:
     def _reset_task_state(self, phase: str = "starting", clear_failures: bool = False) -> None:
         self.stats = self._blank_stats()
         self.stats["phase"] = phase
+        self.phase_start_time = time.time()
         self.recent_discoveries = []
         self.start_metrics = self._snapshot_metrics(force=True)
         if clear_failures:
@@ -178,8 +180,11 @@ class ArchiveSyncManager:
 
         metrics = self._snapshot_metrics()
         elapsed = None
+        phase_elapsed = None
         if self.start_time and self.is_running:
             elapsed = round(time.time() - self.start_time, 1)
+        if self.phase_start_time and self.is_running:
+            phase_elapsed = round(time.time() - self.phase_start_time, 1)
 
         post_initial = None
         if POST_INITIAL_STATE_FILE.exists():
@@ -202,6 +207,7 @@ class ArchiveSyncManager:
             "current_action": self.current_action,
             "stats": dict(self.stats),
             "elapsed_seconds": elapsed,
+            "phase_elapsed_seconds": phase_elapsed,
             "log_lines": self.log_lines[-80:],
             "recent_discoveries": list(self.recent_discoveries[-12:]),
             "failed_fids": list(self.failed_fids[-25:]),
@@ -290,6 +296,7 @@ class ArchiveSyncManager:
 
             # 1. Check DVDCompare homepage
             self.stats["phase"] = "homepage"
+            self.phase_start_time = time.time()
             self.stats["phase_current"] = 0
             self.stats["phase_total"] = 0
             self.status_message = "Checking DVDCompare homepage for revisions..."
@@ -415,6 +422,7 @@ class ArchiveSyncManager:
 
                 catchup_start = current_probe
                 self.stats["phase"] = "catchup"
+                self.phase_start_time = time.time()
                 self.stats["phase_current"] = 0
                 self.stats["phase_total"] = max(0, probe_end - catchup_start + 1)
                 self.status_message = f"Catching up FIDs {current_probe:,} through {probe_end:,}..."
@@ -615,6 +623,7 @@ class ArchiveSyncManager:
     def _run_vacuum_internal(self):
         try:
             self.stats["phase"] = "maintenance"
+            self.phase_start_time = time.time()
             self.stats["phase_current"] = 1
             self.stats["phase_total"] = 1
             self.status_message = "Optimizing database & running VACUUM..."
