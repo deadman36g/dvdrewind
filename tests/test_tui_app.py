@@ -72,18 +72,23 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNotNone(app.query_one("#center"))
                 self.assertIsNotNone(app.query_one("#right"))
                 self.assertEqual(app.query_one("#work_table", DataTable).row_count, 4)
-                health = str(app.query_one("#health_graphs", Static).content)
+                health = "\n".join(
+                    str(app.query_one(selector, Static).content)
+                    for selector in ("#health_imdb", "#health_art", "#health_complete")
+                )
                 mix = str(app.query_one("#catalog_mix", Static).content)
-                self.assertIn("LIBRARY HEALTH", health)
+                self.assertIn("IMDb MATCHES", health)
+                self.assertIn("ARTWORK", health)
+                self.assertIn("FULLY CLEAN", health)
                 self.assertIn("20 left", health)
                 self.assertIn("CATALOG MIX", mix)
                 self.assertIn("Blu-ray", mix)
                 footer = str(app.query_one("#footer_keys", Static).content)
-                self.assertIn("N Best Next", footer)
-                self.assertIn("F Find", footer)
-                self.assertIn("H Keys", footer)
-                self.assertIn("F5 Reload", footer)
-                self.assertIn("Q Quit", footer)
+                self.assertIn("Best Next", footer)
+                self.assertIn("Find", footer)
+                self.assertIn("Help", footer)
+                self.assertIn("Reload", footer)
+                self.assertIn("Quit", footer)
                 self.assertNotIn("R Refresh", footer)
 
     async def test_help_and_find_are_progressively_disclosed(self):
@@ -127,7 +132,7 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("LIVE", brand)
                 self.assertIn("CATCHUP", brand.replace(" ", ""))
                 self.assertIn("BEST NEXT", best)
-                self.assertIn("current population job", best)
+                self.assertIn("current archive job", best)
 
     async def test_repair_sections_expose_real_queues_and_actions(self):
         with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
@@ -140,13 +145,13 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause()
                 self.assertEqual(app.section, "imdb")
                 title = str(app.query_one("#work_title", Static).content)
-                self.assertIn("IMDb Repair", title)
+                self.assertIn("IMDb Matching", title)
                 self.assertGreaterEqual(app.query_one("#work_table", DataTable).row_count, 2)
                 await pilot.press("a")
                 await pilot.pause()
                 self.assertEqual(app.section, "artwork")
                 title = str(app.query_one("#work_title", Static).content)
-                self.assertIn("Artwork Repair", title)
+                self.assertIn("Artwork", title)
                 self.assertGreaterEqual(app.query_one("#work_table", DataTable).row_count, 2)
 
     async def test_active_job_graph_shows_progress_and_remaining(self):

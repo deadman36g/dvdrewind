@@ -26,27 +26,27 @@ STATE_FILE = ARCHIVE_DIR / "tui_state.json"
 WEB_URL = "http://192.168.50.39:8091"
 
 SECTIONS = [
-    ("dashboard", "Dashboard"),
-    ("movies", "Movies"),
-    ("population", "Population"),
-    ("imdb", "IMDb Repair"),
-    ("artwork", "Artwork Repair"),
-    ("discoveries", "Discoveries"),
-    ("failures", "Failures"),
-    ("maintenance", "Maintenance"),
+    ("dashboard", "◆  Dashboard"),
+    ("movies", "▦  Movies"),
+    ("population", "↻  Population"),
+    ("imdb", "◎  IMDb Repair"),
+    ("artwork", "▧  Artwork Repair"),
+    ("discoveries", "✦  Discoveries"),
+    ("failures", "!  Failures"),
+    ("maintenance", "⚙  Maintenance"),
 ]
 
 BADGE = {
-    "READY": "[black on #e0b85c] READY [/black on #e0b85c]",
-    "LIVE": "[black on #55e39f] LIVE [/black on #55e39f]",
-    "IDLE": "[white on #344a60] IDLE [/white on #344a60]",
-    "COMPLETE": "[black on #55e39f] COMPLETE [/black on #55e39f]",
-    "FAILED": "[white on #b94a57] FAILED [/white on #b94a57]",
-    "NEEDS ART": "[black on #e0b85c] NEEDS ART [/black on #e0b85c]",
-    "NEEDS MATCH": "[black on #e0b85c] NEEDS MATCH [/black on #e0b85c]",
-    "NEEDS BOTH": "[white on #9c6545] NEEDS BOTH [/white on #9c6545]",
-    "LOCAL MEDIA": "[white on #6b4d8c] LOCAL MEDIA [/white on #6b4d8c]",
-    "EXTERNAL LINK": "[black on #63c7ff] EXTERNAL LINK [/black on #63c7ff]",
+    "READY": "[bold #f1c477 on #2a2115] READY [/bold #f1c477 on #2a2115]",
+    "LIVE": "[bold #71d49b on #13251d] LIVE [/bold #71d49b on #13251d]",
+    "IDLE": "[#93a3b3 on #202a35] IDLE [/#93a3b3 on #202a35]",
+    "COMPLETE": "[bold #71d49b on #13251d] COMPLETE [/bold #71d49b on #13251d]",
+    "FAILED": "[bold #ef7f73 on #2a1717] FAILED [/bold #ef7f73 on #2a1717]",
+    "NEEDS ART": "[bold #b89de8 on #211a2e] NEEDS ART [/bold #b89de8 on #211a2e]",
+    "NEEDS MATCH": "[bold #f1c477 on #2a2115] NEEDS MATCH [/bold #f1c477 on #2a2115]",
+    "NEEDS BOTH": "[bold #efaa73 on #2b1c17] NEEDS BOTH [/bold #efaa73 on #2b1c17]",
+    "LOCAL MEDIA": "[#b89de8 on #211a2e] LOCAL MEDIA [/#b89de8 on #211a2e]",
+    "EXTERNAL LINK": "[#67c7d9 on #13232a] EXTERNAL LINK [/#67c7d9 on #13232a]",
 }
 
 
@@ -168,19 +168,19 @@ def _library_insights() -> Dict[str, Any]:
         repo.close()
 
 
-def _meter(done: int, total: int, width: int = 22, fill_style: str = "#55e39f") -> str:
+def _meter(done: int, total: int, width: int = 22, fill_style: str = "#71d49b") -> str:
     total = max(0, int(total or 0))
     done = max(0, min(int(done or 0), total)) if total else 0
     pct = (done / total * 100.0) if total else 0.0
     filled = int(round(width * pct / 100.0))
-    return f"[{fill_style}]{'#' * filled}[/{fill_style}][#344a60]{'-' * (width - filled)}[/#344a60] {pct:5.1f}%"
+    return f"[{fill_style}]{'━' * filled}[/{fill_style}][#2b3440]{'─' * (width - filled)}[/#2b3440]"
 
 
-def _mini_bar(value: int, maximum: int, width: int = 12, style: str = "#63c7ff") -> str:
+def _mini_bar(value: int, maximum: int, width: int = 12, style: str = "#67c7d9") -> str:
     maximum = max(1, int(maximum or 1))
     value = max(0, int(value or 0))
     filled = int(round(width * min(1.0, value / maximum)))
-    return f"[{style}]{'#' * filled}[/{style}][#344a60]{'-' * (width - filled)}[/#344a60]"
+    return f"[{style}]{'▰' * filled}[/{style}][#2b3440]{'▱' * (width - filled)}[/#2b3440]"
 
 
 class KeysScreen(ModalScreen[None]):
@@ -191,29 +191,29 @@ class KeysScreen(ModalScreen[None]):
     ]
 
     CSS = """
-    KeysScreen { align: center middle; background: rgba(2, 10, 20, 0.86); }
+    KeysScreen { align: center middle; background: rgba(4, 6, 10, 0.88); }
     #keys_box {
         width: 78;
         height: 36;
-        border: solid #2f78b7;
-        background: #071a2f;
-        padding: 1 2;
+        border: round #9a7338;
+        background: #0f1620;
+        padding: 1 3;
     }
-    #keys_title { height: 2; color: #63c7ff; text-style: bold; }
-    #keys_body { height: 1fr; color: #d7e4ef; }
-    #keys_hint { height: 2; color: #8aa7c1; text-align: center; }
+    #keys_title { height: 2; color: #f1c477; text-style: bold; }
+    #keys_body { height: 1fr; color: #c8d1da; }
+    #keys_hint { height: 2; color: #66788a; text-align: center; }
     """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="keys_box"):
-            yield Static("DVD REWIND // KEYS", id="keys_title")
+            yield Static("DVD REWIND  /  KEYBOARD", id="keys_title")
             yield Static(
-                "[bold #63c7ff]Browse[/]\n"
+                "[bold #d7b476]Browse[/]\n"
                 "  Up/Down        Move through sections or rows\n"
                 "  Enter          Open / run selected row action\n"
                 "  F              Find movies\n"
                 "  N              Show Best Next recommendation\n\n"
-                "[bold #63c7ff]Repair / population[/]\n"
+                "[bold #d7b476]Repair / population[/]\n"
                 "  U              Run normal update\n"
                 "  C              Catch up since 76,200\n"
                 "  I              Open IMDb Repair\n"
@@ -221,7 +221,7 @@ class KeysScreen(ModalScreen[None]):
                 "  P              Run full poster backfill\n"
                 "  M              Database maintenance\n"
                 "  E              Retry saved failed FIDs\n\n"
-                "[bold #63c7ff]App controls[/]\n"
+                "[bold #d7b476]App controls[/]\n"
                 "  R              Refresh data only\n"
                 "  F5             Reload updated application code\n"
                 "  O              Open DVD Rewind web UI\n"
@@ -260,86 +260,153 @@ class DVDRewindTUI(App[None]):
 
     CSS = """
     Screen {
-        background: #061525;
-        color: #d7e4ef;
+        background: #090c12;
+        color: #e8edf2;
     }
     #brand {
-        height: 4;
-        border: solid #2f78b7;
-        background: #0a213c;
-        color: #f4f7fb;
+        height: 5;
+        border-bottom: solid #9a7338;
+        background: #0e1219;
+        color: #f3f5f7;
         padding: 0 2;
     }
-    #workspace { height: 1fr; }
+    #workspace {
+        height: 1fr;
+        padding: 1 1 0 1;
+    }
     #left {
-        width: 24;
-        min-width: 21;
-        border: solid #2f78b7;
-        background: #071a2f;
+        width: 26;
+        min-width: 24;
+        border: round #263342;
+        background: #0d131c;
         margin-right: 1;
     }
     #center {
         width: 1fr;
-        min-width: 56;
-        border: solid #2f78b7;
-        background: #071a2f;
+        min-width: 60;
+        background: #090c12;
         margin-right: 1;
     }
     #right {
-        width: 34;
-        min-width: 30;
-        border: solid #2f78b7;
-        background: #071a2f;
+        width: 38;
+        min-width: 34;
+        background: #090c12;
     }
     .panel-title {
-        height: 2;
-        padding: 0 1;
-        color: #63c7ff;
+        height: 3;
+        padding: 1 2 0 2;
+        color: #d7b476;
         text-style: bold;
-        background: #0c2747;
+        background: #101722;
     }
-    #sections { height: 1fr; padding: 1 0; }
-    ListItem { height: 3; padding: 0 1; color: #c7d6e4; }
-    ListItem.--highlight { background: #153b62; color: #ffffff; text-style: bold; }
-    #work_title { height: 3; padding: 0 1; color: #ffffff; text-style: bold; }
+    #sections {
+        height: 1fr;
+        padding: 1 1;
+        background: #0d131c;
+    }
+    ListItem {
+        height: 3;
+        padding: 0 1;
+        color: #9dacbc;
+        background: #0d131c;
+    }
+    ListItem.--highlight {
+        background: #211c15;
+        color: #f5d79c;
+        text-style: bold;
+        border-left: thick #d5a85b;
+    }
+    #nav_hint {
+        height: 7;
+        margin: 0 1 1 1;
+        padding: 1 1;
+        border-top: solid #263342;
+        color: #6f8295;
+        background: #0d131c;
+    }
+    #work_title {
+        height: 3;
+        margin: 0 1;
+        padding: 1 1 0 1;
+        color: #f2f4f6;
+        text-style: bold;
+    }
     #health_graphs {
         height: 7;
-        padding: 0 2;
-        border-bottom: solid #2f78b7;
-        background: #081d34;
+        margin: 0 1 1 1;
     }
+    .health-card {
+        width: 1fr;
+        height: 7;
+        border: round #263342;
+        background: #0f1620;
+        padding: 0 1;
+        margin-right: 1;
+    }
+    #health_complete { margin-right: 0; }
     #job_graph {
-        height: 4;
+        height: 5;
+        margin: 0 1 1 1;
         padding: 0 2;
-        border-bottom: solid #2f78b7;
-        background: #071a2f;
+        border: round #263342;
+        background: #0f1620;
     }
-    #search_input { height: 3; margin: 0 1; display: none; }
-    #work_table { height: 1fr; margin: 0 1; }
-    DataTable > .datatable--header { background: #0c2747; color: #63c7ff; text-style: bold; }
-    DataTable > .datatable--cursor { background: #244e74; color: #ffffff; }
+    #search_input {
+        height: 3;
+        margin: 0 1 1 1;
+        display: none;
+        border: round #3c4a59;
+        background: #101722;
+        color: #f2f4f6;
+    }
+    #work_table {
+        height: 1fr;
+        margin: 0 1;
+        border: round #263342;
+        background: #0d131c;
+    }
+    DataTable > .datatable--header {
+        background: #151e29;
+        color: #d7b476;
+        text-style: bold;
+    }
+    DataTable > .datatable--even-row { background: #0d131c; }
+    DataTable > .datatable--odd-row { background: #101721; }
+    DataTable > .datatable--cursor {
+        background: #28384a;
+        color: #ffffff;
+        text-style: bold;
+    }
     #detail {
-        height: 9;
+        height: 8;
         min-height: 7;
-        border-top: solid #2f78b7;
-        padding: 1 2;
-        color: #d7e4ef;
+        margin: 1 1 0 1;
+        border: round #263342;
+        background: #0f1620;
+        padding: 0 2;
+        color: #cdd6df;
     }
-    #best_next { height: 11; padding: 1 2; border-bottom: solid #2f78b7; }
-    #catalog_mix { height: 9; padding: 1 2; border-bottom: solid #2f78b7; }
-    #recent_activity { height: 1fr; padding: 1 2; border-bottom: solid #2f78b7; }
-    #warnings { height: 8; padding: 1 2; }
+    .right-card {
+        border: round #263342;
+        background: #0f1620;
+        padding: 1 2;
+        margin-bottom: 1;
+    }
+    #best_next { height: 11; }
+    #catalog_mix { height: 10; }
+    #recent_activity { height: 1fr; }
+    #warnings { height: 9; margin-bottom: 0; }
     #status_line {
         height: 2;
-        border: solid #2f78b7;
-        background: #0a213c;
+        border-top: solid #9a7338;
+        background: #0e1219;
         padding: 0 2;
-        color: #8aa7c1;
+        color: #8293a6;
     }
     #footer_keys {
         height: 2;
-        background: #071a2f;
-        color: #8aa7c1;
+        background: #090c12;
+        color: #66788a;
         text-align: center;
         padding: 0 1;
     }
@@ -365,28 +432,44 @@ class DVDRewindTUI(App[None]):
         self._completion_timer_started = False
 
     def compose(self) -> ComposeResult:
-        yield Static("DVD REWIND", id="brand", markup=True)
+        yield Static(
+            "[bold #f1c477]DVD REWIND[/bold #f1c477]  [#73879a]PRIVATE ARCHIVE CONSOLE[/#73879a]\n"
+            "[#56697c]Physical-media research • edition comparison • archive maintenance[/#56697c]",
+            id="brand",
+            markup=True,
+        )
         with Horizontal(id="workspace"):
             with Vertical(id="left"):
-                yield Static("LIBRARY / SECTIONS", classes="panel-title")
+                yield Static("BROWSE", classes="panel-title")
                 yield ListView(
                     *[ListItem(Label(label), id=f"section-{key}") for key, label in SECTIONS],
                     id="sections",
                 )
+                yield Static(
+                    "[#d7b476]QUICK KEYS[/#d7b476]\n"
+                    "[#8293a6]F[/#8293a6] Find movie   [#8293a6]N[/#8293a6] Best next\n"
+                    "[#8293a6]I[/#8293a6] IMDb repair [#8293a6]A[/#8293a6] Artwork\n"
+                    "[#56697c]H shows every shortcut[/#56697c]",
+                    id="nav_hint",
+                    markup=True,
+                )
             with Vertical(id="center"):
-                yield Static("CURRENT WORK AREA", id="work_title")
-                yield Static("LIBRARY HEALTH\nLoading…", id="health_graphs", markup=True)
+                yield Static("DASHBOARD", id="work_title", markup=True)
+                with Horizontal(id="health_graphs"):
+                    yield Static("IMDb MATCHES\nLoading…", id="health_imdb", classes="health-card", markup=True)
+                    yield Static("ARTWORK\nLoading…", id="health_art", classes="health-card", markup=True)
+                    yield Static("FULLY CLEAN\nLoading…", id="health_complete", classes="health-card", markup=True)
                 yield Static("ACTIVE JOB\nNo active archive job.", id="job_graph", markup=True)
-                yield Input(placeholder="Find a title…", value=self.search_query, id="search_input")
+                yield Input(placeholder="Search titles, editions, distributors…", value=self.search_query, id="search_input")
                 yield DataTable(id="work_table", cursor_type="row", zebra_stripes=True)
-                yield Static("Select an item for details.", id="detail", markup=True)
+                yield Static("Select a row to see details.", id="detail", markup=True)
             with Vertical(id="right"):
-                yield Static("BEST NEXT\nLoading…", id="best_next", markup=True)
-                yield Static("CATALOG MIX\nLoading…", id="catalog_mix", markup=True)
-                yield Static("RECENT ACTIVITY\nLoading…", id="recent_activity", markup=True)
-                yield Static("WARNINGS / NOTICES\nLoading…", id="warnings", markup=True)
+                yield Static("BEST NEXT\nLoading…", id="best_next", classes="right-card", markup=True)
+                yield Static("CATALOG MIX\nLoading…", id="catalog_mix", classes="right-card", markup=True)
+                yield Static("RECENT ACTIVITY\nLoading…", id="recent_activity", classes="right-card", markup=True)
+                yield Static("ATTENTION\nLoading…", id="warnings", classes="right-card", markup=True)
         yield Static("Connecting to archive…", id="status_line", markup=True)
-        yield Static("N Best Next   F Find   H Keys   F5 Reload   Q Quit", id="footer_keys", markup=True)
+        yield Static("N  Best Next     F  Find     H  Help     F5  Reload     Q  Quit", id="footer_keys", markup=True)
 
     async def on_mount(self) -> None:
         table = self.query_one("#work_table", DataTable)
@@ -470,17 +553,17 @@ class DVDRewindTUI(App[None]):
         running = bool(self.status.get("is_running"))
         stats = self.status.get("stats") or {}
         phase = str(stats.get("phase") or "idle").replace("_", " ").upper()
-        marker = "[black on #55e39f] LIVE [/black on #55e39f]" if running else "[white on #344a60] IDLE [/white on #344a60]"
-        update = "   [black on #e0b85c] UPDATE READY - F5 [/black on #e0b85c]" if self._update_ready else ""
-        title = (
-            "[bold #f4f7fb]DVD REWIND[/bold #f4f7fb]  [#63c7ff]// VIDEO STORE ARCHIVE TERMINAL[/#63c7ff]"
-            f"{update}\n{marker}  [#8aa7c1]{phase}[/#8aa7c1]"
+        total = int(self.insights.get("total_titles") or (self.status.get("metrics") or {}).get("titles") or 0)
+        marker = "[black on #71d49b] ● LIVE [/black on #71d49b]" if running else "[white on #263342] ● IDLE [/white on #263342]"
+        update = "  [black on #f1c477] UPDATE READY · F5 [/black on #f1c477]" if self._update_ready else ""
+        activity = str(self.status.get("status_message") or "Working") if running else "Archive worker standing by"
+        self.query_one("#brand", Static).update(
+            "[bold #f1c477]DVD REWIND[/bold #f1c477]  [#73879a]PRIVATE ARCHIVE CONSOLE[/#73879a]"
+            f"  {marker}{update}\n"
+            f"[#56697c]PHYSICAL MEDIA RESEARCH[/#56697c]  [#36495d]•[/#36495d]  "
+            f"[#8293a6]{total:,} titles[/#8293a6]  [#36495d]•[/#36495d]  "
+            f"[#8293a6]{phase}[/#8293a6]  [#36495d]•[/#36495d]  [#c8d1da]{activity}[/#c8d1da]"
         )
-        if running:
-            title += f"  [white]{self.status.get('status_message') or 'Working'}[/white]"
-        else:
-            title += "  [#8aa7c1]Archive worker standing by[/#8aa7c1]"
-        self.query_one("#brand", Static).update(title)
 
     def update_status_line(self) -> None:
         stats = self.status.get("stats") or {}
@@ -489,19 +572,22 @@ class DVDRewindTUI(App[None]):
         running = bool(self.status.get("is_running"))
         current = int(stats.get("current_fid") or 0)
         next_fid = int(stats.get("next_fid") or post.get("next_fid") or 76201)
-        prefix = "[#55e39f]RUNNING[/#55e39f]" if running else "[#8aa7c1]IDLE[/#8aa7c1]"
+        prefix = "[bold #71d49b]● RUNNING[/bold #71d49b]" if running else "[#708397]● IDLE[/#708397]"
         total = int(self.insights.get("total_titles") or metrics.get("titles") or self.status.get("db_titles") or 0)
         with_imdb = int(self.insights.get("with_imdb") or 0)
         with_art = int(self.insights.get("with_art") or 0)
         imdb_pct = (with_imdb / total * 100.0) if total else 0.0
         art_pct = (with_art / total * 100.0) if total else 0.0
+        fid_text = f"FID {current:,} → {next_fid:,}" if running and current else f"Next scan {next_fid:,}"
         text = (
-            f"{prefix}  |  FID {current:,} -> {next_fid:,}  |  "
-            f"{total:,} titles  |  IMDb {imdb_pct:.1f}%  |  Art {art_pct:.1f}%  |  "
-            f"{int(stats.get('errors') or 0)} errors"
+            f"{prefix}  [#36495d]•[/#36495d]  [#9dacbc]{fid_text}[/#9dacbc]  [#36495d]•[/#36495d]  "
+            f"[#9dacbc]{total:,} titles[/#9dacbc]  [#36495d]•[/#36495d]  "
+            f"[#67c7d9]IMDb {imdb_pct:.1f}%[/#67c7d9]  [#36495d]•[/#36495d]  "
+            f"[#b89de8]Art {art_pct:.1f}%[/#b89de8]  [#36495d]•[/#36495d]  "
+            f"[#9dacbc]{int(stats.get('errors') or 0)} errors[/#9dacbc]"
         )
         if self._update_ready:
-            text += "  |  [black on #e0b85c] UPDATE READY - F5 [/black on #e0b85c]"
+            text += "  [#36495d]•[/#36495d]  [bold #f1c477]F5 UPDATE READY[/bold #f1c477]"
         self.query_one("#status_line", Static).update(text)
 
     def update_health_graphs(self) -> None:
@@ -509,16 +595,21 @@ class DVDRewindTUI(App[None]):
         with_imdb = int(self.insights.get("with_imdb") or max(0, total - int(self.insights.get("missing_imdb") or 0)))
         with_art = int(self.insights.get("with_art") or max(0, total - int(self.insights.get("missing_art") or 0)))
         ready = int(self.insights.get("ready_titles") or 0)
-        missing_imdb = max(0, total - with_imdb)
-        missing_art = max(0, total - with_art)
-        not_ready = max(0, total - ready)
-        text = (
-            f"[bold #63c7ff]LIBRARY HEALTH[/bold #63c7ff]   [#8aa7c1]{total:,} catalog titles[/#8aa7c1]\n"
-            f"IMDb     {_meter(with_imdb, total, 20, '#63c7ff')}  [white]{with_imdb:,} matched[/white]  [#e0b85c]{missing_imdb:,} left[/#e0b85c]\n"
-            f"Artwork  {_meter(with_art, total, 20, '#c7a7ff')}  [white]{with_art:,} ready[/white]  [#e0b85c]{missing_art:,} left[/#e0b85c]\n"
-            f"Complete {_meter(ready, total, 20, '#55e39f')}  [white]{ready:,} clean[/white]  [#e0b85c]{not_ready:,} need work[/#e0b85c]"
-        )
-        self.query_one("#health_graphs", Static).update(text)
+
+        def card(title: str, done: int, color: str, done_label: str, left_label: str) -> str:
+            left = max(0, total - done)
+            pct = (done / total * 100.0) if total else 0.0
+            return (
+                f"[#708397]{title}[/#708397]\n"
+                f"[bold {color}]{pct:5.1f}%[/bold {color}]\n"
+                f"{_meter(done, total, 15, color)}\n"
+                f"[#c8d1da]{done:,} {done_label}[/#c8d1da]\n"
+                f"[#f1c477]{left:,} {left_label}[/#f1c477]"
+            )
+
+        self.query_one("#health_imdb", Static).update(card("IMDb MATCHES", with_imdb, "#67c7d9", "matched", "left"))
+        self.query_one("#health_art", Static).update(card("ARTWORK", with_art, "#b89de8", "ready", "left"))
+        self.query_one("#health_complete", Static).update(card("FULLY CLEAN", ready, "#71d49b", "clean", "need work"))
 
     def update_job_graph(self) -> None:
         stats = self.status.get("stats") or {}
@@ -528,21 +619,22 @@ class DVDRewindTUI(App[None]):
             phase = str(stats.get("phase") or "")
             if task == "imdb" and phase == "complete":
                 last_text = (
-                    f"Last IMDb repair: {int(stats.get('matches_found') or 0):,} matched  ·  "
+                    f"{int(stats.get('matches_found') or 0):,} matched  ·  "
                     f"{int(stats.get('unmatched') or 0):,} unresolved  ·  {int(stats.get('errors') or 0):,} errors"
                 )
+                last_label = "IMDb repair"
             elif task == "posters" and phase == "complete":
-                last_text = (
-                    f"Last artwork repair: {int(stats.get('posters_fetched') or 0):,} posters filled  ·  "
-                    f"{int(stats.get('errors') or 0):,} errors"
-                )
+                last_text = f"{int(stats.get('posters_fetched') or 0):,} posters filled  ·  {int(stats.get('errors') or 0):,} errors"
+                last_label = "Artwork repair"
             else:
+                last_label = "Last archive run"
                 last_text = "No completed run recorded" if not last else (
-                    f"Last run: {str(last.get('status') or 'complete').upper()}  ·  {_duration(last.get('elapsed_seconds'))}  ·  "
-                    f"{int(last.get('new_titles_ingested') or 0)} new / {int(last.get('errors') or 0)} errors"
+                    f"{str(last.get('status') or 'complete').upper()}  ·  {_duration(last.get('elapsed_seconds'))}  ·  "
+                    f"{int(last.get('new_titles_ingested') or 0)} new  ·  {int(last.get('errors') or 0)} errors"
                 )
             self.query_one("#job_graph", Static).update(
-                f"[bold #63c7ff]ACTIVE JOB[/bold #63c7ff]  [white on #344a60] IDLE [/white on #344a60]\n[#8aa7c1]{last_text}[/#8aa7c1]"
+                "[#708397]ACTIVE JOB[/#708397]   [white on #263342] ● IDLE [/white on #263342]\n"
+                f"[bold #d7b476]{last_label}[/bold #d7b476]  [#8293a6]{last_text}[/#8293a6]"
             )
             return
 
@@ -551,40 +643,42 @@ class DVDRewindTUI(App[None]):
         remaining = max(0, total - current)
         task = str(self.status.get("task_type") or "job").upper()
         phase = str(stats.get("phase") or "working").replace("_", " ").upper()
+        pct = (current / total * 100.0) if total else 0.0
         if total:
-            graph = _meter(current, total, 30, "#55e39f")
-            progress = f"{current:,}/{total:,}  ·  {remaining:,} left"
+            graph = _meter(current, total, 32, "#71d49b")
+            progress = f"{pct:5.1f}%  ·  {current:,}/{total:,}  ·  {remaining:,} left"
         else:
-            graph = "[#344a60]------------------------------[/#344a60]"
+            graph = "[#2b3440]────────────────────────────────[/#2b3440]"
             progress = "Calculating work…"
         extras = []
         if task == "IMDB":
-            extras.append(f"{int(stats.get('matches_found') or 0):,} matched")
-            extras.append(f"{int(stats.get('unmatched') or 0):,} unresolved")
+            extras.extend([f"{int(stats.get('matches_found') or 0):,} matched", f"{int(stats.get('unmatched') or 0):,} unresolved"])
         elif task == "POSTERS":
             extras.append(f"{int(stats.get('posters_fetched') or 0):,} posters found")
         elif task == "SYNC":
-            extras.append(f"{int(stats.get('new_titles') or 0):,} new")
-            extras.append(f"{int(stats.get('revisions_updated') or 0):,} revised")
-        extra_text = "  ·  " + " / ".join(extras) if extras else ""
+            extras.extend([f"{int(stats.get('new_titles') or 0):,} new", f"{int(stats.get('revisions_updated') or 0):,} revised"])
+        extra_text = "  [#36495d]•[/#36495d]  " + "  ·  ".join(extras) if extras else ""
         self.query_one("#job_graph", Static).update(
-            f"[bold #63c7ff]ACTIVE JOB[/bold #63c7ff]  [black on #55e39f] {task} [/black on #55e39f]  [#8aa7c1]{phase}[/#8aa7c1]\n"
-            f"{graph}  [white]{progress}[/white]{extra_text}"
+            f"[#708397]ACTIVE JOB[/#708397]   [black on #71d49b] ● {task} [/black on #71d49b]   [#8293a6]{phase}[/#8293a6]\n"
+            f"{graph}  [bold #e8edf2]{progress}[/bold #e8edf2]{extra_text}"
         )
 
     def update_catalog_mix(self) -> None:
         mix = dict(self.insights.get("format_mix") or {})
-        lines = ["[bold #63c7ff]CATALOG MIX[/bold #63c7ff]", ""]
+        lines = ["[#708397]CATALOG MIX[/#708397]", ""]
         if not mix:
-            lines.append("[#8aa7c1]Catalog breakdown unavailable.[/#8aa7c1]")
+            lines.append("[#8293a6]Catalog breakdown unavailable.[/#8293a6]")
         else:
             maximum = max(mix.values()) if mix else 1
-            styles = {"4K UHD": "#e0b85c", "Blu-ray": "#63c7ff", "DVD": "#55e39f", "Other": "#c7a7ff"}
+            styles = {"4K UHD": "#f1c477", "Blu-ray": "#67c7d9", "DVD": "#71d49b", "Other": "#b89de8"}
             for name in ("4K UHD", "Blu-ray", "DVD", "Other"):
                 if name not in mix:
                     continue
                 value = int(mix[name])
-                lines.append(f"{name:<8} {_mini_bar(value, maximum, 10, styles.get(name, '#63c7ff'))} [white]{value:>6,}[/white]")
+                lines.append(
+                    f"[#b6c1cc]{name:<8}[/#b6c1cc] {_mini_bar(value, maximum, 9, styles.get(name, '#67c7d9'))} "
+                    f"[bold #e8edf2]{value:>6,}[/bold #e8edf2]"
+                )
         self.query_one("#catalog_mix", Static).update("\n".join(lines))
 
     def _best_next_items(self) -> List[str]:
@@ -596,50 +690,51 @@ class DVDRewindTUI(App[None]):
         missing_both = int(self.insights.get("missing_both") or 0)
         items: List[str] = []
         if running:
-            items.append("[black on #55e39f] LIVE [/black on #55e39f] Keep the current population job visible until it completes.")
+            items.append("[bold #71d49b]● LIVE[/bold #71d49b]  Keep the current archive job visible until it completes.")
             if int(stats.get("errors") or 0):
-                items.append(f"[white on #b94a57] FAILED [/white on #b94a57] Review {int(stats.get('errors') or 0)} current fetch errors after the run.")
+                items.append(f"[bold #ef7f73]● ERRORS[/bold #ef7f73]  Review {int(stats.get('errors') or 0)} fetch errors after the run.")
         else:
             failures = int(last.get("errors") or stats.get("errors") or 0)
             if failures:
-                items.append(f"[white on #b94a57] FAILED [/white on #b94a57] Retry {failures} failed FIDs from the last run.")
+                items.append(f"[bold #ef7f73]● RETRY[/bold #ef7f73]  {failures} failed FIDs are waiting from the last run.")
             if missing_imdb:
-                note = f" ({missing_both:,} also need art)" if missing_both else ""
-                items.append(f"[black on #e0b85c] NEEDS MATCH [/black on #e0b85c] Repair IMDb IDs for {missing_imdb:,} titles{note}.")
+                note = f" · {missing_both:,} also need art" if missing_both else ""
+                items.append(f"[bold #f1c477]● IMDb[/bold #f1c477]  Repair {missing_imdb:,} unmatched titles{note}.")
             if missing_art:
-                items.append(f"[black on #e0b85c] NEEDS ART [/black on #e0b85c] Backfill artwork for {missing_art:,} titles.")
-            items.append("[black on #e0b85c] READY [/black on #e0b85c] Run population update to check revisions and new comparisons.")
+                items.append(f"[bold #b89de8]● ARTWORK[/bold #b89de8]  Backfill posters for {missing_art:,} titles.")
+            items.append("[#67c7d9]● SYNC[/#67c7d9]  Check DVDCompare for revisions and new comparisons.")
         return items[:3]
 
     def update_intelligence(self) -> None:
         best = self._best_next_items()
         self.query_one("#best_next", Static).update(
-            "[bold #63c7ff]BEST NEXT[/bold #63c7ff]\n\n" + "\n\n".join(best or ["[#8aa7c1]Nothing urgent right now.[/#8aa7c1]"])
+            "[#708397]BEST NEXT[/#708397]\n\n" + "\n\n".join(best or ["[#8293a6]Nothing urgent right now.[/#8293a6]"])
         )
 
         logs = list(self.status.get("log_lines") or [])[-5:]
-        activity = ["[bold #63c7ff]RECENT ACTIVITY[/bold #63c7ff]", ""]
+        activity = ["[#708397]RECENT ACTIVITY[/#708397]", ""]
         if logs:
             for item in reversed(logs):
                 ts = str(item.get("ts") or "--:--")
                 msg = str(item.get("msg") or "")
-                prefix = "[white on #b94a57] ! [/white on #b94a57]" if "error" in msg.lower() else "[#55e39f]+[/#55e39f]"
-                activity.append(f"{prefix} [#8aa7c1]{ts}[/#8aa7c1] {msg[:58]}")
+                prefix = "[bold #ef7f73]![/bold #ef7f73]" if "error" in msg.lower() else "[#71d49b]•[/#71d49b]"
+                activity.append(f"{prefix} [#66788a]{ts}[/#66788a] [#b6c1cc]{msg[:54]}[/#b6c1cc]")
         else:
-            activity.append("[#8aa7c1]No live activity right now.[/#8aa7c1]")
+            activity.append("[#8293a6]Quiet right now. No worker activity.[/#8293a6]")
         self.query_one("#recent_activity", Static).update("\n".join(activity))
 
-        warnings = ["[bold #63c7ff]WARNINGS / NOTICES[/bold #63c7ff]", ""]
+        warnings = ["[#708397]ATTENTION[/#708397]", ""]
         missing_imdb = int(self.insights.get("missing_imdb") or 0)
         missing_art = int(self.insights.get("missing_art") or 0)
-        if int((self.status.get("stats") or {}).get("errors") or 0):
-            warnings.append(f"[white on #b94a57] FAILED [/white on #b94a57] {(self.status.get('stats') or {}).get('errors')} current errors")
-        if missing_art:
-            warnings.append(f"[black on #e0b85c] NEEDS ART [/black on #e0b85c] {missing_art:,} titles")
+        current_errors = int((self.status.get("stats") or {}).get("errors") or 0)
+        if current_errors:
+            warnings.append(f"[bold #ef7f73]● {current_errors:,} current errors[/bold #ef7f73]")
         if missing_imdb:
-            warnings.append(f"[black on #e0b85c] NEEDS MATCH [/black on #e0b85c] {missing_imdb:,} IMDb IDs")
+            warnings.append(f"[#f1c477]●[/#f1c477] [#c8d1da]{missing_imdb:,} titles need IMDb matches[/#c8d1da]")
+        if missing_art:
+            warnings.append(f"[#b89de8]●[/#b89de8] [#c8d1da]{missing_art:,} titles need artwork[/#c8d1da]")
         if len(warnings) == 2:
-            warnings.append("[#55e39f]No failures right now.[/#55e39f]")
+            warnings.append("[#71d49b]● Library has no repair warnings.[/#71d49b]")
         self.query_one("#warnings", Static).update("\n".join(warnings))
 
     def _clear_table(self, columns: List[str]) -> DataTable:
@@ -656,14 +751,14 @@ class DVDRewindTUI(App[None]):
         if values:
             state = str(values[0])
             state_styles = {
-                "READY": "bold black on #e0b85c",
-                "LIVE": "bold black on #55e39f",
-                "IDLE": "bold white on #344a60",
-                "COMPLETE": "bold black on #55e39f",
-                "FAILED": "bold white on #b94a57",
-                "NEEDS ART": "bold black on #e0b85c",
-                "NEEDS MATCH": "bold black on #e0b85c",
-                "NEEDS BOTH": "bold white on #9c6545",
+                "READY": "bold #f1c477 on #2a2115",
+                "LIVE": "bold #71d49b on #13251d",
+                "IDLE": "#93a3b3 on #202a35",
+                "COMPLETE": "bold #71d49b on #13251d",
+                "FAILED": "bold #ef7f73 on #2a1717",
+                "NEEDS ART": "bold #b89de8 on #211a2e",
+                "NEEDS MATCH": "bold #f1c477 on #2a2115",
+                "NEEDS BOTH": "bold #efaa73 on #2b1c17",
             }
             if state in state_styles:
                 values = [Text(f" {state} ", style=state_styles[state]), *values[1:]]
@@ -683,7 +778,7 @@ class DVDRewindTUI(App[None]):
         title = self.query_one("#work_title", Static)
 
         if self.section == "dashboard":
-            title.update("CURRENT WORK AREA  //  Dashboard")
+            title.update("[#708397]OVERVIEW[/#708397]   [bold #e8edf2]Dashboard[/bold #e8edf2]")
             table = self._clear_table(["State", "Work Item", "Value", "Next Step"])
             running = bool(self.status.get("is_running"))
             stats = self.status.get("stats") or {}
@@ -695,7 +790,8 @@ class DVDRewindTUI(App[None]):
             self._add_row(table, "best", ["READY", "Best Next", self._best_next_items()[0] if self._best_next_items() else "Nothing urgent", "Press N"], {"title": "Best Next", "state": "READY", "body": "Press N at any time for the current recommended action and why it matters."})
 
         elif self.section == "movies":
-            title.update(f"CURRENT WORK AREA  //  Movies{'  //  ' + self.search_query if self.search_query else ''}")
+            suffix = f"   [#56697c]/[/#56697c]   [#d7b476]{self.search_query}[/#d7b476]" if self.search_query else ""
+            title.update(f"[#708397]LIBRARY[/#708397]   [bold #e8edf2]Movies[/bold #e8edf2]{suffix}")
             table = self._clear_table(["Status", "Title", "Year", "Source", "Next Step"])
             rows = self.search_results or list(self.insights.get("newest") or [])
             if not rows:
@@ -723,7 +819,7 @@ class DVDRewindTUI(App[None]):
                     self._add_row(table, f"movie-{fid}", [state, title_text, year, source, next_step], {"title": title_text, "state": state, "fid": fid, "body": f"FID {fid:,}  |  {source}  |  IMDb: {row.get('imdb_id') or 'not matched'}  |  Artwork: {'available' if has_art else 'not downloaded'}."})
 
         elif self.section == "population":
-            title.update("CURRENT WORK AREA  //  Population")
+            title.update("[#708397]ARCHIVE[/#708397]   [bold #e8edf2]Population & Sync[/bold #e8edf2]")
             table = self._clear_table(["Status", "Task", "Scope", "Next Step"])
             busy = bool(self.status.get("is_running"))
             state = "LIVE" if busy else "READY"
@@ -736,7 +832,7 @@ class DVDRewindTUI(App[None]):
             missing = int(self.insights.get("missing_imdb") or 0)
             total = int(self.insights.get("total_titles") or 0)
             matched = int(self.insights.get("with_imdb") or max(0, total - missing))
-            title.update(f"CURRENT WORK AREA  //  IMDb Repair  //  {missing:,} LEFT")
+            title.update(f"[#708397]REPAIR[/#708397]   [bold #e8edf2]IMDb Matching[/bold #e8edf2]   [#56697c]•[/#56697c]   [#f1c477]{missing:,} left[/#f1c477]")
             table = self._clear_table(["Status", "Title", "Year", "Format", "Next Step"])
             busy = bool(self.status.get("is_running"))
             task_type = str(self.status.get("task_type") or "")
@@ -774,7 +870,7 @@ class DVDRewindTUI(App[None]):
             missing = int(self.insights.get("missing_art") or 0)
             total = int(self.insights.get("total_titles") or 0)
             with_art = int(self.insights.get("with_art") or max(0, total - missing))
-            title.update(f"CURRENT WORK AREA  //  Artwork Repair  //  {missing:,} LEFT")
+            title.update(f"[#708397]REPAIR[/#708397]   [bold #e8edf2]Artwork[/bold #e8edf2]   [#56697c]•[/#56697c]   [#b89de8]{missing:,} left[/#b89de8]")
             table = self._clear_table(["Status", "Title", "Year", "IMDb", "Next Step"])
             busy = bool(self.status.get("is_running"))
             task_type = str(self.status.get("task_type") or "")
@@ -802,7 +898,7 @@ class DVDRewindTUI(App[None]):
                     )
 
         elif self.section == "discoveries":
-            title.update("CURRENT WORK AREA  //  Recent Discoveries")
+            title.update("[#708397]LIBRARY[/#708397]   [bold #e8edf2]Recent Discoveries[/bold #e8edf2]")
             table = self._clear_table(["Status", "Title", "Year", "Format", "FID"])
             discoveries = list(self.status.get("recent_discoveries") or [])
             if not discoveries:
@@ -815,7 +911,7 @@ class DVDRewindTUI(App[None]):
                     self._add_row(table, f"discovery-{fid}", ["COMPLETE", str(row.get("title") or row.get("clean_title") or "Unknown"), str(row.get("year") or "—"), str(row.get("format") or row.get("format_category") or "—"), f"{fid:,}"], {"title": str(row.get("title") or row.get("clean_title") or "Unknown"), "state": "COMPLETE", "fid": fid, "body": f"Newly observed archive record at FID {fid:,}."})
 
         elif self.section == "failures":
-            title.update("CURRENT WORK AREA  //  Failures")
+            title.update("[#708397]ATTENTION[/#708397]   [bold #e8edf2]Failures & Retries[/bold #e8edf2]")
             table = self._clear_table(["Status", "FID", "Phase", "Problem", "Next Step"])
             failures = list(self.status.get("failed_fids") or [])
             if not failures:
@@ -827,7 +923,7 @@ class DVDRewindTUI(App[None]):
                     self._add_row(table, f"failure-{fid}-{idx}", ["FAILED", f"{fid:,}", str(row.get("phase") or "—"), problem[:60], "Enter / E"], {"title": f"Failed FID {fid:,}", "state": "FAILED", "action": "retry", "body": problem})
 
         elif self.section == "maintenance":
-            title.update("CURRENT WORK AREA  //  Maintenance")
+            title.update("[#708397]SYSTEM[/#708397]   [bold #e8edf2]Maintenance[/bold #e8edf2]")
             table = self._clear_table(["Status", "Area", "Value", "Next Step"])
             art = int(self.insights.get("missing_art") or 0)
             imdb = int(self.insights.get("missing_imdb") or 0)
