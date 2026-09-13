@@ -194,7 +194,19 @@ def _errors_table(items: Iterable[Dict[str, Any]]) -> Table:
 
 def _growth_table(data: Dict[str, Any]) -> Table:
     metrics = data.get("metrics") or {}
-    growth = data.get("growth") or {}
+    growth = dict(data.get("growth") or {})
+    if not growth:
+        # After a web-process restart, in-memory start_metrics are gone. The
+        # completed sync persists its start/end snapshot so the last-run report
+        # can still show real archive growth.
+        last_sync = data.get("last_sync") or {}
+        start_metrics = last_sync.get("start_metrics") or {}
+        end_metrics = last_sync.get("end_metrics") or {}
+        if start_metrics and end_metrics:
+            for key, end_value in end_metrics.items():
+                start_value = start_metrics.get(key)
+                if isinstance(end_value, (int, float)) and isinstance(start_value, (int, float)):
+                    growth[key] = round(end_value - start_value, 2) if isinstance(end_value, float) else end_value - start_value
     table = Table(box=box.SIMPLE, expand=True, show_header=False, padding=(0, 1))
     table.add_column("Metric", style="dim", width=16)
     table.add_column("Value", justify="right")
@@ -284,11 +296,12 @@ def build_archive_status_panel(data: Dict[str, Any], view: str = "main") -> Pane
         summary.add_row("Posters fetched", f"{int(last_sync.get('posters_fetched') or 0):,}")
         summary.add_row("Errors", f"{int(last_sync.get('errors') or 0):,}")
         summary.add_row("Next FID", f"{int(last_sync.get('post_initial_next_fid') or INITIAL_MAX_FID + 1):,}")
+        previous_sync = last_sync.get("previous_sync") or {}
         body = Group(
             Text("Last Run Report", style="bold green"),
             summary,
             Text(""),
-            _previous_run_line(last_sync, {}),
+            _previous_run_line(previous_sync, {}),
             Text(""),
             Panel(_growth_table(data), title="Archive Size", border_style="bright_black"),
         )

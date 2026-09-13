@@ -95,11 +95,13 @@ class ArchiveSyncManager:
                 "SELECT COUNT(*) FROM titles WHERE is_missing = 0 AND poster_url IS NOT NULL "
                 "AND poster_url != '' AND poster_url != '/static/images/missing_poster.svg'"
             ).fetchone()[0]
+            # Avoid walking tens of thousands of files on mergerfs for every
+            # status refresh. Every imported comparison records its raw archive
+            # path in SQLite, which is the fast authoritative count here.
+            metrics["raw_html"] = repo.conn.execute(
+                "SELECT COUNT(*) FROM titles WHERE raw_html_path IS NOT NULL AND raw_html_path != ''"
+            ).fetchone()[0]
             repo.close()
-        except Exception:
-            pass
-        try:
-            metrics["raw_html"] = sum(1 for p in RAW_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".html")
         except Exception:
             pass
         try:
@@ -489,9 +491,21 @@ class ArchiveSyncManager:
                     "updated_at": datetime.now().isoformat(),
                 }, indent=2), encoding="utf-8")
 
-            # 3. Save sync status
+            # 3. Save sync status. Preserve one prior completed run so the CLI
+            # can compare this run against the previous one without building an
+            # unbounded history chain inside sync_status.json.
             elapsed = round(time.time() - (self.start_time or time.time()), 1)
             total_db = cur.execute("SELECT COUNT(*) FROM titles WHERE is_missing = 0").fetchone()[0]
+            previous_sync = {}
+            if SYNC_STATUS_FILE.exists():
+                try:
+                    previous_sync = json.loads(SYNC_STATUS_FILE.read_text(encoding="utf-8"))
+                    if isinstance(previous_sync, dict):
+                        previous_sync.pop("previous_sync", None)
+                    else:
+                        previous_sync = {}
+                except Exception:
+                    previous_sync = {}
             status_data = {
                 "last_sync": datetime.now().isoformat(),
                 "status": "canceled" if self.cancel_requested else "success",
@@ -507,6 +521,7 @@ class ArchiveSyncManager:
                 "elapsed_seconds": elapsed,
                 "start_metrics": dict(self.start_metrics),
                 "end_metrics": self._snapshot_metrics(force=True),
+                "previous_sync": previous_sync,
             }
             try:
                 SYNC_STATUS_FILE.write_text(json.dumps(status_data, indent=2), encoding="utf-8")
