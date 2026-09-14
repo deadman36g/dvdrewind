@@ -50,6 +50,7 @@ class ArchiveSyncManager:
         self.log_lines: List[Dict[str, str]] = []
         self.recent_discoveries: List[Dict[str, Any]] = []
         self.failed_fids: List[Dict[str, Any]] = []
+        self.last_result: Dict[str, Any] = {}
         self.start_metrics: Dict[str, Any] = {}
         self.phase_start_time: Optional[float] = None
         self._metrics_cache: Dict[str, Any] = {}
@@ -252,6 +253,7 @@ class ArchiveSyncManager:
             "metrics": metrics,
             "start_metrics": dict(self.start_metrics),
             "growth": growth,
+            "last_result": dict(self.last_result),
             "db_titles": metrics.get("titles", 0),
             "db_size_mb": metrics.get("db_size_mb", 0.0),
         }
@@ -291,6 +293,7 @@ class ArchiveSyncManager:
             self.current_action = "Initializing"
             self.start_time = time.time()
             self._reset_task_state("posters")
+            self.last_result = {"task": "posters", "status": "running", "message": "Artwork repair started"}
             self.log("🖼 Starting offline poster backfill pass...", "cyan")
 
             self.thread = threading.Thread(target=self._run_posters, args=(limit,), daemon=True)
@@ -308,6 +311,12 @@ class ArchiveSyncManager:
             self.current_action = "Initializing"
             self.start_time = time.time()
             self._reset_task_state("imdb")
+            self.last_result = {
+                "task": "imdb",
+                "status": "running",
+                "fid": int(fid) if fid is not None else None,
+                "message": f"IMDb repair started for FID {int(fid):,}" if fid is not None else "IMDb repair started",
+            }
             self.log("Starting conservative IMDb matching pass...", "cyan")
 
             self.thread = threading.Thread(target=self._run_imdb_matches, args=(limit, fid), daemon=True)
@@ -412,7 +421,9 @@ class ArchiveSyncManager:
                         cur.execute("SELECT poster_url FROM titles WHERE fid = ?", (fid,))
                         p_row = cur.fetchone()
                         if not p_row or not p_row[0] or p_row[0] == "/static/images/missing_poster.svg":
-                            p_url = fetch_poster_from_tmdb(parsed.get("imdb_id"), clean_title, parsed.get("year"))
+                            p_url = fetch_poster_from_tmdb(
+                                parsed.get("imdb_id"), clean_title, parsed.get("year"), format_category=parsed.get("format_category")
+                            )
                             if p_url:
                                 repo.update_poster_url(fid, p_url)
                                 self.stats["posters_fetched"] += 1
@@ -513,7 +524,9 @@ class ArchiveSyncManager:
 
                                     repo.save_parsed_comparison(parsed, source_hash=sha256, raw_html_path=str(raw_path))
 
-                                    p_url = fetch_poster_from_tmdb(parsed.get("imdb_id"), clean_title, parsed.get("year"))
+                                    p_url = fetch_poster_from_tmdb(
+                                parsed.get("imdb_id"), clean_title, parsed.get("year"), format_category=parsed.get("format_category")
+                            )
                                     if p_url:
                                         repo.update_poster_url(current_probe, p_url)
                                         self.stats["posters_fetched"] += 1
@@ -656,9 +669,16 @@ class ArchiveSyncManager:
                         # propagated to this format sibling.
                         continue
 
-                    match = find_imdb_match(title, year)
+                    match = find_imdb_match(title, year, format_category=fmt)
                     if not match:
                         self.stats["unmatched"] += 1
+                        self.last_result = {
+                            "task": "imdb",
+                            "status": "not_found",
+                            "fid": int(row_fid),
+                            "title": title,
+                            "message": f"No confident IMDb match found for {title}",
+                        }
                         self.log(f"No confident IMDb match for FID {row_fid}: {title}", "dim")
                         time.sleep(0.25)
                         continue
@@ -666,20 +686,39 @@ class ArchiveSyncManager:
                     imdb_id = str(match["imdb_id"])
                     affected = repo.update_imdb_id(int(row_fid), imdb_id)
                     self.stats["matches_found"] += max(1, affected)
+                    self.last_result = {
+                        "task": "imdb",
+                        "status": "matched",
+                        "fid": int(row_fid),
+                        "title": title,
+                        "imdb_id": imdb_id,
+                        "media_type": match.get("media_type") or "movie",
+                        "message": f"Matched {title} to {imdb_id}",
+                    }
                     self.log(
                         f"IMDb matched FID {row_fid}: {title} -> {imdb_id} ({match.get('confidence', 'verified')})",
                         "green",
                     )
 
                     if not poster_url or poster_url == "/static/images/missing_poster.svg":
-                        p_url = fetch_poster_from_tmdb(imdb_id, title, year)
+                        poster_trace: Dict[str, Any] = {}
+                        p_url = fetch_poster_from_tmdb(imdb_id, title, year, format_category=fmt, trace=poster_trace)
                         if p_url:
                             repo.update_poster_url(int(row_fid), p_url)
                             self.stats["posters_fetched"] += 1
                             self.stats["poster_found"] = True
-                            self.log(f"Artwork filled from matched IMDb record for FID {row_fid}: {title}", "green")
+                            self.last_result["poster_url"] = p_url
+                            self.last_result["poster_source"] = poster_trace.get("source")
+                            self.log(f"Artwork filled from {poster_trace.get('source') or 'matched IMDb record'} for FID {row_fid}: {title}", "green")
                 except Exception as exc:
                     self._record_error(int(row_fid), exc, "imdb")
+                    self.last_result = {
+                        "task": "imdb",
+                        "status": "error",
+                        "fid": int(row_fid),
+                        "title": title,
+                        "message": f"IMDb repair error: {exc}",
+                    }
                     self.log(f"IMDb repair error for FID {row_fid}: {exc}", "red")
 
                 time.sleep(0.35)
@@ -691,6 +730,12 @@ class ArchiveSyncManager:
                 f"unmatched: {self.stats['unmatched']}, errors: {self.stats['errors']}.",
                 "bold",
             )
+            if fid is None:
+                self.last_result = {
+                    "task": "imdb",
+                    "status": "complete",
+                    "message": f"IMDb repair complete: {self.stats['matches_found']} matched, {self.stats['unmatched']} unresolved, {self.stats['errors']} errors",
+                }
             self.status_message = final_status
         except Exception as exc:
             self.log(f"IMDb repair error: {exc}", "red")
@@ -736,14 +781,39 @@ class ArchiveSyncManager:
                 self.current_action = f"Poster for FID {fid}"
 
                 try:
-                    p_url = fetch_poster_from_tmdb(imdb_id, title, year)
+                    poster_trace: Dict[str, Any] = {}
+                    p_url = fetch_poster_from_tmdb(
+                        imdb_id,
+                        title,
+                        year,
+                        format_category=fmt,
+                        trace=poster_trace,
+                    )
                     if p_url:
                         repo.update_poster_url(fid, p_url)
                         fetched += 1
                         self.stats["posters_fetched"] += 1
                         self.stats["poster_found"] = True
-                        self.log(f"🖼 ({idx}/{len(missing)}) FID {fid}: Found poster for '{title}'", "green")
+                        source = poster_trace.get("source") or "automatic lookup"
+                        self.last_result = {
+                            "task": "posters",
+                            "status": "found",
+                            "fid": int(fid),
+                            "title": title,
+                            "source": source,
+                            "tv_fallback": bool(poster_trace.get("tv_fallback")),
+                            "message": f"Artwork found for {title} via {source}",
+                        }
+                        self.log(f"🖼 ({idx}/{len(missing)}) FID {fid}: Found poster for '{title}' via {source}", "green")
                     else:
+                        self.last_result = {
+                            "task": "posters",
+                            "status": "not_found",
+                            "fid": int(fid),
+                            "title": title,
+                            "tv_detected": bool(poster_trace.get("tv_detected")),
+                            "message": f"No automatic artwork found for {title}",
+                        }
                         self.log(f"• ({idx}/{len(missing)}) FID {fid}: No poster found for '{title}'", "dim")
                     time.sleep(1.0)
                 except Exception as e:
@@ -754,6 +824,11 @@ class ArchiveSyncManager:
             final_status = "Poster backfill canceled" if self.cancel_requested else "Poster backfill complete"
             self.stats["phase"] = "complete"
             self.log(f"🏁 {final_status}. Successfully fetched: {fetched} posters.", "bold")
+            self.last_result = {
+                "task": "posters",
+                "status": "complete",
+                "message": f"Artwork repair complete: {fetched} posters fetched, {self.stats['errors']} errors",
+            }
             self.status_message = final_status
 
         except Exception as e:

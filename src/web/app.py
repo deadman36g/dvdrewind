@@ -452,22 +452,34 @@ async def handle_api_poster(request: web.Request) -> web.Response:
             return web.json_response({"success": True, "poster_url": cached_url})
 
         # 3. Auto-Fetch
+        trace = {}
         poster = fetch_poster_from_tmdb(
             imdb_id=title.get("imdb_id"),
             clean_title=title["clean_title"],
             year=title.get("year"),
-            api_key=api_key
+            api_key=api_key,
+            format_category=title.get("format_category"),
+            trace=trace,
         )
         if not poster:
-            poster = fetch_poster_from_wikipedia(title["clean_title"], title.get("imdb_id"))
+            is_tv = bool(trace.get("tv_detected"))
+            poster = fetch_poster_from_wikipedia(title["clean_title"], title.get("imdb_id"), is_tv=is_tv)
+            if poster:
+                trace.update({"source": "Wikipedia TV" if is_tv else "Wikipedia", "tv_fallback": is_tv})
 
         if poster:
             repo.update_poster_url(fid, poster)
-            return web.json_response({"success": True, "poster_url": poster})
+            return web.json_response({
+                "success": True,
+                "poster_url": poster,
+                "source": trace.get("source") or "automatic lookup",
+                "tv_fallback": bool(trace.get("tv_fallback")),
+            })
         else:
             return web.json_response({
                 "success": False,
-                "error": "Could not automatically fetch poster. Please paste an image URL or choose a candidate."
+                "error": "Could not automatically fetch poster. Movie lookup and any eligible TV fallback found no usable artwork.",
+                "tv_detected": bool(trace.get("tv_detected")),
             }, status=400)
     finally:
         repo.close()

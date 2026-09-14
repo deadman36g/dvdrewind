@@ -216,6 +216,49 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("76,305", cards)
                 self.assertNotIn("Verified 76,200", status)
 
+    async def test_sidebar_keeps_active_section_visually_marked(self):
+        with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                dashboard_item = app.query_one("#section-dashboard")
+                self.assertTrue(dashboard_item.has_class("active-section"))
+                await pilot.press("i")
+                await pilot.pause()
+                self.assertTrue(app.query_one("#section-imdb").has_class("active-section"))
+                self.assertFalse(dashboard_item.has_class("active-section"))
+                browse_title = str(app.query_one("#browse_title", Static).content)
+                self.assertIn("IMDb Repair", browse_title)
+                app.query_one("#work_table", DataTable).focus()
+                await pilot.pause()
+                self.assertTrue(app.query_one("#section-imdb").has_class("active-section"))
+
+    async def test_last_repair_result_stays_visible_in_detail_panel(self):
+        status = dict(SAMPLE_STATUS)
+        status["task_type"] = "imdb"
+        status["stats"] = {"errors": 0, "phase": "complete", "matches_found": 1, "unmatched": 0}
+        status["last_result"] = {
+            "task": "imdb",
+            "status": "matched",
+            "fid": 76001,
+            "title": "Needs Match",
+            "imdb_id": "tt1234567",
+            "message": "Matched Needs Match to tt1234567",
+        }
+        with patch("src.tui_app._fetch_status", return_value=status), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                app._switch_section("imdb")
+                await pilot.pause()
+                detail = str(app.query_one("#detail", Static).content)
+                self.assertIn("RESULT", detail)
+                self.assertIn("tt1234567", detail)
+
     async def test_backspace_and_arrow_navigation_are_keyboard_friendly(self):
         with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
             "src.tui_app._library_insights", return_value=INSIGHTS

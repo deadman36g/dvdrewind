@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 import requests
@@ -49,7 +51,123 @@ def save_tmdb_key(api_key: str):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-import re
+_TVDB_TOKEN: Optional[str] = None
+_TVDB_TOKEN_EXPIRES_AT = 0.0
+
+
+def get_saved_tvdb_key() -> Optional[str]:
+    """Return an optional TheTVDB v4 API key without ever requiring one."""
+    env_key = os.environ.get("TVDB_API_KEY")
+    if env_key:
+        return env_key.strip()
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("tvdb_api_key"):
+                    return str(data.get("tvdb_api_key")).strip()
+        except Exception:
+            pass
+    return None
+
+
+def looks_like_tv_title(title: str, format_category: Optional[str] = None) -> bool:
+    """Detect explicit TV markers without matching the letters inside other words."""
+    text = f"{title or ''} {format_category or ''}"
+    return bool(
+        re.search(r"(?:^|[^A-Za-z0-9])TV(?:[^A-Za-z0-9]|$)", text, flags=re.IGNORECASE)
+        or re.search(r"\btelevision\b|\bTV\s+series\b|\bseries\s+TV\b", text, flags=re.IGNORECASE)
+    )
+
+
+def normalize_tv_title_for_search(title: str) -> str:
+    """Remove trailing catalog TV markers before querying series databases."""
+    value = normalize_title_for_search(title)
+    value = re.sub(r"\s*[\(\[]\s*TV(?:\s+Series)?\s*[\)\]]\s*$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\s*[-:–—]?\s*(?:TV|TV\s+Series|Television\s+Series)\s*$", "", value, flags=re.IGNORECASE)
+    return value.strip() or normalize_title_for_search(title)
+
+
+def _tvdb_token(api_key: str) -> Optional[str]:
+    global _TVDB_TOKEN, _TVDB_TOKEN_EXPIRES_AT
+    if _TVDB_TOKEN and time.time() < _TVDB_TOKEN_EXPIRES_AT:
+        return _TVDB_TOKEN
+    try:
+        payload = {"apikey": api_key}
+        pin = os.environ.get("TVDB_PIN")
+        if pin:
+            payload["pin"] = pin.strip()
+        response = requests.post(
+            "https://api4.thetvdb.com/v4/login",
+            json=payload,
+            headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": "application/json"},
+            timeout=8,
+        )
+        if response.status_code != 200:
+            return None
+        token = str((response.json().get("data") or {}).get("token") or "").strip()
+        if not token:
+            return None
+        _TVDB_TOKEN = token
+        _TVDB_TOKEN_EXPIRES_AT = time.time() + (28 * 24 * 3600)
+        return token
+    except Exception:
+        return None
+
+
+def _tvdb_series_poster(clean_title: str, year: Optional[int], cache_key: str, trace: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """Optional final TV-series artwork fallback using TheTVDB v4 when configured."""
+    key = get_saved_tvdb_key()
+    if not key:
+        return None
+    token = _tvdb_token(key)
+    if not token:
+        return None
+    query = normalize_tv_title_for_search(clean_title)
+    wanted_key = _match_title_key(query)
+    headers = {
+        "User-Agent": DEFAULT_USER_AGENT,
+        "Accept": "application/json",
+        "Authorization": f"Bearer {token}",
+    }
+    try:
+        params: Dict[str, Any] = {"query": query, "type": "series"}
+        if year:
+            params["year"] = str(year)
+        response = requests.get("https://api4.thetvdb.com/v4/search", params=params, headers=headers, timeout=8)
+        if response.status_code != 200:
+            return None
+        rows = response.json().get("data") or []
+        match = None
+        for row in rows[:12]:
+            names = [row.get("name") or ""]
+            translations = row.get("translations") or {}
+            if isinstance(translations, dict):
+                names.extend(str(v) for v in translations.values() if v)
+            if not any(_match_title_key(name) == wanted_key for name in names if name):
+                continue
+            row_year = str(row.get("year") or "")
+            if year and row_year[:4].isdigit() and int(row_year[:4]) != int(year):
+                continue
+            match = row
+            break
+        if not match:
+            return None
+        image_url = str(match.get("image_url") or "").strip()
+        if not image_url:
+            return None
+        image = requests.get(image_url, headers={"User-Agent": DEFAULT_USER_AGENT}, timeout=15)
+        if image.status_code != 200 or not image.content:
+            return None
+        local_file = POSTERS_DIR / f"{cache_key}.jpg"
+        with open(local_file, "wb") as f:
+            f.write(image.content)
+        if trace is not None:
+            trace.update({"source": "TheTVDB", "tv_fallback": True, "query": query})
+        return f"/static/posters/{cache_key}.jpg"
+    except Exception:
+        return None
+
 
 def normalize_title_for_search(title: str) -> str:
     """Normalizes titles like 'Brides of Dracula (The)' to 'The Brides of Dracula'."""
@@ -66,99 +184,132 @@ def _match_title_key(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", normalized.lower()).strip()
 
 
-def find_imdb_match(clean_title: str, year: Optional[int] = None, api_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Return a conservative TMDB-backed IMDb match for a title.
-
-    Automatic repair only accepts an exact normalized title match. When a source
-    year exists, TMDB must also report the same release year. This intentionally
-    leaves ambiguous records for manual review instead of silently attaching the
-    wrong IMDb title.
-    """
+def find_imdb_match(
+    clean_title: str,
+    year: Optional[int] = None,
+    api_key: Optional[str] = None,
+    format_category: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return a conservative TMDB-backed IMDb match for a movie or explicit TV title."""
     key = api_key or get_saved_tmdb_key()
     if not key or not clean_title:
         return None
 
     headers = {"User-Agent": DEFAULT_USER_AGENT}
-    query = normalize_title_for_search(clean_title)
+    is_tv = looks_like_tv_title(clean_title, format_category)
+    query = normalize_tv_title_for_search(clean_title) if is_tv else normalize_title_for_search(clean_title)
     wanted_key = _match_title_key(query)
     wanted_year = int(year) if isinstance(year, int) or (str(year).isdigit() if year is not None else False) else None
+    search_kinds = ("tv", "movie") if is_tv else ("movie",)
 
-    try:
-        params = {"api_key": key, "query": query}
-        if wanted_year:
-            params["year"] = str(wanted_year)
-        response = requests.get(
-            "https://api.themoviedb.org/3/search/movie",
-            params=params,
-            headers=headers,
-            timeout=8,
-        )
-        if response.status_code != 200:
-            return None
-        results = response.json().get("results", [])
-    except Exception:
-        return None
-
-    candidates = []
-    for result in results[:12]:
-        result_titles = [result.get("title") or "", result.get("original_title") or ""]
-        if not any(_match_title_key(value) == wanted_key for value in result_titles if value):
+    for kind in search_kinds:
+        try:
+            params: Dict[str, Any] = {"api_key": key, "query": query}
+            if wanted_year:
+                params["first_air_date_year" if kind == "tv" else "year"] = str(wanted_year)
+            response = requests.get(
+                f"https://api.themoviedb.org/3/search/{kind}",
+                params=params,
+                headers=headers,
+                timeout=8,
+            )
+            if response.status_code != 200:
+                continue
+            results = response.json().get("results", [])
+        except Exception:
             continue
-        release_date = str(result.get("release_date") or "")
-        result_year = int(release_date[:4]) if len(release_date) >= 4 and release_date[:4].isdigit() else None
-        if wanted_year and result_year != wanted_year:
+
+        candidates = []
+        for result in results[:12]:
+            if kind == "tv":
+                result_titles = [result.get("name") or "", result.get("original_name") or ""]
+                date_text = str(result.get("first_air_date") or "")
+            else:
+                result_titles = [result.get("title") or "", result.get("original_title") or ""]
+                date_text = str(result.get("release_date") or "")
+            if not any(_match_title_key(value) == wanted_key for value in result_titles if value):
+                continue
+            result_year = int(date_text[:4]) if len(date_text) >= 4 and date_text[:4].isdigit() else None
+            if wanted_year and result_year != wanted_year:
+                continue
+            candidates.append((result, result_year))
+
+        if not candidates:
             continue
-        candidates.append((result, result_year))
 
-    if not candidates:
-        return None
+        result, result_year = candidates[0]
+        tmdb_id = result.get("id")
+        if not tmdb_id:
+            continue
 
-    result, result_year = candidates[0]
-    movie_id = result.get("id")
-    if not movie_id:
-        return None
+        try:
+            if kind == "tv":
+                external_response = requests.get(
+                    f"https://api.themoviedb.org/3/tv/{tmdb_id}/external_ids",
+                    params={"api_key": key},
+                    headers=headers,
+                    timeout=8,
+                )
+                if external_response.status_code != 200:
+                    continue
+                details = external_response.json()
+                imdb_id = str(details.get("imdb_id") or "").strip()
+                display_title = result.get("name") or clean_title
+                poster_path = result.get("poster_path")
+            else:
+                details_response = requests.get(
+                    f"https://api.themoviedb.org/3/movie/{tmdb_id}",
+                    params={"api_key": key},
+                    headers=headers,
+                    timeout=8,
+                )
+                if details_response.status_code != 200:
+                    continue
+                details = details_response.json()
+                imdb_id = str(details.get("imdb_id") or "").strip()
+                display_title = details.get("title") or result.get("title") or clean_title
+                poster_path = details.get("poster_path") or result.get("poster_path")
+        except Exception:
+            continue
 
-    try:
-        details_response = requests.get(
-            f"https://api.themoviedb.org/3/movie/{movie_id}",
-            params={"api_key": key},
-            headers=headers,
-            timeout=8,
-        )
-        if details_response.status_code != 200:
-            return None
-        details = details_response.json()
-    except Exception:
-        return None
+        if not re.fullmatch(r"tt\d+", imdb_id):
+            continue
 
-    imdb_id = str(details.get("imdb_id") or "").strip()
-    if not re.fullmatch(r"tt\d+", imdb_id):
-        return None
+        return {
+            "imdb_id": imdb_id,
+            "tmdb_id": tmdb_id,
+            "title": display_title,
+            "year": result_year,
+            "poster_path": poster_path,
+            "media_type": kind,
+            "confidence": ("exact-tv-title-year" if wanted_year else "exact-tv-title") if kind == "tv" else ("exact-title-year" if wanted_year else "exact-title"),
+        }
 
-    return {
-        "imdb_id": imdb_id,
-        "tmdb_id": movie_id,
-        "title": details.get("title") or result.get("title") or clean_title,
-        "year": result_year,
-        "poster_path": details.get("poster_path") or result.get("poster_path"),
-        "confidence": "exact-title-year" if wanted_year else "exact-title",
-    }
+    return None
 
 
-def fetch_poster_from_wikipedia(clean_title: str, imdb_id: Optional[str] = None) -> Optional[str]:
+def fetch_poster_from_wikipedia(clean_title: str, imdb_id: Optional[str] = None, is_tv: bool = False) -> Optional[str]:
     """
     Fetches official theatrical movie poster from Wikipedia REST API as a zero-config fallback.
     Requires no API key and returns high quality images for classic films.
     """
     headers = {"User-Agent": "DVDRewind-Archive/1.0 (Personal Archive Research Tool)"}
     
-    norm = normalize_title_for_search(clean_title)
-    candidates = [
-        norm,
-        f"{norm} (film)",
-        clean_title,
-        f"{clean_title} (film)"
-    ]
+    norm = normalize_tv_title_for_search(clean_title) if is_tv else normalize_title_for_search(clean_title)
+    if is_tv:
+        candidates = [
+            norm,
+            f"{norm} (TV series)",
+            f"{norm} (television series)",
+            clean_title,
+        ]
+    else:
+        candidates = [
+            norm,
+            f"{norm} (film)",
+            clean_title,
+            f"{clean_title} (film)"
+        ]
     
     seen = set()
     for candidate in candidates:
@@ -209,25 +360,37 @@ async def cache_custom_poster(url: str, cache_key: str) -> str:
         f.write(result.body)
     return f"/static/posters/{cache_key}.jpg"
 
-def fetch_poster_from_tmdb(imdb_id: Optional[str], clean_title: str, year: Optional[int] = None, api_key: Optional[str] = None) -> Optional[str]:
-    """
-    Fetches official movie poster path from TMDB using IMDb ID or title search.
-    If TMDB key is missing, seamlessly falls back to Wikipedia theatrical poster.
-    Returns the web URL of the locally cached poster.
-    """
+def fetch_poster_from_tmdb(
+    imdb_id: Optional[str],
+    clean_title: str,
+    year: Optional[int] = None,
+    api_key: Optional[str] = None,
+    format_category: Optional[str] = None,
+    trace: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Fetch artwork with movie lookup first and explicit TV fallbacks when indicated."""
     key = api_key or get_saved_tmdb_key()
-    
-    # If no TMDB key, try Wikipedia zero-config fallback
+    is_tv = looks_like_tv_title(clean_title, format_category)
+    cache_key = imdb_id or f"title_{abs(hash(clean_title))}"
+
+    if trace is not None:
+        trace.clear()
+        trace.update({"tv_detected": is_tv, "source": "none"})
+
     if not key:
-        wiki_poster = fetch_poster_from_wikipedia(clean_title, imdb_id)
-        if wiki_poster:
-            return wiki_poster
-        return None
+        tvdb_poster = _tvdb_series_poster(clean_title, year, cache_key, trace=trace) if is_tv else None
+        if tvdb_poster:
+            return tvdb_poster
+        wiki_poster = fetch_poster_from_wikipedia(clean_title, imdb_id, is_tv=is_tv)
+        if wiki_poster and trace is not None:
+            trace.update({"source": "Wikipedia TV" if is_tv else "Wikipedia", "tv_fallback": is_tv})
+        return wiki_poster
 
     headers = {"User-Agent": DEFAULT_USER_AGENT}
     poster_path = None
+    source = ""
 
-    # 1. Try Find by IMDb ID
+    # 1. IMDb IDs can resolve to either a movie or a TV series in TMDB.
     if imdb_id and imdb_id.startswith("tt"):
         try:
             find_url = f"https://api.themoviedb.org/3/find/{imdb_id}?api_key={key}&external_source=imdb_id"
@@ -235,14 +398,19 @@ def fetch_poster_from_tmdb(imdb_id: Optional[str], clean_title: str, year: Optio
             if resp.status_code == 200:
                 data = resp.json()
                 movie_results = data.get("movie_results", [])
-                if movie_results and movie_results[0].get("poster_path"):
-                    poster_path = movie_results[0]["poster_path"]
-        except Exception as e:
-            print(f"Error finding by IMDb ID: {e}")
+                tv_results = data.get("tv_results", [])
+                ordered = [("TMDB TV (IMDb)", tv_results), ("TMDB Movie (IMDb)", movie_results)] if is_tv else [("TMDB Movie (IMDb)", movie_results), ("TMDB TV (IMDb)", tv_results)]
+                for label, results in ordered:
+                    if results and results[0].get("poster_path"):
+                        poster_path = results[0]["poster_path"]
+                        source = label
+                        break
+        except Exception as exc:
+            print(f"Error finding by IMDb ID: {exc}")
 
-    # 2. Fallback to Search by Title + Year
+    # 2. Search the appropriate TMDB catalog. Explicit TV titles search TV first.
     if not poster_path and clean_title:
-        norm_title = normalize_title_for_search(clean_title)
+        norm_title = normalize_tv_title_for_search(clean_title) if is_tv else normalize_title_for_search(clean_title)
         search_candidates = [norm_title]
         stripped = re.sub(r"\s+(?:Box\s+Set|Trilogy|Collection|Anthology)\s*$", "", norm_title, flags=re.IGNORECASE).strip()
         if stripped and stripped not in search_candidates:
@@ -250,50 +418,65 @@ def fetch_poster_from_tmdb(imdb_id: Optional[str], clean_title: str, year: Optio
         if clean_title not in search_candidates:
             search_candidates.append(clean_title)
 
-        for candidate in search_candidates:
-            if poster_path:
-                break
-            try:
-                search_url = "https://api.themoviedb.org/3/search/movie"
-                params = {"api_key": key, "query": candidate}
-                if year and isinstance(year, int):
-                    params["year"] = str(year)
-                resp = requests.get(search_url, params=params, headers=headers, timeout=10)
-                if resp.status_code == 200:
-                    results = resp.json().get("results", [])
-                    if results and results[0].get("poster_path"):
-                        poster_path = results[0]["poster_path"]
-                        break
-                # Try without year restriction if year was passed
-                if not poster_path and "year" in params:
-                    params.pop("year")
+        search_kinds = ("tv", "movie") if is_tv else ("movie",)
+        for kind in search_kinds:
+            for candidate in search_candidates:
+                if poster_path:
+                    break
+                try:
+                    search_url = f"https://api.themoviedb.org/3/search/{kind}"
+                    params: Dict[str, Any] = {"api_key": key, "query": candidate}
+                    year_key = "first_air_date_year" if kind == "tv" else "year"
+                    if year and isinstance(year, int):
+                        params[year_key] = str(year)
                     resp = requests.get(search_url, params=params, headers=headers, timeout=10)
                     if resp.status_code == 200:
                         results = resp.json().get("results", [])
                         if results and results[0].get("poster_path"):
                             poster_path = results[0]["poster_path"]
+                            source = "TMDB TV" if kind == "tv" else "TMDB Movie"
                             break
-            except Exception as e:
-                pass
+                    if not poster_path and year_key in params:
+                        params.pop(year_key)
+                        resp = requests.get(search_url, params=params, headers=headers, timeout=10)
+                        if resp.status_code == 200:
+                            results = resp.json().get("results", [])
+                            if results and results[0].get("poster_path"):
+                                poster_path = results[0]["poster_path"]
+                                source = "TMDB TV" if kind == "tv" else "TMDB Movie"
+                                break
+                except Exception:
+                    continue
+            if poster_path:
+                break
+
+    # 3. Explicit TV titles get an optional TheTVDB v4 fallback when configured.
+    if not poster_path and is_tv:
+        tvdb_poster = _tvdb_series_poster(clean_title, year, cache_key, trace=trace)
+        if tvdb_poster:
+            return tvdb_poster
 
     if not poster_path:
-        # Fallback to Wikipedia
-        return fetch_poster_from_wikipedia(clean_title, imdb_id)
+        wiki_poster = fetch_poster_from_wikipedia(clean_title, imdb_id, is_tv=is_tv)
+        if wiki_poster and trace is not None:
+            trace.update({"source": "Wikipedia TV" if is_tv else "Wikipedia", "tv_fallback": is_tv})
+        return wiki_poster
 
-    # Download and cache poster locally
     tmdb_image_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
-    cache_key = imdb_id or f"title_{abs(hash(clean_title))}"
     local_file = POSTERS_DIR / f"{cache_key}.jpg"
-
     try:
         img_resp = requests.get(tmdb_image_url, headers=headers, timeout=15)
-        if img_resp.status_code == 200:
+        if img_resp.status_code == 200 and img_resp.content:
             with open(local_file, "wb") as f:
                 f.write(img_resp.content)
+            if trace is not None:
+                trace.update({"source": source or "TMDB", "tv_fallback": "TV" in source})
             return f"/static/posters/{cache_key}.jpg"
-    except Exception as e:
-        print(f"Error caching TMDB poster: {e}")
+    except Exception as exc:
+        print(f"Error caching TMDB poster: {exc}")
 
+    if trace is not None:
+        trace.update({"source": source or "TMDB", "tv_fallback": "TV" in source})
     return tmdb_image_url
 
 import urllib.parse

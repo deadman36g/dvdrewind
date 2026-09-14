@@ -367,6 +367,31 @@ class DVDRewindTUI(App[None]):
         text-style: bold;
         border-left: thick #d5a85b;
     }
+    ListItem.active-section {
+        background: #1b2b3a;
+        color: #ffffff;
+        text-style: bold;
+        border-left: thick #63c7ff;
+        border-right: solid #315a70;
+    }
+    #section-imdb.active-section {
+        background: #2a2115;
+        color: #f1c477;
+        border-left: thick #f1c477;
+        border-right: solid #7b5d26;
+    }
+    #section-artwork.active-section {
+        background: #211a2e;
+        color: #d9c3f4;
+        border-left: thick #b89de8;
+        border-right: solid #614d7c;
+    }
+    #section-population.active-section {
+        background: #13232a;
+        color: #8edbe8;
+        border-left: thick #67c7d9;
+        border-right: solid #315b66;
+    }
     #nav_hint {
         height: 7;
         margin: 0 1 1 1;
@@ -500,6 +525,8 @@ class DVDRewindTUI(App[None]):
         self._was_running: Optional[bool] = None
         self._completion_timer_started = False
         self._section_history: List[str] = []
+        self._action_feedback: str = ""
+        self._seen_last_result: str = ""
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -510,7 +537,7 @@ class DVDRewindTUI(App[None]):
         )
         with Horizontal(id="workspace"):
             with Vertical(id="left"):
-                yield Static("BROWSE", classes="panel-title")
+                yield Static("BROWSE", id="browse_title", classes="panel-title")
                 yield ListView(
                     *[ListItem(Label(label), id=f"section-{key}") for key, label in SECTIONS],
                     id="sections",
@@ -617,7 +644,23 @@ class DVDRewindTUI(App[None]):
             "checked_at": frontier.get("checked_at") or post.get("updated_at") or last.get("last_sync"),
         }
 
+    def _update_sidebar_state(self) -> None:
+        """Keep the active section visually obvious even when focus is in the table."""
+        current_name = dict(SECTIONS).get(self.section, self.section.title())
+        self.query_one("#browse_title", Static).update(
+            f"BROWSE  [#56697c]•[/#56697c]  [bold #f2f4f6]{current_name.replace('◆  ', '').replace('▦  ', '').replace('↻  ', '').replace('◎  ', '').replace('▧  ', '').replace('✦  ', '').replace('!  ', '').replace('⚙  ', '')}[/bold #f2f4f6]"
+        )
+        for key, label in SECTIONS:
+            try:
+                item = self.query_one(f"#section-{key}", ListItem)
+                item.set_class(key == self.section, "active-section")
+                text = f"▶  {label}" if key == self.section else f"   {label}"
+                item.query_one(Label).update(text)
+            except Exception:
+                continue
+
     def _apply_section_theme(self) -> None:
+        self._update_sidebar_state()
         center = self.query_one("#center", Vertical)
         for class_name in ("theme-imdb", "theme-artwork", "theme-population"):
             center.remove_class(class_name)
@@ -646,6 +689,7 @@ class DVDRewindTUI(App[None]):
         was_running = self._was_running
         self._was_running = bool(status.get("is_running"))
         self.status = status
+        self._consume_last_result()
         if not self.is_mounted:
             return
         try:
@@ -693,6 +737,34 @@ class DVDRewindTUI(App[None]):
             f"[#8293a6]{total:,} titles[/#8293a6]  [#36495d]•[/#36495d]  "
             f"[#8293a6]{phase}[/#8293a6]  [#36495d]•[/#36495d]  [#c8d1da]{activity}[/#c8d1da]"
         )
+
+    def _consume_last_result(self) -> None:
+        result = self.status.get("last_result") or {}
+        if not isinstance(result, dict) or not result:
+            return
+        try:
+            signature = json.dumps(result, sort_keys=True, default=str)
+        except Exception:
+            signature = str(result)
+        if signature == self._seen_last_result:
+            return
+        self._seen_last_result = signature
+        state = str(result.get("status") or "").lower()
+        message = str(result.get("message") or "").strip()
+        source = str(result.get("source") or result.get("poster_source") or "").strip()
+        if not message:
+            return
+        if state == "running":
+            self._action_feedback = f"[bold #f1c477]STARTED[/bold #f1c477]  {message}. Watch ACTIVE JOB above for progress."
+        elif state in {"matched", "found", "complete"}:
+            source_note = f" via {source}" if source and source.lower() not in message.lower() else ""
+            self._action_feedback = f"[bold #71d49b]RESULT[/bold #71d49b]  {message}{source_note}."
+        elif state == "not_found":
+            self._action_feedback = f"[bold #efaa73]NO MATCH[/bold #efaa73]  {message}. Nothing was silently changed."
+        elif state == "error":
+            self._action_feedback = f"[bold #ef7f73]ERROR[/bold #ef7f73]  {message}"
+        else:
+            self._action_feedback = message
 
     def update_status_line(self) -> None:
         stats = self.status.get("stats") or {}
@@ -1194,10 +1266,11 @@ class DVDRewindTUI(App[None]):
             action_hint = "\n[#8293a6]↵ Enter[/#8293a6] [#c8d1da]open / run[/#c8d1da]   [#8293a6]⌫ Backspace[/#8293a6] [#c8d1da]go back[/#c8d1da]"
         else:
             action_hint = "\n[#8293a6]↵ Enter[/#8293a6] [#c8d1da]more details[/#c8d1da]   [#8293a6]⌫ Backspace[/#8293a6] [#c8d1da]go back[/#c8d1da]"
+        feedback = f"\n{self._action_feedback}" if self._action_feedback else ""
         self.query_one("#detail", Static).update(
             f"[bold {accent}]SELECTED[/bold {accent}]  {badge}{meta}\n"
             f"[bold #f2f4f6]{title}[/bold #f2f4f6]\n"
-            f"[#c8d1da]{body}[/#c8d1da]{action_hint}"
+            f"[#c8d1da]{body}[/#c8d1da]{action_hint}{feedback}"
         )
 
     def on_key(self, event: events.Key) -> None:
@@ -1291,18 +1364,31 @@ class DVDRewindTUI(App[None]):
         if self.status.get("is_running"):
             self.notify("Wait for the active archive job to finish before repairing one poster.", severity="warning")
             return
-        self.notify(f"Fetching artwork for FID {fid:,}…", timeout=2)
+        self._action_feedback = f"[bold #c9afea]WORKING[/bold #c9afea]  Searching artwork sources for FID {fid:,}…"
+        self.update_detail_for_cursor()
+        self.notify(f"Artwork search started for FID {fid:,}. Watch the result line below.", timeout=3)
         try:
             result = await asyncio.to_thread(_post_poster, fid)
         except Exception as exc:
+            self._action_feedback = f"[bold #ef7f73]ERROR[/bold #ef7f73]  Artwork repair failed for FID {fid:,}: {exc}"
+            self.update_detail_for_cursor()
             self.notify(f"Artwork repair failed: {exc}", severity="error")
             return
         self._last_insights_refresh = 0.0
-        await self.refresh_data()
         if result.get("success"):
-            self.notify(f"Artwork repaired for FID {fid:,}", severity="information")
+            source = str(result.get("source") or "automatic lookup")
+            tv_note = " (TV fallback)" if result.get("tv_fallback") else ""
+            self._action_feedback = (
+                f"[bold #71d49b]ARTWORK SAVED[/bold #71d49b]  FID {fid:,} matched via {source}{tv_note}."
+            )
+            self.notify(f"Artwork repaired for FID {fid:,} via {source}", severity="information", timeout=4)
         else:
-            self.notify(str(result.get("error") or "No artwork match found"), severity="warning")
+            error = str(result.get("error") or "No artwork match found")
+            tv_note = " TV-series fallback was attempted." if result.get("tv_detected") else ""
+            self._action_feedback = f"[bold #efaa73]NO ART MATCH[/bold #efaa73]  {error}{tv_note}"
+            self.notify(error, severity="warning", timeout=4)
+        await self.refresh_data()
+        self.update_detail_for_cursor()
 
     async def start_worker(self, endpoint: str, payload: Dict[str, Any], message: str) -> None:
         if self.status.get("is_running"):
@@ -1314,15 +1400,21 @@ class DVDRewindTUI(App[None]):
             self.notify(f"Could not start task: {exc}", severity="error")
             return
         if not result.get("ok"):
-            self.notify(str(result.get("message") or "Task could not be started"), severity="warning")
+            failure = str(result.get("message") or "Task could not be started")
+            self._action_feedback = f"[bold #efaa73]NOT STARTED[/bold #efaa73]  {failure}"
+            self.notify(failure, severity="warning")
+            self.update_detail_for_cursor()
             return
         target_section = {"imdb": "imdb", "posters": "artwork"}.get(endpoint, "population")
+        accent = "#f1c477" if endpoint == "imdb" else ("#c9afea" if endpoint == "posters" else "#7bd0df")
+        self._action_feedback = f"[bold {accent}]STARTED[/bold {accent}]  {message}. Watch ACTIVE JOB above; the final result will stay here."
         self.section = target_section
         section_list = self.query_one("#sections", ListView)
         section_list.index = [key for key, _ in SECTIONS].index(target_section)
-        self.notify(message, severity="information")
+        self.notify(f"{message} — watch ACTIVE JOB above", severity="information", timeout=4)
         self._last_insights_refresh = 0.0
         await self.refresh_data()
+        self.update_detail_for_cursor()
         self.save_place()
 
     def show_completion_state(self) -> None:
