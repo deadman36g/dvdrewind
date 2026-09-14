@@ -83,31 +83,13 @@
       <!-- Unified 11-Button External Intelligence Strip (All Uniform 38x38 Buttons) -->
       <div class="hero-ext-footer">
         <div class="hero-ext-strip" role="navigation" aria-label="External Intelligence Resources">
-          <!-- 1. IMDb -->
+          <!-- 1. IMDb (External Tab) -->
           {% if title.imdb_id %}
           <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="ext-icon-btn-sm" id="btn-imdb-link"
              title="Open IMDb Overview &amp; Specs: {{ title.clean_title }} (Opens in new tab)"
              aria-label="IMDb Overview">
             {{ icons.imdb_button() }}
           </a>
-          {% else %}
-          <span class="ext-icon-btn-sm is-deactivated" title="No IMDb title matched" aria-disabled="true">
-            {{ icons.imdb_button() }}
-          </span>
-          {% endif %}
-
-          <!-- 1. IMDb -->
-          {% if title.imdb_id %}
-          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-imdb-toggle"
-                  data-service="imdb"
-                  data-service-name="IMDb"
-                  data-embed-url="/embed/proxy?service=imdb&url={{ ('https://www.imdb.com/title/' ~ title.imdb_id ~ '/')|urlencode }}&fid={{ title.fid }}"
-                  data-external-url="https://www.imdb.com/title/{{ title.imdb_id }}/"
-                  title="IMDb Mobile Dossier &amp; Ratings: {{ title.clean_title }} (Click to embed)"
-                  aria-label="IMDb Overview"
-                  aria-expanded="false">
-            {{ icons.imdb_button() }}
-          </button>
           {% else %}
           <span class="ext-icon-btn-sm is-deactivated" title="No IMDb title matched" aria-disabled="true">
             {{ icons.imdb_button() }}
@@ -133,18 +115,13 @@
           </span>
           {% endif %}
 
-          <!-- 3. Letterboxd -->
+          <!-- 3. Letterboxd (External Tab) -->
           {% if title.letterboxd_url %}
-          <button type="button" class="ext-icon-btn-sm is-active btn-inline-drawer-trigger" id="btn-letterboxd-toggle"
-                  data-service="letterboxd"
-                  data-service-name="Letterboxd"
-                  data-embed-url="/embed/proxy?service=letterboxd&url={{ title.letterboxd_url|urlencode }}&fid={{ title.fid }}"
-                  data-external-url="{{ title.letterboxd_url }}"
-                  title="Letterboxd Cinephile Reviews &amp; Lists: {{ title.clean_title }} (Click to embed)"
-                  aria-label="Letterboxd Community"
-                  aria-expanded="false">
+          <a href="{{ title.letterboxd_url }}" target="_blank" rel="noopener noreferrer" class="ext-icon-btn-sm" id="btn-letterboxd-link"
+             title="Open Letterboxd Cinephile Reviews &amp; Lists: {{ title.clean_title }} (Opens in new tab)"
+             aria-label="Letterboxd Community">
             {{ icons.letterboxd_button() }}
-          </button>
+          </a>
           {% else %}
           <span class="ext-icon-btn-sm is-deactivated" title="No Letterboxd link found" aria-disabled="true">
             {{ icons.letterboxd_button() }}

@@ -33,7 +33,7 @@
 3. **Respect Established Design & UX Directives:**
    - **Hero Section:** Keep only clean movie information at the top (Title, Year, Runtime, Director, Studio, Tagline/Synopsis). Do **not** place format pills (like "Blu-ray" or "4K UHD") or specific audio tracks (like "DTS-HD MA") in the universal movie hero. Format selectors belong on the editions table toolbar.
    - **Physical Editions Table:** The Collector Mastering References Guide must sit directly connected beneath the physical editions table (using `.mastering-shelf-attached` with zero margin/top-border gap) looking like a natural extension, while remaining collapsible.
-   - **Service Buttons (Letterboxd, Wikipedia, IMDb, etc.):** Buttons open in-page embedded views (iframe proxy via `/embed/proxy` or inline dossier), **not** external popup tabs.
+   - **Service Buttons:** Wikipedia opens in-page embedded views (iframe proxy via `/embed/proxy`), while IMDb and Letterboxd open directly in external browser tabs (`target="_blank"`).
    - **Tone & Wording:** Use human-friendly, conversational archivist language (not sterile or robotic database jargon).
 4. **Handoff Protocol:**
    - When finishing a session or switching models, update this `AGENTS.md` file with what was completed, any bugs found/fixed, and the exact next steps for the incoming agent.
