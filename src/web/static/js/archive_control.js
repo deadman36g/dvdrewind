@@ -156,7 +156,7 @@ function renderArchiveStatus(data) {
     if (data.log_lines.length !== lastLogLinesLength || data.is_running) {
       lastLogLinesLength = data.log_lines.length;
       if (data.log_lines.length === 0) {
-        consoleElem.innerHTML = `<div class="console-line dim"><span class="console-ts">--:--:--</span> Ready. Use Sync for normal updates, or Catch Up Since 76,200 for a full post-initial pass.</div>`;
+        consoleElem.innerHTML = `<div class="console-line dim"><span class="console-ts">--:--:--</span> Ready. Use Sync to update the live frontier; Deep Verify re-checks the full historical tail.</div>`;
       } else {
         const html = data.log_lines.map(line => {
           const styleClass = line.style ? ` style-${line.style}` : "";
@@ -213,7 +213,7 @@ async function triggerArchiveCatchUp() {
     });
     const data = await res.json();
     if (!data.ok) {
-      alert(data.message || "Could not start post-76,200 catch-up.");
+      alert(data.message || "Could not start historical-tail verification.");
     }
     pollArchiveStatus();
   } catch (err) {

@@ -4,18 +4,25 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import DataTable, Input, ListView, Static
 
-from src.tui_app import DVDRewindTUI, KeysScreen, STATE_FILE
+from src.tui_app import DVDRewindTUI, DetailScreen, KeysScreen, STATE_FILE
 
 
 SAMPLE_STATUS = {
     "is_running": False,
     "task_type": "sync",
     "status_message": "Ready",
-    "stats": {"errors": 0, "next_fid": 76305, "phase": "idle"},
-    "metrics": {"titles": 26709, "releases": 70080, "db_size_mb": 315.8},
-    "post_initial": {"next_fid": 76305},
+    "stats": {"errors": 0, "next_fid": 76201, "phase": "idle"},
+    "metrics": {"titles": 26709, "releases": 70080, "max_fid": 76204, "db_size_mb": 315.8},
+    "post_initial": {"next_fid": 76305, "highest_seen_fid": 76204, "updated_at": "2026-09-13T21:26:08"},
+    "frontier": {
+        "historical_baseline_fid": 76200,
+        "verified_through_fid": 76304,
+        "next_fid": 76305,
+        "highest_title_fid": 76204,
+        "checked_at": "2026-09-13T21:26:08",
+    },
     "last_sync": {
         "status": "success",
         "elapsed_seconds": 100,
@@ -84,7 +91,9 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("CATALOG MIX", mix)
                 self.assertIn("Blu-ray", mix)
                 footer = str(app.query_one("#footer_keys", Static).content)
-                self.assertIn("Best Next", footer)
+                self.assertIn("Move", footer)
+                self.assertIn("Open / Run", footer)
+                self.assertIn("Back", footer)
                 self.assertIn("Find", footer)
                 self.assertIn("Help", footer)
                 self.assertIn("Reload", footer)
@@ -145,14 +154,20 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause()
                 self.assertEqual(app.section, "imdb")
                 title = str(app.query_one("#work_title", Static).content)
-                self.assertIn("IMDb Matching", title)
+                self.assertIn("IMDb REPAIR", title)
+                self.assertIn("Matching & Metadata", title)
                 self.assertGreaterEqual(app.query_one("#work_table", DataTable).row_count, 2)
+                imdb_graph = str(app.query_one("#job_graph", Static).content)
+                self.assertIn("IMDb MATCHING", imdb_graph)
                 await pilot.press("a")
                 await pilot.pause()
                 self.assertEqual(app.section, "artwork")
                 title = str(app.query_one("#work_title", Static).content)
-                self.assertIn("Artwork", title)
+                self.assertIn("ARTWORK REPAIR", title)
+                self.assertIn("Posters & Covers", title)
                 self.assertGreaterEqual(app.query_one("#work_table", DataTable).row_count, 2)
+                art_graph = str(app.query_one("#job_graph", Static).content)
+                self.assertIn("ARTWORK REPAIR", art_graph)
 
     async def test_active_job_graph_shows_progress_and_remaining(self):
         live = dict(SAMPLE_STATUS)
@@ -179,6 +194,82 @@ class TestDVDRewindTextualTUI(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("25/100", graph)
                 self.assertIn("75 left", graph)
                 self.assertIn("20 matched", graph)
+
+    async def test_population_uses_live_frontier_not_idle_baseline(self):
+        with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                app._switch_section("population")
+                await pilot.pause()
+                title = str(app.query_one("#work_title", Static).content)
+                status = str(app.query_one("#status_line", Static).content)
+                cards = "\n".join(
+                    str(app.query_one(selector, Static).content)
+                    for selector in ("#health_imdb", "#health_art", "#health_complete")
+                )
+                self.assertIn("76,305", title)
+                self.assertIn("Verified 76,304", status)
+                self.assertIn("76,304", cards)
+                self.assertIn("76,305", cards)
+                self.assertNotIn("Verified 76,200", status)
+
+    async def test_backspace_and_arrow_navigation_are_keyboard_friendly(self):
+        with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                self.assertIsInstance(app.focused, ListView)
+                await pilot.press("right")
+                await pilot.pause()
+                self.assertIsInstance(app.focused, DataTable)
+                await pilot.press("left")
+                await pilot.pause()
+                self.assertIsInstance(app.focused, ListView)
+                await pilot.press("i")
+                await pilot.pause()
+                self.assertEqual(app.section, "imdb")
+                await pilot.press("backspace")
+                await pilot.pause()
+                self.assertEqual(app.section, "dashboard")
+
+    async def test_enter_on_informational_row_opens_detail_screen(self):
+        with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                app._switch_section("maintenance")
+                table = app.query_one("#work_table", DataTable)
+                table.move_cursor(row=2, animate=False)  # Known Missing FIDs: informational only.
+                table.focus()
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertIsInstance(app.screen, DetailScreen)
+                await pilot.press("backspace")
+                await pilot.pause()
+                self.assertNotIsInstance(app.screen, DetailScreen)
+
+    async def test_backspace_edits_search_text_instead_of_leaving_search(self):
+        with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(
+            "src.tui_app._library_insights", return_value=INSIGHTS
+        ):
+            app = DVDRewindTUI()
+            async with app.run_test(size=(150, 54)) as pilot:
+                await pilot.pause()
+                await pilot.press("f")
+                await pilot.press("a", "b", "c")
+                search = app.query_one("#search_input", Input)
+                self.assertTrue(str(search.value).endswith("abc"))
+                await pilot.press("backspace")
+                await pilot.pause()
+                self.assertTrue(str(search.value).endswith("ab"))
+                self.assertEqual(search.styles.display, "block")
 
     async def test_f5_returns_reload_code_for_wrapper_restart(self):
         with patch("src.tui_app._fetch_status", return_value=SAMPLE_STATUS), patch(

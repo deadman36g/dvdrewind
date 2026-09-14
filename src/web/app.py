@@ -606,9 +606,9 @@ async def handle_api_archive_sync(request: web.Request) -> web.Response:
         pass
     started = manager.start_sync(limit=limit, force_from_initial=force_from_initial)
     if force_from_initial:
-        message = "Post-76,200 catch-up started" if started else "A task is already running"
+        message = "Historical-tail verification started" if started else "A task is already running"
     else:
-        message = "Sync started" if started else "A task is already running"
+        message = "Update to Latest started" if started else "A task is already running"
     return web.json_response({"ok": started, "message": message})
 
 async def handle_api_archive_posters(request: web.Request) -> web.Response:

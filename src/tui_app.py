@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from rich.text import Text
+from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -24,6 +25,7 @@ STATUS_URL = "http://127.0.0.1:8088/api/archive/status"
 CONTROL_BASE_URL = "http://127.0.0.1:8088/api/archive"
 STATE_FILE = ARCHIVE_DIR / "tui_state.json"
 WEB_URL = "http://192.168.50.39:8091"
+INITIAL_MAX_FID = 76200  # Historical baseline only; live frontier is persisted separately.
 
 SECTIONS = [
     ("dashboard", "◆  Dashboard"),
@@ -47,6 +49,7 @@ BADGE = {
     "NEEDS BOTH": "[bold #efaa73 on #2b1c17] NEEDS BOTH [/bold #efaa73 on #2b1c17]",
     "LOCAL MEDIA": "[#b89de8 on #211a2e] LOCAL MEDIA [/#b89de8 on #211a2e]",
     "EXTERNAL LINK": "[#67c7d9 on #13232a] EXTERNAL LINK [/#67c7d9 on #13232a]",
+    "CURRENT": "[bold #67c7d9 on #13232a] CURRENT [/bold #67c7d9 on #13232a]",
 }
 
 
@@ -186,6 +189,7 @@ def _mini_bar(value: int, maximum: int, width: int = 12, style: str = "#67c7d9")
 class KeysScreen(ModalScreen[None]):
     BINDINGS = [
         Binding("escape", "close", "Close", show=False),
+        Binding("backspace", "close", "Close", show=False),
         Binding("h", "close", "Close", show=False),
         Binding("q", "close", "Close", show=False),
     ]
@@ -210,12 +214,14 @@ class KeysScreen(ModalScreen[None]):
             yield Static(
                 "[bold #d7b476]Browse[/]\n"
                 "  Up/Down        Move through sections or rows\n"
+                "  Left/Right     Move between navigation and work area\n"
                 "  Enter          Open / run selected row action\n"
+                "  Backspace      Go back to the previous area\n"
                 "  F              Find movies\n"
                 "  N              Show Best Next recommendation\n\n"
                 "[bold #d7b476]Repair / population[/]\n"
-                "  U              Run normal update\n"
-                "  C              Catch up since 76,200\n"
+                "  U              Update archive to latest\n"
+                "  C              Deep-verify the historical tail\n"
                 "  I              Open IMDb Repair\n"
                 "  A              Open Artwork Repair\n"
                 "  P              Run full poster backfill\n"
@@ -237,12 +243,57 @@ class KeysScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
+class DetailScreen(ModalScreen[None]):
+    """Keyboard-first expanded inspector for rows that don't launch a task."""
+
+    BINDINGS = [
+        Binding("escape", "close", "Close", show=False),
+        Binding("backspace", "close", "Close", show=False),
+        Binding("enter", "close", "Close", show=False),
+        Binding("q", "close", "Close", show=False),
+    ]
+
+    CSS = """
+    DetailScreen { align: center middle; background: rgba(4, 6, 10, 0.88); }
+    #detail_box {
+        width: 88;
+        height: 22;
+        border: round #6c7b89;
+        background: #0f1620;
+        padding: 1 3;
+    }
+    #detail_modal_title { height: 3; color: #f1c477; text-style: bold; }
+    #detail_modal_body { height: 1fr; color: #c8d1da; }
+    #detail_modal_hint { height: 2; color: #66788a; text-align: center; }
+    """
+
+    def __init__(self, detail: Dict[str, Any]) -> None:
+        super().__init__()
+        self.detail = dict(detail or {})
+
+    def compose(self) -> ComposeResult:
+        state = str(self.detail.get("state") or "IDLE")
+        badge = BADGE.get(state, f"[white on #344a60] {state} [/white on #344a60]")
+        title = str(self.detail.get("title") or "Selected item")
+        body = str(self.detail.get("body") or "No additional detail is available.")
+        fid = self.detail.get("fid")
+        meta = f"\n\n[#708397]FID[/#708397]  [#e8edf2]{int(fid):,}[/#e8edf2]" if fid else ""
+        with Vertical(id="detail_box"):
+            yield Static(f"{badge}   {title}", id="detail_modal_title", markup=True)
+            yield Static(f"{body}{meta}", id="detail_modal_body", markup=True)
+            yield Static("Enter / Backspace / Esc  Close", id="detail_modal_hint")
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
 class DVDRewindTUI(App[None]):
     TITLE = "DVD Rewind"
     SUB_TITLE = "Archive Console"
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit", show=False),
+        Binding("backspace", "go_back", "Back", show=False),
         Binding("r", "refresh_data", "Refresh", show=False),
         Binding("f", "find", "Find", show=False),
         Binding("n", "best_next", "Best Next", show=False),
@@ -410,6 +461,24 @@ class DVDRewindTUI(App[None]):
         text-align: center;
         padding: 0 1;
     }
+
+    /* Section identity: the same layout, with task-specific accent language. */
+    .theme-imdb #work_title { color: #f1c477; }
+    .theme-imdb #job_graph { border: round #7b5d26; background: #17130d; }
+    .theme-imdb #work_table { border: round #5d4927; }
+    .theme-imdb DataTable > .datatable--header { background: #2a2115; color: #f1c477; }
+    .theme-imdb DataTable > .datatable--cursor { background: #4a3a1d; color: #fff3cf; }
+
+    .theme-artwork #work_title { color: #c9afea; }
+    .theme-artwork #job_graph { border: round #614d7c; background: #15111e; }
+    .theme-artwork #work_table { border: round #4e3e65; }
+    .theme-artwork DataTable > .datatable--header { background: #211a2e; color: #c9afea; }
+    .theme-artwork DataTable > .datatable--cursor { background: #3e3150; color: #f3ebff; }
+
+    .theme-population #work_title { color: #7bd0df; }
+    .theme-population #job_graph { border: round #315b66; background: #0d171b; }
+    .theme-population #work_table { border: round #31515c; }
+    .theme-population DataTable > .datatable--header { background: #13232a; color: #7bd0df; }
     """
 
     def __init__(self) -> None:
@@ -430,6 +499,7 @@ class DVDRewindTUI(App[None]):
         self._restored_cursor = False
         self._was_running: Optional[bool] = None
         self._completion_timer_started = False
+        self._section_history: List[str] = []
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -446,10 +516,10 @@ class DVDRewindTUI(App[None]):
                     id="sections",
                 )
                 yield Static(
-                    "[#d7b476]QUICK KEYS[/#d7b476]\n"
-                    "[#8293a6]F[/#8293a6] Find movie   [#8293a6]N[/#8293a6] Best next\n"
-                    "[#8293a6]I[/#8293a6] IMDb repair [#8293a6]A[/#8293a6] Artwork\n"
-                    "[#56697c]H shows every shortcut[/#56697c]",
+                    "[#d7b476]NAVIGATION[/#d7b476]\n"
+                    "[#8293a6]← / →[/#8293a6] move between panes\n"
+                    "[#8293a6]↑ / ↓[/#8293a6] move selection   [#8293a6]↵[/#8293a6] open / run\n"
+                    "[#8293a6]⌫[/#8293a6] back   [#8293a6]H[/#8293a6] all shortcuts",
                     id="nav_hint",
                     markup=True,
                 )
@@ -469,7 +539,7 @@ class DVDRewindTUI(App[None]):
                 yield Static("RECENT ACTIVITY\nLoading…", id="recent_activity", classes="right-card", markup=True)
                 yield Static("ATTENTION\nLoading…", id="warnings", classes="right-card", markup=True)
         yield Static("Connecting to archive…", id="status_line", markup=True)
-        yield Static("N  Best Next     F  Find     H  Help     F5  Reload     Q  Quit", id="footer_keys", markup=True)
+        yield Static("←/→  Move     ↵  Open / Run     ⌫  Back     F  Find     H  Help     F5  Reload     Q  Quit", id="footer_keys", markup=True)
 
     async def on_mount(self) -> None:
         table = self.query_one("#work_table", DataTable)
@@ -480,6 +550,7 @@ class DVDRewindTUI(App[None]):
         self.set_interval(2.0, self.check_code_update)
         await self.refresh_data()
         self.render_section()
+        section_list.focus()
 
     def save_place(self) -> None:
         try:
@@ -498,6 +569,64 @@ class DVDRewindTUI(App[None]):
 
     def on_unmount(self) -> None:
         self.save_place()
+
+    def _frontier_info(self) -> Dict[str, Any]:
+        """Return the live persisted scan frontier, never the historical baseline as 'current'."""
+        frontier = dict(self.status.get("frontier") or {})
+        post = self.status.get("post_initial") or {}
+        last = self.status.get("last_sync") or {}
+        metrics = self.status.get("metrics") or {}
+        running = bool(self.status.get("is_running")) and str(self.status.get("task_type") or "") == "sync"
+        stats = self.status.get("stats") or {}
+
+        try:
+            persisted_next = int(frontier.get("next_fid") or post.get("next_fid") or INITIAL_MAX_FID + 1)
+        except (TypeError, ValueError):
+            persisted_next = INITIAL_MAX_FID + 1
+        try:
+            active_next = int(stats.get("next_fid") or 0)
+        except (TypeError, ValueError):
+            active_next = 0
+        next_fid = active_next if running and active_next else persisted_next
+
+        try:
+            verified = int(frontier.get("verified_through_fid") or max(INITIAL_MAX_FID, persisted_next - 1))
+        except (TypeError, ValueError):
+            verified = max(INITIAL_MAX_FID, persisted_next - 1)
+        try:
+            highest_title = max(
+                int(frontier.get("highest_title_fid") or 0),
+                int(metrics.get("max_fid") or 0),
+            )
+        except (TypeError, ValueError):
+            highest_title = 0
+        try:
+            highest_seen = max(
+                int(frontier.get("highest_seen_fid") or 0),
+                int(post.get("highest_seen_fid") or 0),
+                int(last.get("highest_seen_fid") or 0),
+            )
+        except (TypeError, ValueError):
+            highest_seen = 0
+        return {
+            "historical_baseline_fid": INITIAL_MAX_FID,
+            "verified_through_fid": verified,
+            "next_fid": next_fid,
+            "highest_title_fid": highest_title,
+            "highest_seen_fid": highest_seen,
+            "checked_at": frontier.get("checked_at") or post.get("updated_at") or last.get("last_sync"),
+        }
+
+    def _apply_section_theme(self) -> None:
+        center = self.query_one("#center", Vertical)
+        for class_name in ("theme-imdb", "theme-artwork", "theme-population"):
+            center.remove_class(class_name)
+        if self.section == "imdb":
+            center.add_class("theme-imdb")
+        elif self.section == "artwork":
+            center.add_class("theme-artwork")
+        elif self.section == "population":
+            center.add_class("theme-population")
 
     async def refresh_data(self) -> None:
         try:
@@ -568,17 +697,18 @@ class DVDRewindTUI(App[None]):
     def update_status_line(self) -> None:
         stats = self.status.get("stats") or {}
         metrics = self.status.get("metrics") or {}
-        post = self.status.get("post_initial") or {}
         running = bool(self.status.get("is_running"))
         current = int(stats.get("current_fid") or 0)
-        next_fid = int(stats.get("next_fid") or post.get("next_fid") or 76201)
+        frontier = self._frontier_info()
+        next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
+        verified = int(frontier.get("verified_through_fid") or INITIAL_MAX_FID)
         prefix = "[bold #71d49b]● RUNNING[/bold #71d49b]" if running else "[#708397]● IDLE[/#708397]"
         total = int(self.insights.get("total_titles") or metrics.get("titles") or self.status.get("db_titles") or 0)
         with_imdb = int(self.insights.get("with_imdb") or 0)
         with_art = int(self.insights.get("with_art") or 0)
         imdb_pct = (with_imdb / total * 100.0) if total else 0.0
         art_pct = (with_art / total * 100.0) if total else 0.0
-        fid_text = f"FID {current:,} → {next_fid:,}" if running and current else f"Next scan {next_fid:,}"
+        fid_text = f"FID {current:,} → {next_fid:,}" if running and current else f"Verified {verified:,} · next {next_fid:,}"
         text = (
             f"{prefix}  [#36495d]•[/#36495d]  [#9dacbc]{fid_text}[/#9dacbc]  [#36495d]•[/#36495d]  "
             f"[#9dacbc]{total:,} titles[/#9dacbc]  [#36495d]•[/#36495d]  "
@@ -595,8 +725,11 @@ class DVDRewindTUI(App[None]):
         with_imdb = int(self.insights.get("with_imdb") or max(0, total - int(self.insights.get("missing_imdb") or 0)))
         with_art = int(self.insights.get("with_art") or max(0, total - int(self.insights.get("missing_art") or 0)))
         ready = int(self.insights.get("ready_titles") or 0)
+        missing_imdb = max(0, total - with_imdb)
+        missing_art = max(0, total - with_art)
+        missing_both = int(self.insights.get("missing_both") or 0)
 
-        def card(title: str, done: int, color: str, done_label: str, left_label: str) -> str:
+        def progress_card(title: str, done: int, color: str, done_label: str, left_label: str) -> str:
             left = max(0, total - done)
             pct = (done / total * 100.0) if total else 0.0
             return (
@@ -604,12 +737,64 @@ class DVDRewindTUI(App[None]):
                 f"[bold {color}]{pct:5.1f}%[/bold {color}]\n"
                 f"{_meter(done, total, 15, color)}\n"
                 f"[#c8d1da]{done:,} {done_label}[/#c8d1da]\n"
-                f"[#f1c477]{left:,} {left_label}[/#f1c477]"
+                f"[{color}]{left:,} {left_label}[/{color}]"
             )
 
-        self.query_one("#health_imdb", Static).update(card("IMDb MATCHES", with_imdb, "#67c7d9", "matched", "left"))
-        self.query_one("#health_art", Static).update(card("ARTWORK", with_art, "#b89de8", "ready", "left"))
-        self.query_one("#health_complete", Static).update(card("FULLY CLEAN", ready, "#71d49b", "clean", "need work"))
+        def count_card(title: str, value: Any, color: str, line1: str, line2: str = "") -> str:
+            display = f"{value:,}" if isinstance(value, int) else str(value or "—")
+            return (
+                f"[#708397]{title}[/#708397]\n"
+                f"[bold {color}]{display}[/bold {color}]\n"
+                f"[{color}]━━━━━━━━━━━━━━━[/{color}]\n"
+                f"[#c8d1da]{line1}[/#c8d1da]\n"
+                f"[#8293a6]{line2}[/#8293a6]"
+            )
+
+        if self.section == "imdb":
+            self.query_one("#health_imdb", Static).update(
+                progress_card("IMDb COVERAGE", with_imdb, "#f1c477", "matched", "unmatched")
+            )
+            self.query_one("#health_art", Static).update(
+                count_card("UNMATCHED QUEUE", missing_imdb, "#f1c477", "titles waiting", "Enter first row to run")
+            )
+            self.query_one("#health_complete", Static).update(
+                count_card("ALSO NEED ART", missing_both, "#efaa73", "need both repairs", "IMDb match comes first")
+            )
+            return
+
+        if self.section == "artwork":
+            matched_art_missing = max(0, missing_art - missing_both)
+            self.query_one("#health_imdb", Static).update(
+                progress_card("ART COVERAGE", with_art, "#b89de8", "ready", "missing")
+            )
+            self.query_one("#health_art", Static).update(
+                count_card("MISSING ART", missing_art, "#b89de8", "titles waiting", "Enter first row to run")
+            )
+            self.query_one("#health_complete", Static).update(
+                count_card("READY TO FETCH", matched_art_missing, "#67c7d9", "already IMDb-matched", f"{missing_both:,} also need IMDb")
+            )
+            return
+
+        if self.section == "population":
+            frontier = self._frontier_info()
+            verified = int(frontier.get("verified_through_fid") or INITIAL_MAX_FID)
+            next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
+            highest = int(frontier.get("highest_title_fid") or 0)
+            checked = _fmt_ts(frontier.get("checked_at"))
+            self.query_one("#health_imdb", Static).update(
+                count_card("VERIFIED THROUGH", verified, "#67c7d9", "frontier FID", "not the old baseline")
+            )
+            self.query_one("#health_art", Static).update(
+                count_card("NEXT SCAN", next_fid, "#67c7d9", "resume from here", f"highest title {highest:,}" if highest else "highest title unknown")
+            )
+            self.query_one("#health_complete", Static).update(
+                count_card("LAST CHECK", checked, "#71d49b", "frontier freshness", "Update to Latest advances this")
+            )
+            return
+
+        self.query_one("#health_imdb", Static).update(progress_card("IMDb MATCHES", with_imdb, "#f1c477", "matched", "left"))
+        self.query_one("#health_art", Static).update(progress_card("ARTWORK", with_art, "#b89de8", "ready", "left"))
+        self.query_one("#health_complete", Static).update(progress_card("FULLY CLEAN", ready, "#71d49b", "clean", "need work"))
 
     def update_job_graph(self) -> None:
         stats = self.status.get("stats") or {}
@@ -617,21 +802,45 @@ class DVDRewindTUI(App[None]):
             last = self.status.get("last_sync") or {}
             task = str(self.status.get("task_type") or "")
             phase = str(stats.get("phase") or "")
-            if task == "imdb" and phase == "complete":
-                last_text = (
-                    f"{int(stats.get('matches_found') or 0):,} matched  ·  "
-                    f"{int(stats.get('unmatched') or 0):,} unresolved  ·  {int(stats.get('errors') or 0):,} errors"
+            if self.section == "imdb":
+                missing = int(self.insights.get("missing_imdb") or 0)
+                if task == "imdb" and phase == "complete":
+                    detail = (
+                        f"Last pass: {int(stats.get('matches_found') or 0):,} matched  ·  "
+                        f"{int(stats.get('unmatched') or 0):,} unresolved  ·  {int(stats.get('errors') or 0):,} errors"
+                    )
+                else:
+                    detail = f"{missing:,} titles are waiting for a confident IMDb match. Enter the first row to run the pass."
+                self.query_one("#job_graph", Static).update(
+                    "[#8e733d]IMDb MATCHING[/#8e733d]   [bold #f1c477 on #2a2115] ● READY [/bold #f1c477 on #2a2115]\n"
+                    f"[#d9c8a2]{detail}[/#d9c8a2]"
                 )
-                last_label = "IMDb repair"
-            elif task == "posters" and phase == "complete":
-                last_text = f"{int(stats.get('posters_fetched') or 0):,} posters filled  ·  {int(stats.get('errors') or 0):,} errors"
-                last_label = "Artwork repair"
-            else:
-                last_label = "Last archive run"
-                last_text = "No completed run recorded" if not last else (
-                    f"{str(last.get('status') or 'complete').upper()}  ·  {_duration(last.get('elapsed_seconds'))}  ·  "
-                    f"{int(last.get('new_titles_ingested') or 0)} new  ·  {int(last.get('errors') or 0)} errors"
+                return
+            if self.section == "artwork":
+                missing = int(self.insights.get("missing_art") or 0)
+                if task == "posters" and phase == "complete":
+                    detail = f"Last pass: {int(stats.get('posters_fetched') or 0):,} posters filled  ·  {int(stats.get('errors') or 0):,} errors"
+                else:
+                    detail = f"{missing:,} titles are waiting for artwork. Enter the first row to start or continue the backfill."
+                self.query_one("#job_graph", Static).update(
+                    "[#796795]ARTWORK REPAIR[/#796795]   [bold #c9afea on #211a2e] ● READY [/bold #c9afea on #211a2e]\n"
+                    f"[#cfc1df]{detail}[/#cfc1df]"
                 )
+                return
+            if self.section == "population":
+                frontier = self._frontier_info()
+                self.query_one("#job_graph", Static).update(
+                    "[#527d86]ARCHIVE SYNC[/#527d86]   [bold #7bd0df on #13232a] ● READY [/bold #7bd0df on #13232a]\n"
+                    f"[#a9c7cd]Verified through FID {int(frontier.get('verified_through_fid') or INITIAL_MAX_FID):,}  ·  "
+                    f"next scan {int(frontier.get('next_fid') or INITIAL_MAX_FID + 1):,}  ·  last checked {_fmt_ts(frontier.get('checked_at'))}[/#a9c7cd]"
+                )
+                return
+
+            last_label = "Last archive run"
+            last_text = "No completed run recorded" if not last else (
+                f"{str(last.get('status') or 'complete').upper()}  ·  {_duration(last.get('elapsed_seconds'))}  ·  "
+                f"{int(last.get('new_titles_ingested') or 0)} new  ·  {int(last.get('errors') or 0)} errors"
+            )
             self.query_one("#job_graph", Static).update(
                 "[#708397]ACTIVE JOB[/#708397]   [white on #263342] ● IDLE [/white on #263342]\n"
                 f"[bold #d7b476]{last_label}[/bold #d7b476]  [#8293a6]{last_text}[/#8293a6]"
@@ -644,8 +853,11 @@ class DVDRewindTUI(App[None]):
         task = str(self.status.get("task_type") or "job").upper()
         phase = str(stats.get("phase") or "working").replace("_", " ").upper()
         pct = (current / total * 100.0) if total else 0.0
+        task_color = {"IMDB": "#f1c477", "POSTERS": "#b89de8", "SYNC": "#67c7d9"}.get(task, "#71d49b")
+        task_bg = {"IMDB": "#2a2115", "POSTERS": "#211a2e", "SYNC": "#13232a"}.get(task, "#13251d")
+        task_label = {"IMDB": "IMDb MATCHING", "POSTERS": "ARTWORK REPAIR", "SYNC": "ARCHIVE SYNC"}.get(task, task)
         if total:
-            graph = _meter(current, total, 32, "#71d49b")
+            graph = _meter(current, total, 32, task_color)
             progress = f"{pct:5.1f}%  ·  {current:,}/{total:,}  ·  {remaining:,} left"
         else:
             graph = "[#2b3440]────────────────────────────────[/#2b3440]"
@@ -659,7 +871,7 @@ class DVDRewindTUI(App[None]):
             extras.extend([f"{int(stats.get('new_titles') or 0):,} new", f"{int(stats.get('revisions_updated') or 0):,} revised"])
         extra_text = "  [#36495d]•[/#36495d]  " + "  ·  ".join(extras) if extras else ""
         self.query_one("#job_graph", Static).update(
-            f"[#708397]ACTIVE JOB[/#708397]   [black on #71d49b] ● {task} [/black on #71d49b]   [#8293a6]{phase}[/#8293a6]\n"
+            f"[#708397]ACTIVE JOB[/#708397]   [bold {task_color} on {task_bg}] ● {task_label} [/bold {task_color} on {task_bg}]   [#8293a6]{phase}[/#8293a6]\n"
             f"{graph}  [bold #e8edf2]{progress}[/bold #e8edf2]{extra_text}"
         )
 
@@ -685,6 +897,9 @@ class DVDRewindTUI(App[None]):
         running = bool(self.status.get("is_running"))
         stats = self.status.get("stats") or {}
         last = self.status.get("last_sync") or {}
+        frontier = self._frontier_info()
+        verified = int(frontier.get("verified_through_fid") or INITIAL_MAX_FID)
+        next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
         missing_art = int(self.insights.get("missing_art") or 0)
         missing_imdb = int(self.insights.get("missing_imdb") or 0)
         missing_both = int(self.insights.get("missing_both") or 0)
@@ -702,7 +917,7 @@ class DVDRewindTUI(App[None]):
                 items.append(f"[bold #f1c477]● IMDb[/bold #f1c477]  Repair {missing_imdb:,} unmatched titles{note}.")
             if missing_art:
                 items.append(f"[bold #b89de8]● ARTWORK[/bold #b89de8]  Backfill posters for {missing_art:,} titles.")
-            items.append("[#67c7d9]● SYNC[/#67c7d9]  Check DVDCompare for revisions and new comparisons.")
+            items.append(f"[#67c7d9]● UPDATE[/#67c7d9]  Verified through FID {verified:,}; update to latest resumes at {next_fid:,}.")
         return items[:3]
 
     def update_intelligence(self) -> None:
@@ -726,6 +941,9 @@ class DVDRewindTUI(App[None]):
         warnings = ["[#708397]ATTENTION[/#708397]", ""]
         missing_imdb = int(self.insights.get("missing_imdb") or 0)
         missing_art = int(self.insights.get("missing_art") or 0)
+        frontier = self._frontier_info()
+        verified = int(frontier.get("verified_through_fid") or INITIAL_MAX_FID)
+        next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
         current_errors = int((self.status.get("stats") or {}).get("errors") or 0)
         if current_errors:
             warnings.append(f"[bold #ef7f73]● {current_errors:,} current errors[/bold #ef7f73]")
@@ -733,7 +951,8 @@ class DVDRewindTUI(App[None]):
             warnings.append(f"[#f1c477]●[/#f1c477] [#c8d1da]{missing_imdb:,} titles need IMDb matches[/#c8d1da]")
         if missing_art:
             warnings.append(f"[#b89de8]●[/#b89de8] [#c8d1da]{missing_art:,} titles need artwork[/#c8d1da]")
-        if len(warnings) == 2:
+        warnings.append(f"[#67c7d9]◆[/#67c7d9] [#c8d1da]Frontier {verified:,} → next {next_fid:,}[/#c8d1da]")
+        if not current_errors and not missing_art and not missing_imdb:
             warnings.append("[#71d49b]● Library has no repair warnings.[/#71d49b]")
         self.query_one("#warnings", Static).update("\n".join(warnings))
 
@@ -759,6 +978,7 @@ class DVDRewindTUI(App[None]):
                 "NEEDS ART": "bold #b89de8 on #211a2e",
                 "NEEDS MATCH": "bold #f1c477 on #2a2115",
                 "NEEDS BOTH": "bold #efaa73 on #2b1c17",
+                "CURRENT": "bold #67c7d9 on #13232a",
             }
             if state in state_styles:
                 values = [Text(f" {state} ", style=state_styles[state]), *values[1:]]
@@ -768,6 +988,9 @@ class DVDRewindTUI(App[None]):
     def render_section(self, preserve_cursor: bool = False) -> None:
         if not self.is_mounted:
             return
+        self._apply_section_theme()
+        self.update_health_graphs()
+        self.update_job_graph()
         table = self.query_one("#work_table", DataTable)
         if preserve_cursor:
             previous = table.cursor_row
@@ -782,12 +1005,15 @@ class DVDRewindTUI(App[None]):
             table = self._clear_table(["State", "Work Item", "Value", "Next Step"])
             running = bool(self.status.get("is_running"))
             stats = self.status.get("stats") or {}
-            post = self.status.get("post_initial") or {}
             last = self.status.get("last_sync") or {}
-            self._add_row(table, "worker", ["LIVE" if running else "IDLE", "Archive Worker", str(self.status.get("status_message") or "Ready"), "Watch" if running else "Run Update"], {"title": "Archive Worker", "state": "LIVE" if running else "IDLE", "body": "The NAS worker handles sync, catch-up, poster backfill, and database maintenance. Leaving the TUI does not stop an active job."})
-            self._add_row(table, "cursor", ["READY", "Population Cursor", f"FID {int(stats.get('next_fid') or post.get('next_fid') or 76201):,}", "Continue"], {"title": "Population Cursor", "state": "READY", "body": "The next post-76,200 FID that the catch-up worker will inspect."})
-            self._add_row(table, "last", ["COMPLETE" if last else "IDLE", "Last Run", _fmt_ts(last.get("last_sync")) if last else "No completed run", f"{int(last.get('new_titles_ingested') or 0)} new / {int(last.get('errors') or 0)} errors"], {"title": "Last Run", "state": "COMPLETE" if last else "IDLE", "body": f"Duration {_duration(last.get('elapsed_seconds'))}. {int(last.get('revisions_updated') or 0)} revisions, {int(last.get('posters_fetched') or 0)} posters, {int(last.get('errors') or 0)} errors."})
-            self._add_row(table, "best", ["READY", "Best Next", self._best_next_items()[0] if self._best_next_items() else "Nothing urgent", "Press N"], {"title": "Best Next", "state": "READY", "body": "Press N at any time for the current recommended action and why it matters."})
+            frontier = self._frontier_info()
+            verified = int(frontier.get("verified_through_fid") or INITIAL_MAX_FID)
+            next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
+            checked = _fmt_ts(frontier.get("checked_at"))
+            self._add_row(table, "worker", ["LIVE" if running else "IDLE", "Archive Worker", str(self.status.get("status_message") or "Ready"), "Watch" if running else "Update to Latest"], {"title": "Archive Worker", "state": "LIVE" if running else "IDLE", "action": "open_population", "body": "The NAS worker handles archive sync, IMDb matching, artwork repair, and maintenance. Enter opens Population & Sync; leaving the TUI never stops an active job."})
+            self._add_row(table, "cursor", ["CURRENT", "Archive Frontier", f"Verified through FID {verified:,}", f"Next {next_fid:,}"], {"title": "Live Archive Frontier", "state": "CURRENT", "action": "open_population", "body": f"The original 76,200 value was only the historical baseline. The persisted frontier is now verified through FID {verified:,}; the next normal update resumes at {next_fid:,}. Last frontier check: {checked}."})
+            self._add_row(table, "last", ["COMPLETE" if last else "IDLE", "Last Update", _fmt_ts(last.get("last_sync")) if last else "No completed run", f"{int(last.get('new_titles_ingested') or 0)} new / {int(last.get('errors') or 0)} errors"], {"title": "Last Archive Update", "state": "COMPLETE" if last else "IDLE", "action": "open_population", "body": f"Checked {int(last.get('homepage_checked') or 0):,} homepage-linked comparisons. Duration {_duration(last.get('elapsed_seconds'))}. {int(last.get('new_titles_ingested') or 0)} new titles, {int(last.get('revisions_updated') or 0)} revisions, {int(last.get('posters_fetched') or 0)} posters, {int(last.get('errors') or 0)} errors."})
+            self._add_row(table, "best", ["READY", "Best Next", self._best_next_items()[0] if self._best_next_items() else "Nothing urgent", "Enter / N"], {"title": "Best Next", "state": "READY", "action": "best_next", "body": "Enter or press N to jump to the highest-priority area and see what to do next."})
 
         elif self.section == "movies":
             suffix = f"   [#56697c]/[/#56697c]   [#d7b476]{self.search_query}[/#d7b476]" if self.search_query else ""
@@ -806,33 +1032,42 @@ class DVDRewindTUI(App[None]):
                     has_imdb = bool(str(row.get("imdb_id") or "").strip())
                     if not has_art and not has_imdb:
                         state = "NEEDS BOTH"
-                        next_step = "Repair match + art"
+                        next_step = "IMDb Repair first"
+                        action = "open_imdb"
                     elif not has_imdb:
                         state = "NEEDS MATCH"
-                        next_step = "IMDb Repair"
+                        next_step = "Open IMDb Repair"
+                        action = "open_imdb"
                     elif not has_art:
                         state = "NEEDS ART"
-                        next_step = "Artwork Repair"
+                        next_step = "Open Artwork Repair"
+                        action = "open_artwork"
                     else:
                         state = "COMPLETE"
                         next_step = "Inspect"
-                    self._add_row(table, f"movie-{fid}", [state, title_text, year, source, next_step], {"title": title_text, "state": state, "fid": fid, "body": f"FID {fid:,}  |  {source}  |  IMDb: {row.get('imdb_id') or 'not matched'}  |  Artwork: {'available' if has_art else 'not downloaded'}."})
+                        action = None
+                    self._add_row(table, f"movie-{fid}", [state, title_text, year, source, next_step], {"title": title_text, "state": state, "fid": fid, "action": action, "body": f"FID {fid:,}  |  {source}  |  IMDb: {row.get('imdb_id') or 'not matched'}  |  Artwork: {'available' if has_art else 'not downloaded'}."})
 
         elif self.section == "population":
-            title.update("[#708397]ARCHIVE[/#708397]   [bold #e8edf2]Population & Sync[/bold #e8edf2]")
+            frontier = self._frontier_info()
+            verified = int(frontier.get("verified_through_fid") or INITIAL_MAX_FID)
+            next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
+            highest = int(frontier.get("highest_title_fid") or 0)
+            checked = _fmt_ts(frontier.get("checked_at"))
+            title.update(f"[#527d86]ARCHIVE[/#527d86]   [bold #7bd0df]Population & Sync[/bold #7bd0df]   [#36495d]•[/#36495d]   [#7bd0df]next {next_fid:,}[/#7bd0df]")
             table = self._clear_table(["Status", "Task", "Scope", "Next Step"])
             busy = bool(self.status.get("is_running"))
             state = "LIVE" if busy else "READY"
-            self._add_row(table, "population-update", [state, "Run Update", "Homepage revisions + resume catch-up", "Watch" if busy else "Enter / U"], {"title": "Run Update", "state": state, "action": "update", "body": "Normal maintenance run: check DVDCompare homepage revisions, then resume the persisted post-76,200 cursor."})
-            self._add_row(table, "population-catchup", [state, "Catch Up Since 76,200", "Re-scan every post-initial FID", "Watch" if busy else "Enter / C"], {"title": "Catch Up Since 76,200", "state": state, "action": "catchup", "body": "Starts at FID 76,201 and skips titles already stored. Use this when you want a full post-initial verification pass."})
-            self._add_row(table, "population-posters", [state, "Poster Backfill", f"{int(self.insights.get('missing_art') or 0):,} titles need art", "Watch" if busy else "Enter / P"], {"title": "Poster Backfill", "state": "NEEDS ART" if self.insights.get("missing_art") else state, "action": "posters", "body": "Fetch artwork for archive titles that do not have a usable poster yet."})
-            self._add_row(table, "population-db", [state, "Database Maintenance", "Integrity + FTS optimize + VACUUM", "Watch" if busy else "Enter / M"], {"title": "Database Maintenance", "state": state, "action": "maintenance", "body": "Checks SQLite integrity, optimizes full-text search, then VACUUMs the archive database."})
+            self._add_row(table, "population-update", [state, "UPDATE TO LATEST", f"Homepage + resume from FID {next_fid:,}", "Watch" if busy else "Enter / U"], {"title": "Update to Latest", "state": state, "action": "update", "body": f"This is the normal keep-current action. It checks DVDCompare's homepage for new/revised comparisons, then resumes the persisted frontier from FID {next_fid:,} and probes beyond the newest known title. Last frontier check: {checked}."})
+            self._add_row(table, "population-frontier", ["CURRENT", "Verified Frontier", f"Through FID {verified:,}", f"Next {next_fid:,}"], {"title": "Verified Archive Frontier", "state": "CURRENT", "body": f"The archive has already checked through FID {verified:,}. The next normal update starts at {next_fid:,}. Highest actual title FID seen: {highest:,}. The old 76,200 number is kept only as historical provenance, not as the current frontier."})
+            self._add_row(table, "population-catchup", [state, "Deep Verify Historical Tail", f"Original baseline → FID {verified:,}", "Watch" if busy else "Enter / C"], {"title": "Deep Historical-Tail Verification", "state": state, "action": "catchup", "body": "Recovery/verification pass: re-checks the entire tail beginning immediately after the original catalog baseline and skips records already stored. Use normal Update to Latest for day-to-day freshness."})
+            self._add_row(table, "population-last", ["COMPLETE" if frontier.get("checked_at") else "IDLE", "Last Freshness Check", checked, f"Highest title {highest:,}" if highest else "No high-water title"], {"title": "Freshness Check", "state": "COMPLETE" if frontier.get("checked_at") else "IDLE", "action": "update" if not busy else None, "body": f"Last persisted frontier check: {checked}. Enter runs Update to Latest again. Verified through FID {verified:,}; next scan {next_fid:,}."})
 
         elif self.section == "imdb":
             missing = int(self.insights.get("missing_imdb") or 0)
             total = int(self.insights.get("total_titles") or 0)
             matched = int(self.insights.get("with_imdb") or max(0, total - missing))
-            title.update(f"[#708397]REPAIR[/#708397]   [bold #e8edf2]IMDb Matching[/bold #e8edf2]   [#56697c]•[/#56697c]   [#f1c477]{missing:,} left[/#f1c477]")
+            title.update(f"[#8e733d]IMDb REPAIR[/#8e733d]   [bold #f1c477]Matching & Metadata[/bold #f1c477]   [#5e4a27]•[/#5e4a27]   [bold #f1c477]{missing:,} left[/bold #f1c477]")
             table = self._clear_table(["Status", "Title", "Year", "Format", "Next Step"])
             busy = bool(self.status.get("is_running"))
             task_type = str(self.status.get("task_type") or "")
@@ -870,7 +1105,7 @@ class DVDRewindTUI(App[None]):
             missing = int(self.insights.get("missing_art") or 0)
             total = int(self.insights.get("total_titles") or 0)
             with_art = int(self.insights.get("with_art") or max(0, total - missing))
-            title.update(f"[#708397]REPAIR[/#708397]   [bold #e8edf2]Artwork[/bold #e8edf2]   [#56697c]•[/#56697c]   [#b89de8]{missing:,} left[/#b89de8]")
+            title.update(f"[#796795]ARTWORK REPAIR[/#796795]   [bold #c9afea]Posters & Covers[/bold #c9afea]   [#4e3e65]•[/#4e3e65]   [bold #c9afea]{missing:,} left[/bold #c9afea]")
             table = self._clear_table(["Status", "Title", "Year", "IMDb", "Next Step"])
             busy = bool(self.status.get("is_running"))
             task_type = str(self.status.get("task_type") or "")
@@ -941,7 +1176,7 @@ class DVDRewindTUI(App[None]):
     def update_detail_for_cursor(self) -> None:
         table = self.query_one("#work_table", DataTable)
         if table.row_count <= 0:
-            self.query_one("#detail", Static).update("[#8aa7c1]No details available.[/#8aa7c1]")
+            self.query_one("#detail", Static).update("[#8293a6]No details available.[/#8293a6]")
             return
         try:
             row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
@@ -952,19 +1187,41 @@ class DVDRewindTUI(App[None]):
         badge = BADGE.get(state, f"[white on #344a60] {state} [/white on #344a60]")
         title = str(detail.get("title") or "Selected item")
         body = str(detail.get("body") or "No additional detail.")
-        action_hint = ""
+        accent = {"imdb": "#f1c477", "artwork": "#c9afea", "population": "#7bd0df"}.get(self.section, "#d7b476")
+        fid = detail.get("fid")
+        meta = f"  [#56697c]•[/#56697c]  [#8293a6]FID {int(fid):,}[/#8293a6]" if fid else ""
         if detail.get("action"):
-            action_hint = "\n[#8aa7c1]Enter runs the selected action.[/#8aa7c1]"
+            action_hint = "\n[#8293a6]↵ Enter[/#8293a6] [#c8d1da]open / run[/#c8d1da]   [#8293a6]⌫ Backspace[/#8293a6] [#c8d1da]go back[/#c8d1da]"
+        else:
+            action_hint = "\n[#8293a6]↵ Enter[/#8293a6] [#c8d1da]more details[/#c8d1da]   [#8293a6]⌫ Backspace[/#8293a6] [#c8d1da]go back[/#c8d1da]"
         self.query_one("#detail", Static).update(
-            f"[bold #63c7ff]DETAIL[/bold #63c7ff]  {badge}\n[bold white]{title}[/bold white]\n{body}{action_hint}"
+            f"[bold {accent}]SELECTED[/bold {accent}]  {badge}{meta}\n"
+            f"[bold #f2f4f6]{title}[/bold #f2f4f6]\n"
+            f"[#c8d1da]{body}[/#c8d1da]{action_hint}"
         )
+
+    def on_key(self, event: events.Key) -> None:
+        """Make the main layout behave like a two-pane keyboard application."""
+        focused = self.focused
+        if event.key == "left" and isinstance(focused, DataTable):
+            self.query_one("#sections", ListView).focus()
+            event.prevent_default()
+            event.stop()
+            return
+        if event.key == "right" and isinstance(focused, ListView):
+            section_list = self.query_one("#sections", ListView)
+            index = max(0, int(section_list.index or 0))
+            if index < len(SECTIONS):
+                self._switch_section(SECTIONS[index][0])
+                self.query_one("#work_table", DataTable).focus()
+            event.prevent_default()
+            event.stop()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         item_id = event.item.id or ""
         if item_id.startswith("section-"):
-            self.section = item_id.replace("section-", "", 1)
-            self.render_section()
-            self.save_place()
+            self._switch_section(item_id.replace("section-", "", 1))
+            self.query_one("#work_table", DataTable).focus()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         self.update_detail_for_cursor()
@@ -976,6 +1233,9 @@ class DVDRewindTUI(App[None]):
         action = detail.get("action")
         if action:
             await self.run_named_action(str(action))
+            return
+        # Enter should never feel dead. Non-action rows open a larger inspector.
+        self.push_screen(DetailScreen(detail))
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         query = event.value.strip()
@@ -1001,9 +1261,9 @@ class DVDRewindTUI(App[None]):
 
     async def run_named_action(self, name: str) -> None:
         if name == "update":
-            await self.start_worker("sync", {"since_initial": False}, "Normal archive update started")
+            await self.start_worker("sync", {"since_initial": False}, "Update to Latest started")
         elif name == "catchup":
-            await self.start_worker("sync", {"since_initial": True}, "Post-76,200 catch-up started")
+            await self.start_worker("sync", {"since_initial": True}, "Deep historical-tail verification started")
         elif name == "imdb":
             await self.start_worker("imdb", {}, "IMDb repair started")
         elif name.startswith("imdb_one:"):
@@ -1020,6 +1280,10 @@ class DVDRewindTUI(App[None]):
             self._switch_section("imdb")
         elif name == "open_artwork":
             self._switch_section("artwork")
+        elif name == "open_population":
+            self._switch_section("population")
+        elif name == "best_next":
+            self.action_best_next()
         elif name == "retry":
             await self.action_retry_failures()
 
@@ -1144,14 +1408,36 @@ class DVDRewindTUI(App[None]):
     async def action_run_catchup(self) -> None:
         await self.run_named_action("catchup")
 
-    def _switch_section(self, section: str) -> None:
+    def _switch_section(self, section: str, remember: bool = True) -> None:
         if section not in {key for key, _ in SECTIONS}:
             return
+        if section != self.section and remember:
+            if not self._section_history or self._section_history[-1] != self.section:
+                self._section_history.append(self.section)
+                self._section_history = self._section_history[-20:]
         self.section = section
         section_list = self.query_one("#sections", ListView)
         section_list.index = [key for key, _ in SECTIONS].index(section)
         self.render_section()
         self.save_place()
+
+    def action_go_back(self) -> None:
+        search = self.query_one("#search_input", Input)
+        if search.styles.display != "none":
+            search.styles.display = "none"
+            self.query_one("#work_table", DataTable).focus()
+            return
+        if self._section_history:
+            previous = self._section_history.pop()
+            self._switch_section(previous, remember=False)
+            self.query_one("#work_table", DataTable).focus()
+            return
+        if self.section != "dashboard":
+            self._switch_section("dashboard", remember=False)
+            self.query_one("#work_table", DataTable).focus()
+            return
+        # At the root, Backspace simply returns focus to the navigation rail.
+        self.query_one("#sections", ListView).focus()
 
     def action_imdb_repair(self) -> None:
         self._switch_section("imdb")

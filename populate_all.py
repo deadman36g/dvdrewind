@@ -885,7 +885,7 @@ def main():
         epilog="""
 Examples:
   python populate_all.py                     Interactive full catalog sweep (dashboard)
-  python populate_all.py --sync              Resume post-76,200 catch-up + check current revisions
+  python populate_all.py --sync              Update to latest: check revisions + resume live FID frontier
   python populate_all.py --since-initial     Re-scan everything added after the original 76,200 cutoff
   python populate_all.py --command-center    Open the unified DVD Rewind terminal command center
   python populate_all.py --watch             Watch the live web-managed sync with hotkeys and live dashboard

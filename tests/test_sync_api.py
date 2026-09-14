@@ -26,7 +26,12 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertIn("db_size_mb", data)
         self.assertIn("log_lines", data)
         self.assertIn("post_initial", data)
+        self.assertIn("frontier", data)
+        self.assertIn("historical_baseline_fid", data["frontier"])
+        self.assertIn("verified_through_fid", data["frontier"])
+        self.assertIn("next_fid", data["frontier"])
         self.assertIn("metrics", data)
+        self.assertIn("max_fid", data["metrics"])
         self.assertIn("growth", data)
         self.assertIn("phase_elapsed_seconds", data)
         self.assertIn("recent_discoveries", data)
@@ -54,7 +59,7 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertEqual(resp.status, 200)
         data = await resp.json()
         self.assertTrue(data["ok"])
-        self.assertIn("76,200", data["message"])
+        self.assertIn("Historical-tail verification", data["message"])
         start_sync.assert_called_once_with(limit=25, force_from_initial=True)
 
     @unittest_run_loop
@@ -77,7 +82,7 @@ class TestSyncAPI(AioHTTPTestCase):
         self.assertEqual(resp.status, 200)
         text = await resp.text()
         self.assertIn('id="btn-catchup-since-initial"', text)
-        self.assertIn("Catch Up Since 76,200", text)
+        self.assertIn("Deep Verify Archive Tail", text)
 
     @unittest_run_loop
     async def test_api_archive_cancel(self):

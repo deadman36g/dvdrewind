@@ -88,6 +88,7 @@ class ArchiveSyncManager:
             "releases": 0,
             "posters": 0,
             "raw_html": 0,
+            "max_fid": 0,
             "db_size_mb": 0.0,
         }
         try:
@@ -97,6 +98,9 @@ class ArchiveSyncManager:
             metrics["posters"] = repo.conn.execute(
                 "SELECT COUNT(*) FROM titles WHERE is_missing = 0 AND poster_url IS NOT NULL "
                 "AND poster_url != '' AND poster_url != '/static/images/missing_poster.svg'"
+            ).fetchone()[0]
+            metrics["max_fid"] = repo.conn.execute(
+                "SELECT COALESCE(MAX(fid), 0) FROM titles WHERE is_missing = 0"
             ).fetchone()[0]
             # Avoid walking tens of thousands of files on mergerfs for every
             # status refresh. Every imported comparison records its raw archive
@@ -195,6 +199,35 @@ class ArchiveSyncManager:
             except Exception:
                 pass
 
+        frontier_next = INITIAL_MAX_FID + 1
+        frontier_highest_title = int(metrics.get("max_fid") or 0)
+        frontier_highest_seen = INITIAL_MAX_FID
+        frontier_checked_at = None
+        if isinstance(post_initial, dict):
+            try:
+                frontier_next = max(INITIAL_MAX_FID + 1, int(post_initial.get("next_fid") or frontier_next))
+            except (TypeError, ValueError):
+                frontier_next = INITIAL_MAX_FID + 1
+            try:
+                frontier_highest_seen = max(frontier_highest_seen, int(post_initial.get("highest_seen_fid") or 0))
+            except (TypeError, ValueError):
+                pass
+            frontier_checked_at = post_initial.get("updated_at")
+        if isinstance(last_sync, dict):
+            try:
+                frontier_highest_seen = max(frontier_highest_seen, int(last_sync.get("highest_seen_fid") or 0))
+            except (TypeError, ValueError):
+                pass
+            frontier_checked_at = frontier_checked_at or last_sync.get("last_sync")
+        frontier = {
+            "historical_baseline_fid": INITIAL_MAX_FID,
+            "verified_through_fid": max(INITIAL_MAX_FID, frontier_next - 1),
+            "next_fid": frontier_next,
+            "highest_title_fid": frontier_highest_title,
+            "highest_seen_fid": frontier_highest_seen,
+            "checked_at": frontier_checked_at,
+        }
+
         growth = {}
         if self.start_metrics:
             for key, value in metrics.items():
@@ -215,6 +248,7 @@ class ArchiveSyncManager:
             "failed_fids": list(self.failed_fids[-25:]),
             "last_sync": last_sync,
             "post_initial": post_initial,
+            "frontier": frontier,
             "metrics": metrics,
             "start_metrics": dict(self.start_metrics),
             "growth": growth,
@@ -230,17 +264,17 @@ class ArchiveSyncManager:
             self.task_type = "sync"
             self.cancel_requested = False
             self.status_message = (
-                "Starting full post-76,200 catch-up..."
+                "Starting deep historical-tail verification..."
                 if force_from_initial
-                else "Starting incremental sync..."
+                else "Starting update to latest..."
             )
             self.current_action = "Initializing"
             self.start_time = time.time()
             self._reset_task_state("starting", clear_failures=True)
             if force_from_initial:
-                self.log("🚀 Starting complete catch-up from FID 76,201...", "cyan")
+                self.log("Starting deep verification from the original catalog-tail baseline...", "cyan")
             else:
-                self.log("🚀 Starting incremental sync with DVDCompare...", "cyan")
+                self.log("Starting update to latest with DVDCompare...", "cyan")
 
             self.thread = threading.Thread(target=self._run_sync, args=(limit, force_from_initial), daemon=True)
             self.thread.start()

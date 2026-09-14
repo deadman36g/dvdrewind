@@ -48,7 +48,7 @@ FORMAT_STYLES = {
 PHASE_LABELS = {
     "starting": "STARTING",
     "homepage": "HOMEPAGE REVISIONS",
-    "catchup": "76,201+ CATCH-UP",
+    "catchup": "ARCHIVE FRONTIER SCAN",
     "posters": "POSTER BACKFILL",
     "maintenance": "DATABASE MAINTENANCE",
     "complete": "COMPLETE",
@@ -526,8 +526,8 @@ def build_command_center_panel(data: Dict[str, Any]) -> Panel:
     menu.add_column("Action", ratio=1)
     menu.add_column("State", width=12, justify="right")
     options = [
-        ("1", "Run Update", "BUSY" if running else "READY"),
-        ("2", "Catch Up Since 76,200", "BUSY" if running else "READY"),
+        ("1", "Update to Latest", "BUSY" if running else "READY"),
+        ("2", "Deep Verify Historical Tail", "BUSY" if running else "READY"),
         ("3", "Watch Live Run", "LIVE" if running else "IDLE"),
         ("4", "Recent Discoveries", "VIEW"),
         ("5", "Search Archive", "SEARCH"),
