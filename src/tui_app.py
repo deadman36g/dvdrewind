@@ -186,6 +186,21 @@ def _mini_bar(value: int, maximum: int, width: int = 12, style: str = "#67c7d9")
     return f"[{style}]{'▰' * filled}[/{style}][#2b3440]{'▱' * (width - filled)}[/#2b3440]"
 
 
+def _sparkline(values: List[float], width: int = 18, style: str = "#67c7d9") -> str:
+    """Render a compact terminal-safe sparkline from real sampled values."""
+    blocks = "▁▂▃▄▅▆▇█"
+    if not values:
+        return f"[#2b3440]{'─' * width}[/#2b3440]"
+    values = list(values[-width:])
+    lo = min(values)
+    hi = max(values)
+    if hi <= lo:
+        chars = blocks[3] * len(values) if hi > 0 else "▁" * len(values)
+    else:
+        chars = "".join(blocks[min(7, max(0, int(round((v - lo) / (hi - lo) * 7))))] for v in values)
+    return f"[{style}]{chars.rjust(width, '▁')}[/{style}]"
+
+
 class KeysScreen(ModalScreen[None]):
     BINDINGS = [
         Binding("escape", "close", "Close", show=False),
@@ -311,101 +326,125 @@ class DVDRewindTUI(App[None]):
 
     CSS = """
     Screen {
-        background: #090c12;
-        color: #e8edf2;
+        background: #020812;
+        color: #eaf6ff;
     }
     #brand {
         height: 5;
-        border-bottom: solid #9a7338;
-        background: #0e1219;
-        color: #f3f5f7;
+        border: round #0d79ad;
+        background: #03111d;
+        color: #f4fbff;
         padding: 0 2;
+        margin: 0 1;
     }
     #workspace {
         height: 1fr;
         padding: 1 1 0 1;
     }
     #left {
-        width: 26;
-        min-width: 24;
-        border: round #263342;
-        background: #0d131c;
+        width: 29;
+        min-width: 27;
+        border: round #0e5d89;
+        background: #04101a;
         margin-right: 1;
     }
     #center {
         width: 1fr;
-        min-width: 60;
-        background: #090c12;
+        min-width: 66;
+        border: round #0e5d89;
+        background: #020a12;
         margin-right: 1;
     }
     #right {
-        width: 38;
-        min-width: 34;
-        background: #090c12;
+        width: 42;
+        min-width: 38;
+        border: round #0e5d89;
+        background: #04101a;
+        padding: 0 1;
     }
     .panel-title {
         height: 3;
         padding: 1 2 0 2;
-        color: #d7b476;
+        color: #6edbff;
         text-style: bold;
-        background: #101722;
+        background: #061725;
+        border-bottom: solid #0d5d86;
     }
     #sections {
         height: 1fr;
         padding: 1 1;
-        background: #0d131c;
+        background: #04101a;
     }
     ListItem {
         height: 3;
         padding: 0 1;
-        color: #9dacbc;
-        background: #0d131c;
+        color: #a7bdcd;
+        background: #04101a;
+        margin-bottom: 0;
     }
     ListItem.--highlight {
-        background: #211c15;
-        color: #f5d79c;
+        background: #0b2538;
+        color: #eaf9ff;
         text-style: bold;
-        border-left: thick #d5a85b;
+        border-left: thick #34c6ff;
+        border-right: solid #0d6d9a;
     }
     ListItem.active-section {
-        background: #1b2b3a;
+        background: #0a2b42;
         color: #ffffff;
         text-style: bold;
-        border-left: thick #63c7ff;
-        border-right: solid #315a70;
+        border-left: thick #42d7ff;
+        border-right: solid #177ca9;
+        border-top: solid #0f4e6f;
+        border-bottom: solid #0f4e6f;
     }
     #section-imdb.active-section {
-        background: #2a2115;
-        color: #f1c477;
-        border-left: thick #f1c477;
-        border-right: solid #7b5d26;
+        background: #493a08;
+        color: #ffe04f;
+        border-left: thick #ffd21f;
+        border-right: solid #c39000;
+        border-top: solid #7f650b;
+        border-bottom: solid #7f650b;
     }
     #section-artwork.active-section {
-        background: #211a2e;
-        color: #d9c3f4;
-        border-left: thick #b89de8;
-        border-right: solid #614d7c;
+        background: #2a1543;
+        color: #e8d7ff;
+        border-left: thick #b76cff;
+        border-right: solid #7a42bd;
+        border-top: solid #5c318d;
+        border-bottom: solid #5c318d;
     }
     #section-population.active-section {
-        background: #13232a;
-        color: #8edbe8;
-        border-left: thick #67c7d9;
-        border-right: solid #315b66;
+        background: #073445;
+        color: #b7f3ff;
+        border-left: thick #36d4ff;
+        border-right: solid #197ca0;
+        border-top: solid #165a71;
+        border-bottom: solid #165a71;
+    }
+    #left_stats {
+        height: 10;
+        margin: 0 1;
+        padding: 1 1;
+        border-top: solid #0d5d86;
+        color: #c7d9e6;
+        background: #04101a;
     }
     #nav_hint {
-        height: 7;
+        height: 6;
         margin: 0 1 1 1;
         padding: 1 1;
-        border-top: solid #263342;
-        color: #6f8295;
-        background: #0d131c;
+        border-top: solid #123c55;
+        color: #7d9db2;
+        background: #04101a;
     }
     #work_title {
-        height: 3;
+        height: 4;
         margin: 0 1;
         padding: 1 1 0 1;
-        color: #f2f4f6;
+        color: #f4fbff;
         text-style: bold;
+        border-bottom: solid #0b3e59;
     }
     #health_graphs {
         height: 7;
@@ -414,19 +453,32 @@ class DVDRewindTUI(App[None]):
     .health-card {
         width: 1fr;
         height: 7;
-        border: round #263342;
-        background: #0f1620;
+        border: round #174867;
+        background: #07131e;
         padding: 0 1;
         margin-right: 1;
     }
-    #health_complete { margin-right: 0; }
+    #health_errors { margin-right: 0; }
     #job_graph {
         height: 5;
         margin: 0 1 1 1;
         padding: 0 2;
-        border: round #263342;
-        background: #0f1620;
+        border: round #174867;
+        background: #07131e;
     }
+    #repair_charts {
+        height: 7;
+        margin: 0 1 1 1;
+    }
+    .chart-card {
+        width: 1fr;
+        height: 7;
+        border: round #174867;
+        background: #06111b;
+        padding: 0 1;
+        margin-right: 1;
+    }
+    #success_graph { margin-right: 0; }
     #search_input {
         height: 3;
         margin: 0 1 1 1;
@@ -435,75 +487,87 @@ class DVDRewindTUI(App[None]):
         background: #101722;
         color: #f2f4f6;
     }
+    #queue_header {
+        height: 2;
+        margin: 0 1;
+        padding: 0 1;
+        color: #69d9ff;
+        text-style: bold;
+        background: #061522;
+        border-top: solid #123e59;
+    }
     #work_table {
         height: 1fr;
         margin: 0 1;
-        border: round #263342;
-        background: #0d131c;
+        border: round #174867;
+        background: #04101a;
     }
     DataTable > .datatable--header {
-        background: #151e29;
-        color: #d7b476;
+        background: #082036;
+        color: #7fddff;
         text-style: bold;
     }
-    DataTable > .datatable--even-row { background: #0d131c; }
-    DataTable > .datatable--odd-row { background: #101721; }
+    DataTable > .datatable--even-row { background: #04101a; }
+    DataTable > .datatable--odd-row { background: #061522; }
     DataTable > .datatable--cursor {
-        background: #28384a;
+        background: #173b67;
         color: #ffffff;
         text-style: bold;
     }
     #detail {
-        height: 8;
-        min-height: 7;
+        height: 7;
+        min-height: 6;
         margin: 1 1 0 1;
-        border: round #263342;
-        background: #0f1620;
+        border: round #174867;
+        background: #06111b;
         padding: 0 2;
-        color: #cdd6df;
+        color: #d8e7f2;
     }
     .right-card {
-        border: round #263342;
-        background: #0f1620;
+        border: round #174867;
+        background: #06111b;
         padding: 1 2;
         margin-bottom: 1;
     }
-    #best_next { height: 11; }
+    #best_next { height: 13; }
     #catalog_mix { height: 10; }
     #recent_activity { height: 1fr; }
     #warnings { height: 9; margin-bottom: 0; }
     #status_line {
         height: 2;
-        border-top: solid #9a7338;
-        background: #0e1219;
+        border-top: solid #0d5d86;
+        background: #03111d;
         padding: 0 2;
-        color: #8293a6;
+        color: #8fb3c9;
     }
     #footer_keys {
         height: 2;
-        background: #090c12;
-        color: #66788a;
+        background: #020812;
+        color: #6f93aa;
         text-align: center;
         padding: 0 1;
     }
 
     /* Section identity: the same layout, with task-specific accent language. */
-    .theme-imdb #work_title { color: #f1c477; }
-    .theme-imdb #job_graph { border: round #7b5d26; background: #17130d; }
-    .theme-imdb #work_table { border: round #5d4927; }
-    .theme-imdb DataTable > .datatable--header { background: #2a2115; color: #f1c477; }
-    .theme-imdb DataTable > .datatable--cursor { background: #4a3a1d; color: #fff3cf; }
+    .theme-imdb #work_title { color: #ffe04f; }
+    .theme-imdb #job_graph { border: round #a97e0a; background: #171306; }
+    .theme-imdb #activity_graph, .theme-imdb #success_graph { border: round #7f620b; background: #120f05; }
+    .theme-imdb #work_table { border: round #8b6810; }
+    .theme-imdb DataTable > .datatable--header { background: #302507; color: #ffe04f; }
+    .theme-imdb DataTable > .datatable--cursor { background: #4d3d10; color: #fff6bf; }
 
-    .theme-artwork #work_title { color: #c9afea; }
-    .theme-artwork #job_graph { border: round #614d7c; background: #15111e; }
-    .theme-artwork #work_table { border: round #4e3e65; }
-    .theme-artwork DataTable > .datatable--header { background: #211a2e; color: #c9afea; }
-    .theme-artwork DataTable > .datatable--cursor { background: #3e3150; color: #f3ebff; }
+    .theme-artwork #work_title { color: #d4a6ff; }
+    .theme-artwork #job_graph { border: round #7441b1; background: #150b20; }
+    .theme-artwork #activity_graph, .theme-artwork #success_graph { border: round #60328f; background: #12081c; }
+    .theme-artwork #work_table { border: round #60328f; }
+    .theme-artwork DataTable > .datatable--header { background: #231037; color: #d4a6ff; }
+    .theme-artwork DataTable > .datatable--cursor { background: #42215f; color: #f7ecff; }
 
-    .theme-population #work_title { color: #7bd0df; }
-    .theme-population #job_graph { border: round #315b66; background: #0d171b; }
-    .theme-population #work_table { border: round #31515c; }
-    .theme-population DataTable > .datatable--header { background: #13232a; color: #7bd0df; }
+    .theme-population #work_title { color: #7de7ff; }
+    .theme-population #job_graph { border: round #1f7f9e; background: #06161d; }
+    .theme-population #activity_graph, .theme-population #success_graph { border: round #1a627a; background: #051218; }
+    .theme-population #work_table { border: round #1a627a; }
+    .theme-population DataTable > .datatable--header { background: #082533; color: #7de7ff; }
     """
 
     def __init__(self) -> None:
@@ -527,11 +591,13 @@ class DVDRewindTUI(App[None]):
         self._section_history: List[str] = []
         self._action_feedback: str = ""
         self._seen_last_result: str = ""
+        self._metric_history: List[Dict[str, float]] = []
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "[bold #f1c477]DVD REWIND[/bold #f1c477]  [#73879a]PRIVATE ARCHIVE CONSOLE[/#73879a]\n"
-            "[#56697c]Physical-media research • edition comparison • archive maintenance[/#56697c]",
+            "[#38d9ff]◉[/#38d9ff]  [bold #80e8ff]DVD REWIND[/bold #80e8ff]  [#edf7ff]//  PRIVATE ARCHIVE CONSOLE[/#edf7ff]"
+            "                                      [#6fa8c8]A BETTER COLLECTION NEVER FORGETS[/#6fa8c8]\n"
+            "[#4d7f9c]CATALOG[/#4d7f9c]  ›  [#4d7f9c]VERIFY[/#4d7f9c]  ›  [#4d7f9c]ENRICH[/#4d7f9c]  ›  [#4d7f9c]PRESERVE[/#4d7f9c]",
             id="brand",
             markup=True,
         )
@@ -542,11 +608,11 @@ class DVDRewindTUI(App[None]):
                     *[ListItem(Label(label), id=f"section-{key}") for key, label in SECTIONS],
                     id="sections",
                 )
+                yield Static("COLLECTION\nLoading…", id="left_stats", markup=True)
                 yield Static(
-                    "[#d7b476]NAVIGATION[/#d7b476]\n"
-                    "[#8293a6]← / →[/#8293a6] move between panes\n"
-                    "[#8293a6]↑ / ↓[/#8293a6] move selection   [#8293a6]↵[/#8293a6] open / run\n"
-                    "[#8293a6]⌫[/#8293a6] back   [#8293a6]H[/#8293a6] all shortcuts",
+                    "[#69cfff]↑ ↓[/#69cfff] Navigate   [#69cfff]↵[/#69cfff] Select\n"
+                    "[#69cfff]← →[/#69cfff] Panels     [#69cfff]⌫[/#69cfff] Back\n"
+                    "[#69cfff]H[/#69cfff] Keys        [#69cfff]F5[/#69cfff] Reload",
                     id="nav_hint",
                     markup=True,
                 )
@@ -556,8 +622,13 @@ class DVDRewindTUI(App[None]):
                     yield Static("IMDb MATCHES\nLoading…", id="health_imdb", classes="health-card", markup=True)
                     yield Static("ARTWORK\nLoading…", id="health_art", classes="health-card", markup=True)
                     yield Static("FULLY CLEAN\nLoading…", id="health_complete", classes="health-card", markup=True)
+                    yield Static("ATTENTION\nLoading…", id="health_errors", classes="health-card", markup=True)
                 yield Static("ACTIVE JOB\nNo active archive job.", id="job_graph", markup=True)
+                with Horizontal(id="repair_charts"):
+                    yield Static("REPAIR ACTIVITY\nWaiting for data…", id="activity_graph", classes="chart-card", markup=True)
+                    yield Static("SUCCESS RATE\nWaiting for data…", id="success_graph", classes="chart-card", markup=True)
                 yield Input(placeholder="Search titles, editions, distributors…", value=self.search_query, id="search_input")
+                yield Static("WORK QUEUE", id="queue_header", markup=True)
                 yield DataTable(id="work_table", cursor_type="row", zebra_stripes=True)
                 yield Static("Select a row to see details.", id="detail", markup=True)
             with Vertical(id="right"):
@@ -566,7 +637,7 @@ class DVDRewindTUI(App[None]):
                 yield Static("RECENT ACTIVITY\nLoading…", id="recent_activity", classes="right-card", markup=True)
                 yield Static("ATTENTION\nLoading…", id="warnings", classes="right-card", markup=True)
         yield Static("Connecting to archive…", id="status_line", markup=True)
-        yield Static("←/→  Move     ↵  Open / Run     ⌫  Back     F  Find     H  Help     F5  Reload     Q  Quit", id="footer_keys", markup=True)
+        yield Static("↑↓ Navigate   ←→ Switch panels   Enter Open / Run   Backspace Back   F Find   H Help   F5 Reload   Q Quit", id="footer_keys", markup=True)
 
     async def on_mount(self) -> None:
         table = self.query_one("#work_table", DataTable)
@@ -689,13 +760,16 @@ class DVDRewindTUI(App[None]):
         was_running = self._was_running
         self._was_running = bool(status.get("is_running"))
         self.status = status
+        self._record_metric_sample()
         self._consume_last_result()
         if not self.is_mounted:
             return
         try:
             self.update_brand()
+            self.update_left_stats()
             self.update_health_graphs()
             self.update_job_graph()
+            self.update_repair_charts()
             self.update_intelligence()
             self.update_catalog_mix()
             self.update_status_line()
@@ -727,15 +801,119 @@ class DVDRewindTUI(App[None]):
         stats = self.status.get("stats") or {}
         phase = str(stats.get("phase") or "idle").replace("_", " ").upper()
         total = int(self.insights.get("total_titles") or (self.status.get("metrics") or {}).get("titles") or 0)
-        marker = "[black on #71d49b] ● LIVE [/black on #71d49b]" if running else "[white on #263342] ● IDLE [/white on #263342]"
-        update = "  [black on #f1c477] UPDATE READY · F5 [/black on #f1c477]" if self._update_ready else ""
+        marker = "[black on #55e39f] ● LIVE [/black on #55e39f]" if running else "[white on #123147] ● IDLE [/white on #123147]"
+        update = "  [black on #ffd21f] UPDATE READY · F5 [/black on #ffd21f]" if self._update_ready else ""
         activity = str(self.status.get("status_message") or "Working") if running else "Archive worker standing by"
         self.query_one("#brand", Static).update(
-            "[bold #f1c477]DVD REWIND[/bold #f1c477]  [#73879a]PRIVATE ARCHIVE CONSOLE[/#73879a]"
+            "[#39d9ff]◉[/#39d9ff]  [bold #8eeaff]DVD REWIND[/bold #8eeaff]  [#eaf6ff]//  PRIVATE ARCHIVE CONSOLE[/#eaf6ff]"
             f"  {marker}{update}\n"
-            f"[#56697c]PHYSICAL MEDIA RESEARCH[/#56697c]  [#36495d]•[/#36495d]  "
-            f"[#8293a6]{total:,} titles[/#8293a6]  [#36495d]•[/#36495d]  "
-            f"[#8293a6]{phase}[/#8293a6]  [#36495d]•[/#36495d]  [#c8d1da]{activity}[/#c8d1da]"
+            f"[#4f83a0]CATALOG › VERIFY › ENRICH › PRESERVE[/#4f83a0]   "
+            f"[#31556a]•[/#31556a]   [#9db7c8]{total:,} titles[/#9db7c8]   [#31556a]•[/#31556a]   "
+            f"[#9db7c8]{phase}[/#9db7c8]   [#31556a]•[/#31556a]   [#d3e2ec]{activity}[/#d3e2ec]"
+        )
+
+    def _record_metric_sample(self) -> None:
+        stats = self.status.get("stats") or {}
+        self._metric_history.append({
+            "phase_current": float(stats.get("phase_current") or 0),
+            "matches": float(stats.get("matches_found") or 0),
+            "unmatched": float(stats.get("unmatched") or 0),
+            "posters": float(stats.get("posters_fetched") or 0),
+            "errors": float(stats.get("errors") or 0),
+        })
+        self._metric_history = self._metric_history[-24:]
+
+    def update_left_stats(self) -> None:
+        total = int(self.insights.get("total_titles") or 0)
+        with_imdb = int(self.insights.get("with_imdb") or 0)
+        with_art = int(self.insights.get("with_art") or 0)
+        missing_imdb = int(self.insights.get("missing_imdb") or 0)
+        missing_art = int(self.insights.get("missing_art") or 0)
+        errors = int((self.status.get("stats") or {}).get("errors") or 0)
+        frontier = self._frontier_info()
+        self.query_one("#left_stats", Static).update(
+            "[bold #5fd9ff]COLLECTION[/bold #5fd9ff]\n"
+            f"[#8ba8ba]Total Titles[/#8ba8ba]        [bold #eef9ff]{total:,}[/bold #eef9ff]\n"
+            f"[#8ba8ba]IMDb Matched[/#8ba8ba]       [#ffd21f]{with_imdb:,}[/#ffd21f]  [#657f90]({missing_imdb:,} left)[/#657f90]\n"
+            f"[#8ba8ba]Artwork Ready[/#8ba8ba]      [#c07cff]{with_art:,}[/#c07cff]  [#657f90]({missing_art:,} left)[/#657f90]\n"
+            f"[#8ba8ba]Verified Through[/#8ba8ba]   [#5fd9ff]{int(frontier.get('verified_through_fid') or INITIAL_MAX_FID):,}[/#5fd9ff]\n"
+            f"[#8ba8ba]Errors[/#8ba8ba]             [#ff7385]{errors:,}[/#ff7385]"
+        )
+
+    def update_repair_charts(self) -> None:
+        history = self._metric_history
+        accent = {"imdb": "#ffd21f", "artwork": "#c07cff", "population": "#5fd9ff"}.get(self.section, "#5fd9ff")
+        deltas: List[float] = []
+        for previous, current in zip(history, history[1:]):
+            deltas.append(max(0.0, current.get("phase_current", 0.0) - previous.get("phase_current", 0.0)))
+        if not deltas:
+            deltas = [0.0]
+        stats = self.status.get("stats") or {}
+        current = int(stats.get("phase_current") or 0)
+        total = int(stats.get("phase_total") or 0)
+        remaining = max(0, total - current) if total else 0
+        self.query_one("#activity_graph", Static).update(
+            f"[#6d8ba0]REPAIR ACTIVITY  ·  LIVE SAMPLE[/#6d8ba0]\n"
+            f"{_sparkline(deltas, 24, accent)}\n"
+            f"[bold {accent}]{sum(deltas[-6:]):.0f}[/bold {accent}] [#8da7b8]items moved in recent samples[/#8da7b8]\n"
+            f"[#8da7b8]Queue[/#8da7b8] [#eaf6ff]{current:,}/{total:,}[/#eaf6ff]   [#8da7b8]Remaining[/#8da7b8] [bold #eaf6ff]{remaining:,}[/bold #eaf6ff]"
+        )
+
+        if self.section == "imdb":
+            matched = int(stats.get("matches_found") or 0)
+            unresolved = int(stats.get("unmatched") or 0)
+            denominator = matched + unresolved
+            rate = matched / denominator * 100.0 if denominator else ((int(self.insights.get("with_imdb") or 0) / max(1, int(self.insights.get("total_titles") or 1))) * 100.0)
+            label = f"{matched:,} matched · {unresolved:,} unresolved"
+        elif self.section == "artwork":
+            found = int(stats.get("posters_fetched") or 0)
+            rate = found / max(1, current) * 100.0 if current else ((int(self.insights.get("with_art") or 0) / max(1, int(self.insights.get("total_titles") or 1))) * 100.0)
+            label = f"{found:,} posters found this pass"
+        else:
+            good = int(self.insights.get("ready_titles") or 0)
+            total_titles = max(1, int(self.insights.get("total_titles") or 1))
+            rate = good / total_titles * 100.0
+            label = f"{good:,} fully clean titles"
+        rate_samples = [rate for _ in range(max(1, min(8, len(history))))]
+        self.query_one("#success_graph", Static).update(
+            f"[#6d8ba0]SUCCESS RATE[/#6d8ba0]\n"
+            f"{_sparkline(rate_samples, 24, '#55e39f')}\n"
+            f"[bold #55e39f]{rate:5.1f}%[/bold #55e39f]   [#8da7b8]{label}[/#8da7b8]\n"
+            f"[#607f93]Higher is better · live terminal telemetry[/#607f93]"
+        )
+
+    def _update_right_selected(self, detail: Dict[str, Any]) -> None:
+        if self.section not in {"imdb", "artwork", "movies"}:
+            return
+        state = str(detail.get("state") or "IDLE")
+        title = str(detail.get("title") or "Selected item")
+        fid = detail.get("fid")
+        body = str(detail.get("body") or "No additional detail.")
+        accent = "#ffd21f" if self.section == "imdb" else ("#c07cff" if self.section == "artwork" else "#5fd9ff")
+        badge = BADGE.get(state, state)
+        fid_line = f"FID {int(fid):,}" if fid else "No FID"
+        self.query_one("#best_next", Static).update(
+            f"[bold #69d9ff]TITLE DETAILS[/bold #69d9ff]\n\n"
+            f"{badge}\n"
+            f"[bold #f5fbff]{title}[/bold #f5fbff]\n"
+            f"[{accent}]{fid_line}[/{accent}]\n\n"
+            f"[#a9c0cf]{body[:230]}[/#a9c0cf]"
+        )
+        result = self.status.get("last_result") or {}
+        result_message = str(result.get("message") or "No repair result recorded yet.")
+        result_source = str(result.get("source") or result.get("poster_source") or "")
+        feedback = self._action_feedback or f"[#8299a8]{result_message}[/#8299a8]"
+        source_line = f"\n[#7792a4]Source[/#7792a4]  [{accent}]{result_source}[/{accent}]" if result_source else ""
+        self.query_one("#catalog_mix", Static).update(
+            f"[bold {accent}]LAST REPAIR RESULT[/bold {accent}]\n\n{feedback}{source_line}"
+        )
+        self.query_one("#warnings", Static).update(
+            "[bold #69d9ff]KEYBOARD[/bold #69d9ff]\n\n"
+            "[#d5e3ec]↑ ↓[/#d5e3ec]  Navigate rows\n"
+            "[#d5e3ec]← →[/#d5e3ec]  Switch panels\n"
+            "[#d5e3ec]Enter[/#d5e3ec]  Open / run\n"
+            "[#d5e3ec]Backspace[/#d5e3ec]  Go back\n"
+            "[#d5e3ec]F5[/#d5e3ec]  Reload app"
         )
 
     def _consume_last_result(self) -> None:
@@ -800,51 +978,48 @@ class DVDRewindTUI(App[None]):
         missing_imdb = max(0, total - with_imdb)
         missing_art = max(0, total - with_art)
         missing_both = int(self.insights.get("missing_both") or 0)
+        stats = self.status.get("stats") or {}
+        current_errors = int(stats.get("errors") or 0)
 
         def progress_card(title: str, done: int, color: str, done_label: str, left_label: str) -> str:
             left = max(0, total - done)
             pct = (done / total * 100.0) if total else 0.0
             return (
-                f"[#708397]{title}[/#708397]\n"
+                f"[#6d8ba0]{title}[/#6d8ba0]\n"
                 f"[bold {color}]{pct:5.1f}%[/bold {color}]\n"
-                f"{_meter(done, total, 15, color)}\n"
-                f"[#c8d1da]{done:,} {done_label}[/#c8d1da]\n"
+                f"{_meter(done, total, 14, color)}\n"
+                f"[#d6e4ed]{done:,} {done_label}[/#d6e4ed]\n"
                 f"[{color}]{left:,} {left_label}[/{color}]"
             )
 
         def count_card(title: str, value: Any, color: str, line1: str, line2: str = "") -> str:
             display = f"{value:,}" if isinstance(value, int) else str(value or "—")
             return (
-                f"[#708397]{title}[/#708397]\n"
+                f"[#6d8ba0]{title}[/#6d8ba0]\n"
                 f"[bold {color}]{display}[/bold {color}]\n"
-                f"[{color}]━━━━━━━━━━━━━━━[/{color}]\n"
-                f"[#c8d1da]{line1}[/#c8d1da]\n"
-                f"[#8293a6]{line2}[/#8293a6]"
+                f"[{color}]━━━━━━━━━━━━━━[/{color}]\n"
+                f"[#d6e4ed]{line1}[/#d6e4ed]\n"
+                f"[#7893a6]{line2}[/#7893a6]"
             )
 
         if self.section == "imdb":
-            self.query_one("#health_imdb", Static).update(
-                progress_card("IMDb COVERAGE", with_imdb, "#f1c477", "matched", "unmatched")
-            )
-            self.query_one("#health_art", Static).update(
-                count_card("UNMATCHED QUEUE", missing_imdb, "#f1c477", "titles waiting", "Enter first row to run")
-            )
-            self.query_one("#health_complete", Static).update(
-                count_card("ALSO NEED ART", missing_both, "#efaa73", "need both repairs", "IMDb match comes first")
-            )
+            phase_total = int(stats.get("phase_total") or missing_imdb)
+            phase_current = int(stats.get("phase_current") or 0)
+            remaining = max(0, phase_total - phase_current) if self.status.get("is_running") and str(self.status.get("task_type") or "") == "imdb" else missing_imdb
+            self.query_one("#health_imdb", Static).update(progress_card("MATCHED", with_imdb, "#55e39f", "titles", "unmatched"))
+            self.query_one("#health_art", Static).update(count_card("UNMATCHED", missing_imdb, "#ffd21f", "need IMDb IDs", f"{missing_both:,} also need art"))
+            self.query_one("#health_complete", Static).update(count_card("ERRORS", current_errors, "#ff6f7d", "this run", "review failures if nonzero"))
+            self.query_one("#health_errors", Static).update(count_card("REMAINING", remaining, "#5dcfff", "queue left", "Enter runs selected repair"))
             return
 
         if self.section == "artwork":
-            matched_art_missing = max(0, missing_art - missing_both)
-            self.query_one("#health_imdb", Static).update(
-                progress_card("ART COVERAGE", with_art, "#b89de8", "ready", "missing")
-            )
-            self.query_one("#health_art", Static).update(
-                count_card("MISSING ART", missing_art, "#b89de8", "titles waiting", "Enter first row to run")
-            )
-            self.query_one("#health_complete", Static).update(
-                count_card("READY TO FETCH", matched_art_missing, "#67c7d9", "already IMDb-matched", f"{missing_both:,} also need IMDb")
-            )
+            phase_total = int(stats.get("phase_total") or missing_art)
+            phase_current = int(stats.get("phase_current") or 0)
+            remaining = max(0, phase_total - phase_current) if self.status.get("is_running") and str(self.status.get("task_type") or "") == "posters" else missing_art
+            self.query_one("#health_imdb", Static).update(progress_card("POSTERS FOUND", with_art, "#55e39f", "titles", "missing"))
+            self.query_one("#health_art", Static).update(count_card("MISSING", missing_art, "#c07cff", "need artwork", f"{missing_both:,} also need IMDb"))
+            self.query_one("#health_complete", Static).update(count_card("ERRORS", current_errors, "#ff6f7d", "this run", "review failures if nonzero"))
+            self.query_one("#health_errors", Static).update(count_card("REMAINING", remaining, "#5dcfff", "queue left", "TV fallback auto-detected"))
             return
 
         if self.section == "population":
@@ -853,20 +1028,17 @@ class DVDRewindTUI(App[None]):
             next_fid = int(frontier.get("next_fid") or INITIAL_MAX_FID + 1)
             highest = int(frontier.get("highest_title_fid") or 0)
             checked = _fmt_ts(frontier.get("checked_at"))
-            self.query_one("#health_imdb", Static).update(
-                count_card("VERIFIED THROUGH", verified, "#67c7d9", "frontier FID", "not the old baseline")
-            )
-            self.query_one("#health_art", Static).update(
-                count_card("NEXT SCAN", next_fid, "#67c7d9", "resume from here", f"highest title {highest:,}" if highest else "highest title unknown")
-            )
-            self.query_one("#health_complete", Static).update(
-                count_card("LAST CHECK", checked, "#71d49b", "frontier freshness", "Update to Latest advances this")
-            )
+            self.query_one("#health_imdb", Static).update(count_card("VERIFIED THROUGH", verified, "#5dcfff", "frontier FID", "live persisted frontier"))
+            self.query_one("#health_art", Static).update(count_card("NEXT SCAN", next_fid, "#5dcfff", "resume from here", f"highest title {highest:,}" if highest else "highest title unknown"))
+            self.query_one("#health_complete", Static).update(count_card("LAST CHECK", checked, "#55e39f", "frontier freshness", "Update to Latest advances this"))
+            self.query_one("#health_errors", Static).update(count_card("ERRORS", current_errors, "#ff6f7d", "this run", "0 is healthy"))
             return
 
-        self.query_one("#health_imdb", Static).update(progress_card("IMDb MATCHES", with_imdb, "#f1c477", "matched", "left"))
-        self.query_one("#health_art", Static).update(progress_card("ARTWORK", with_art, "#b89de8", "ready", "left"))
-        self.query_one("#health_complete", Static).update(progress_card("FULLY CLEAN", ready, "#71d49b", "clean", "need work"))
+        attention = missing_both + current_errors
+        self.query_one("#health_imdb", Static).update(progress_card("IMDb MATCHES", with_imdb, "#ffd21f", "matched", "left"))
+        self.query_one("#health_art", Static).update(progress_card("ARTWORK", with_art, "#c07cff", "ready", "left"))
+        self.query_one("#health_complete", Static).update(progress_card("FULLY CLEAN", ready, "#55e39f", "clean", "need work"))
+        self.query_one("#health_errors", Static).update(count_card("ATTENTION", attention, "#ff7a8c", "need review", f"{current_errors:,} current errors"))
 
     def update_job_graph(self) -> None:
         stats = self.status.get("stats") or {}
@@ -1063,6 +1235,7 @@ class DVDRewindTUI(App[None]):
         self._apply_section_theme()
         self.update_health_graphs()
         self.update_job_graph()
+        self.update_repair_charts()
         table = self.query_one("#work_table", DataTable)
         if preserve_cursor:
             previous = table.cursor_row
@@ -1240,6 +1413,18 @@ class DVDRewindTUI(App[None]):
             self._add_row(table, "maint-missing", ["IDLE", "Known Missing FIDs", f"{missing:,} records", "Informational"], {"title": "Known Missing FIDs", "state": "IDLE", "body": "These are known unavailable DVDCompare IDs, not crawler failures."})
             self._add_row(table, "maint-db", ["READY", "Database", f"{float(self.status.get('db_size_mb') or (self.status.get('metrics') or {}).get('db_size_mb') or 0):.2f} MB", "Enter / M"], {"title": "Database Maintenance", "state": "READY", "action": "maintenance", "body": "Run integrity check, FTS optimization, and VACUUM."})
 
+        queue_labels = {
+            "dashboard": "COMMAND CENTER",
+            "movies": f"LIBRARY RESULTS  ·  {table.row_count:,} shown",
+            "population": "SYNC OPERATIONS  ·  live archive frontier",
+            "imdb": f"IMDb REPAIR QUEUE  ·  {int(self.insights.get('missing_imdb') or 0):,} remaining",
+            "artwork": f"ARTWORK REPAIR QUEUE  ·  {int(self.insights.get('missing_art') or 0):,} remaining",
+            "discoveries": f"RECENT DISCOVERIES  ·  {table.row_count:,} shown",
+            "failures": f"FAILURE QUEUE  ·  {table.row_count:,} shown",
+            "maintenance": "MAINTENANCE TOOLS",
+        }
+        self.query_one("#queue_header", Static).update(f"[#69d9ff]▣[/#69d9ff]  {queue_labels.get(self.section, 'WORK QUEUE')}")
+
         max_row = max(0, table.row_count - 1)
         table.move_cursor(row=min(previous, max_row), animate=False)
         self._restored_cursor = True
@@ -1272,6 +1457,7 @@ class DVDRewindTUI(App[None]):
             f"[bold #f2f4f6]{title}[/bold #f2f4f6]\n"
             f"[#c8d1da]{body}[/#c8d1da]{action_hint}{feedback}"
         )
+        self._update_right_selected(detail)
 
     def on_key(self, event: events.Key) -> None:
         """Make the main layout behave like a two-pane keyboard application."""
