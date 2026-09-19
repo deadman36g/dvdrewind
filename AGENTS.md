@@ -62,7 +62,10 @@ python -m unittest discover -s tests -v
 ## 4. Current State & Recent Changes (Handoff Log)
 
 ### Completed Work:
-1. **Hero Title Bar Clean-up:**
+1. **Project Branding Icon:**
+   - Added the modernized square rewind-button icon under `assets/branding/dvdrewind-icon.webp`.
+   - Added the runtime copy at `src/web/static/dvdrewind_icon.webp` and wired it as the site favicon while preserving the existing wide header wordmark.
+2. **Hero Title Bar Clean-up:**
    - Removed format switcher pills from `.movie-hero` title bar.
    - Relocated format filter pills to the physical editions toolbar (`.section-toolbar .title-format-pills`) ensuring test compatibility.
 2. **Mastering Reference Guide Connection:**

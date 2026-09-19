@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/dvdrewind-icon.webp" width="160" height="160" alt="DVDRewind icon">
+</p>
+
 # DVDRewind / Rewind Private Archive
 
 [![CI](https://github.com/deadman36g/dvdrewind/actions/workflows/ci.yml/badge.svg)](https://github.com/deadman36g/dvdrewind/actions/workflows/ci.yml)
