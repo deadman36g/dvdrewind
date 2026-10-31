@@ -10,5 +10,8 @@ services:
       - ./archive:/app/archive
     environment:
       - PYTHONUNBUFFERED=1
+      # Unlocks Sync/Posters/Optimize for remote visitors (e.g. dvdrewind.d36g.xyz).
+      # Put DVDREWIND_ADMIN_TOKEN=<long random secret> in a .env file next to this file.
+      - DVDREWIND_ADMIN_TOKEN=${DVDREWIND_ADMIN_TOKEN:-}
       # Optional TMDB API key override (default built-in key works out of the box)
       # - TMDB_API_KEY=your_api_key_here

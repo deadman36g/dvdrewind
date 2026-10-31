@@ -38,3 +38,4 @@ Thumbs.db
 desktop.ini
 src/web/static/screenshot_*.png
 src/web/static/preview_*.png
+.env
