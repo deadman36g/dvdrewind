@@ -187,82 +187,102 @@ function clearArchiveLog() {
   lastLogLinesLength = 0;
 }
 
-async function triggerArchiveSync() {
+const ARCHIVE_TOKEN_STORAGE_KEY = "dvdrewind.adminToken";
+
+function getArchiveAdminToken() {
   try {
-    const res = await fetch("/api/archive/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start sync task.");
-    }
-    pollArchiveStatus();
-  } catch (err) {
-    alert(`Failed to start sync: ${err.message}`);
+    return localStorage.getItem(ARCHIVE_TOKEN_STORAGE_KEY) || "";
+  } catch (_) {
+    return "";
   }
 }
 
-async function triggerArchiveCatchUp() {
+function setArchiveAdminToken(token) {
   try {
-    const res = await fetch("/api/archive/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ since_initial: true }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start historical-tail verification.");
+    if (token) {
+      localStorage.setItem(ARCHIVE_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(ARCHIVE_TOKEN_STORAGE_KEY);
     }
-    pollArchiveStatus();
-  } catch (err) {
-    alert(`Failed to start catch-up: ${err.message}`);
+  } catch (_) {
+    /* storage unavailable (private mode) - token just won't persist */
   }
 }
 
-async function triggerPostersBackfill() {
+async function sendArchiveControl(path, body) {
+  const headers = { "Content-Type": "application/json" };
+  const token = getArchiveAdminToken();
+  if (token) headers["X-DVDRewind-Admin-Token"] = token;
+  const res = await fetch(path, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body || {}),
+  });
+  let data = {};
   try {
-    const res = await fetch("/api/archive/posters", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start poster backfill.");
+    data = await res.json();
+  } catch (_) {
+    data = { ok: false, message: `Server answered with HTTP ${res.status}.` };
+  }
+  return { status: res.status, data };
+}
+
+/**
+ * POST to an archive control endpoint. When the archive is reached from
+ * outside localhost the server requires the DVDREWIND_ADMIN_TOKEN; if the
+ * request is refused we ask for the token once, remember it in this
+ * browser, and retry.
+ */
+async function archiveControlPost(path, body, fallbackMessage, { quiet = false } = {}) {
+  try {
+    let { status, data } = await sendArchiveControl(path, body);
+    if (status === 403) {
+      const hadToken = Boolean(getArchiveAdminToken());
+      const entered = window.prompt(
+        (hadToken
+          ? "That admin token wasn't accepted. "
+          : "Archive controls are locked when you're not on the server itself. ") +
+          "Enter the DVDREWIND_ADMIN_TOKEN set on the server to unlock them in this browser:"
+      );
+      if (entered && entered.trim()) {
+        setArchiveAdminToken(entered.trim());
+        ({ status, data } = await sendArchiveControl(path, body));
+        if (status === 403) setArchiveAdminToken("");
+      }
+    }
+    if (!data.ok && !quiet) {
+      alert(data.message || data.error || fallbackMessage);
     }
     pollArchiveStatus();
+    return data;
   } catch (err) {
-    alert(`Failed to start poster backfill: ${err.message}`);
+    if (!quiet) alert(`${fallbackMessage} (${err.message})`);
+    return { ok: false };
   }
 }
 
-async function triggerDatabaseVacuum() {
-  try {
-    const res = await fetch("/api/archive/vacuum", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start database optimization.");
-    }
-    pollArchiveStatus();
-  } catch (err) {
-    alert(`Failed to start optimization: ${err.message}`);
-  }
+function triggerArchiveSync() {
+  return archiveControlPost("/api/archive/sync", {}, "Could not start sync task.");
 }
 
-async function cancelArchiveTask() {
-  try {
-    const res = await fetch("/api/archive/cancel", { method: "POST" });
-    const data = await res.json();
-    pollArchiveStatus();
-  } catch (err) {
-    console.error("Cancel error:", err);
-  }
+function triggerArchiveCatchUp() {
+  return archiveControlPost(
+    "/api/archive/sync",
+    { since_initial: true },
+    "Could not start historical-tail verification."
+  );
+}
+
+function triggerPostersBackfill() {
+  return archiveControlPost("/api/archive/posters", {}, "Could not start poster backfill.");
+}
+
+function triggerDatabaseVacuum() {
+  return archiveControlPost("/api/archive/vacuum", {}, "Could not start database optimization.");
+}
+
+function cancelArchiveTask() {
+  return archiveControlPost("/api/archive/cancel", {}, "Could not cancel the running task.", { quiet: true });
 }
 
 // Global initialization and Escape key listener

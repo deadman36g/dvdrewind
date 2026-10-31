@@ -428,7 +428,7 @@ async def archive_control_middleware(request: web.Request, handler):
             return web.json_response(
                 {
                     "ok": False,
-                    "error": "Archive controls are restricted to localhost unless an admin token is configured.",
+                    "error": "Archive controls are locked for remote visitors. Set DVDREWIND_ADMIN_TOKEN on the server and enter it in this browser to unlock them.",
                 },
                 status=403,
             )

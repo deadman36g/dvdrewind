@@ -87,6 +87,12 @@ python -m unittest discover -s tests -v
 - **Exposure guidance:** Keep DVDRewind private. If using a reverse proxy, preserve external Host/client-address headers or explicitly block the archive-control routes unless the admin-token header is injected; a proxy that rewrites remote requests to look exactly like localhost can defeat localhost-only detection. The embed proxy is intentionally still permitted to fetch only the listed public services.
 - **Verification:** 38/38 tests pass after adding security regressions for blocked IPv4/IPv6/local schemes, hostname tricks, private redirects, response-size limits, HTML escaping, poster SSRF, and archive-control authorization.
 
+### Remote Archive Controls Fix — 2026-10-31
+- **Bug:** On the hosted site (`dvdrewind.d36g.xyz`) "Sync with DVDCompare" only showed "Could not start sync task." The security middleware was returning `403` (non-localhost, no admin token), but the browser never sent `X-DVDRewind-Admin-Token` and only read `data.message`, hiding the middleware's `data.error`.
+- **Fix:** `archive_control.js` now routes every archive action through `archiveControlPost()`, which sends a token saved in `localStorage` (`dvdrewind.adminToken`), prompts once for `DVDREWIND_ADMIN_TOKEN` on a `403`, retries, forgets a rejected token, and surfaces `message`/`error` from the server. The 403 text now tells the user how to unlock controls.
+- **Server requirement:** `DVDREWIND_ADMIN_TOKEN` must be set in the server's environment for remote use; without it remote archive actions stay locked by design.
+- **Verification:** 66/66 tests pass; headless Chromium check posing as a remote client confirmed wrong token → clear error, correct token → `200`, token reused without re-prompting.
+
 ### Known Watch Items / Next Steps for Incoming Agent:
 1. **Visual Polish:**
    - Verify layout rendering on `http://127.0.0.1:8088/movie/62304`.
