@@ -72,6 +72,7 @@ function renderArchiveStatus(data) {
       let label = "Working...";
       if (data.task_type === "sync") label = "Syncing with DVDCompare...";
       else if (data.task_type === "posters") label = "Backfilling posters...";
+      else if (data.task_type === "gapfill") label = "Filling archive gaps...";
       else if (data.task_type === "vacuum") label = "Optimizing database...";
       navBtn.title = `Archive Task: ${label}`;
     }
@@ -123,7 +124,13 @@ function renderArchiveStatus(data) {
       statProgress.textContent = data.task_type.toUpperCase();
       if (statProgressSub) {
         const stats = data.stats || {};
-        if (data.task_type === "sync") {
+        if (data.task_type === "gapfill") {
+          const done = stats.phase_current || 0;
+          const total = stats.phase_total || 0;
+          const pct = total ? Math.floor((done / total) * 100) : 0;
+          statProgress.textContent = `GAP FILL ${pct}%`;
+          statProgressSub.textContent = `${done.toLocaleString()} of ${total.toLocaleString()} checked • Recovered: ${stats.new_titles || 0} • ${formatEta(stats.eta_seconds)}`;
+        } else if (data.task_type === "sync") {
           statProgressSub.textContent = `New: ${stats.new_titles || 0} • Rev: ${stats.revisions_updated || 0} • Scanned: ${stats.scanned_fids || 0} • FID ${stats.current_fid || 0}`;
         } else {
           statProgressSub.textContent = `Checked: ${stats.checked || 0} • Errors: ${stats.errors || 0} (${data.elapsed_seconds || 0}s)`;
@@ -139,12 +146,14 @@ function renderArchiveStatus(data) {
   const btnSync = document.getElementById("btn-start-sync");
   const btnCatchup = document.getElementById("btn-catchup-since-initial");
   const btnPosters = document.getElementById("btn-start-posters");
+  const btnGapFill = document.getElementById("btn-start-gap-fill");
   const btnVacuum = document.getElementById("btn-start-vacuum");
   const btnCancel = document.getElementById("btn-cancel-task");
 
   if (btnSync) btnSync.disabled = data.is_running;
   if (btnCatchup) btnCatchup.disabled = data.is_running;
   if (btnPosters) btnPosters.disabled = data.is_running;
+  if (btnGapFill) btnGapFill.disabled = data.is_running;
   if (btnVacuum) btnVacuum.disabled = data.is_running;
   if (btnCancel) {
     btnCancel.style.display = data.is_running ? "inline-flex" : "none";
@@ -275,6 +284,17 @@ function triggerArchiveCatchUp() {
 
 function triggerPostersBackfill() {
   return archiveControlPost("/api/archive/posters", {}, "Could not start poster backfill.");
+}
+
+function triggerArchiveGapFill() {
+  return archiveControlPost("/api/archive/gap-fill", {}, "Could not start the archive gap fill.");
+}
+
+function formatEta(seconds) {
+  if (seconds === null || seconds === undefined) return "estimating…";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
 }
 
 function triggerDatabaseVacuum() {

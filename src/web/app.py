@@ -650,6 +650,19 @@ async def handle_api_archive_imdb(request: web.Request) -> web.Response:
     message = "IMDb repair started" if started else "A task is already running"
     return web.json_response({"ok": started, "message": message})
 
+async def handle_api_archive_gap_fill(request: web.Request) -> web.Response:
+    manager = ArchiveSyncManager()
+    limit = None
+    try:
+        data = await request.json()
+        if data.get("limit") is not None:
+            limit = int(data.get("limit"))
+    except Exception:
+        pass
+    started = manager.start_gap_fill(limit=limit)
+    message = "Archive gap fill started" if started else "A task is already running"
+    return web.json_response({"ok": started, "message": message})
+
 async def handle_api_archive_vacuum(request: web.Request) -> web.Response:
     manager = ArchiveSyncManager()
     started = manager.start_vacuum()
@@ -1184,6 +1197,7 @@ def create_app() -> web.Application:
     app.router.add_post("/api/archive/posters", handle_api_archive_posters)
     app.router.add_post("/api/archive/imdb", handle_api_archive_imdb)
     app.router.add_post("/api/archive/vacuum", handle_api_archive_vacuum)
+    app.router.add_post("/api/archive/gap-fill", handle_api_archive_gap_fill)
     app.router.add_post("/api/archive/cancel", handle_api_archive_cancel)
 
     # Static assets

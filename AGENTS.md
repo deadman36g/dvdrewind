@@ -93,6 +93,12 @@ python -m unittest discover -s tests -v
 - **Server requirement:** `DVDREWIND_ADMIN_TOKEN` must be set in the server's environment for remote use; without it remote archive actions stay locked by design.
 - **Verification:** 66/66 tests pass; headless Chromium check posing as a remote client confirmed wrong token → clear error, correct token → `200`, token reused without re-prompting.
 
+### Fill Archive Gaps Task — 2026-10-31
+- **Finding:** The original `populate_all.py` sweep never finished (progress file stopped near FID 66,233 with ~715 errors). The live DB had ~49,400 IDs below `INITIAL_MAX_FID` (76,200) that were never requested. Sync / Deep Verify only scan above 76,200, so they never filled these holes.
+- **Added:** "🧩 Fill Archive Gaps" button → `POST /api/archive/gap-fill` (admin-protected) → `ArchiveSyncManager.start_gap_fill()` / `_run_gap_fill()`. It checks every ID 1..76,200 with no `titles` row, reuses valid raw HTML already on disk, remembers DVDCompare "not found" IDs in `archive/gap_fill_state.json`, logs failures for retry on the next run, pauses 2 minutes after 5 consecutive failures, and reports progress/ETA (`stats.phase_current/phase_total/eta_seconds/confirmed_empty`).
+- **Tests:** `tests/test_gap_fill.py` uses a fake DVDCompare client and a temp DB.
+- **Deployment note:** The NAS copy at `/srv/mergerfs/storage_pool/nas/stacks/dvdrewind` is newer than GitHub (it has the Harvest Edition Covers feature). Deploy there with targeted patches, not a full overwrite.
+
 ### Known Watch Items / Next Steps for Incoming Agent:
 1. **Visual Polish:**
    - Verify layout rendering on `http://127.0.0.1:8088/movie/62304`.

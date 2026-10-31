@@ -40,6 +40,7 @@ _ARCHIVE_CONTROL_PATHS = {
     "/api/archive/sync",
     "/api/archive/posters",
     "/api/archive/imdb",
+    "/api/archive/gap-fill",
     "/api/archive/vacuum",
     "/api/archive/cancel",
 }

@@ -23,6 +23,7 @@ SYNC_STATUS_FILE = ARCHIVE_DIR / "sync_status.json"
 POST_INITIAL_STATE_FILE = ARCHIVE_DIR / "post_initial_sync.json"
 FAILED_FIDS_FILE = ARCHIVE_DIR / "sync_failed_fids.json"
 POSTERS_DIR = ARCHIVE_DIR / "posters"
+GAP_FILL_STATE_FILE = ARCHIVE_DIR / "gap_fill_state.json"
 
 
 class ArchiveSyncManager:
@@ -337,6 +338,24 @@ class ArchiveSyncManager:
             self.log("🧹 Starting SQLite database maintenance...", "cyan")
 
             self.thread = threading.Thread(target=self._run_vacuum_task, daemon=True)
+            self.thread.start()
+            return True
+
+    def start_gap_fill(self, limit: Optional[int] = None) -> bool:
+        with self._lock:
+            if self.is_running:
+                return False
+            self.is_running = True
+            self.task_type = "gapfill"
+            self.cancel_requested = False
+            self.status_message = "Starting archive gap fill..."
+            self.current_action = "Initializing"
+            self.start_time = time.time()
+            self._reset_task_state("gapfill")
+            self.last_result = {"task": "gapfill", "status": "running", "message": "Archive gap fill started"}
+            self.log("🧩 Looking for catalog IDs the original import never checked...", "cyan")
+
+            self.thread = threading.Thread(target=self._run_gap_fill, args=(limit,), daemon=True)
             self.thread.start()
             return True
 
@@ -835,6 +854,206 @@ class ArchiveSyncManager:
             self.log(f"❌ Poster backfill error: {e}", "red")
             self.status_message = f"Error: {e}"
         finally:
+            self.is_running = False
+            self.current_action = ""
+
+    @staticmethod
+    def _load_gap_fill_state() -> Dict[str, Any]:
+        if GAP_FILL_STATE_FILE.exists():
+            try:
+                data = json.loads(GAP_FILL_STATE_FILE.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+        return {}
+
+    @staticmethod
+    def _save_gap_fill_state(confirmed_empty: set, extra: Dict[str, Any]) -> None:
+        data = {"confirmed_empty": sorted(confirmed_empty), "updated_at": datetime.now().isoformat()}
+        data.update(extra)
+        try:
+            tmp = GAP_FILL_STATE_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data), encoding="utf-8")
+            tmp.replace(GAP_FILL_STATE_FILE)
+        except Exception:
+            pass
+
+    def _run_gap_fill(self, limit: Optional[int] = None):
+        """Check every historical ID (1..INITIAL_MAX_FID) that has no row yet.
+
+        Resumable by design: titles found are saved to SQLite and IDs that
+        DVDCompare says do not exist are remembered in gap_fill_state.json,
+        so a stopped or restarted run simply skips everything already settled.
+        """
+        repo = None
+        not_found_markers = (b"FILMID NOT FOUND", b"Unable to find film details")
+        try:
+            repo = ArchiveRepository()
+            client = ScraperClient()
+            parser = DVDCompareParser(WarningCollector())
+            cur = repo.conn.cursor()
+
+            state = self._load_gap_fill_state()
+            confirmed_empty = set(int(f) for f in state.get("confirmed_empty", []))
+            existing = set(r[0] for r in cur.execute("SELECT fid FROM titles").fetchall())
+            candidates = [
+                f for f in range(1, INITIAL_MAX_FID + 1)
+                if f not in existing and f not in confirmed_empty
+            ]
+            total_open = len(candidates)
+            if limit and limit > 0:
+                candidates = candidates[:limit]
+            total = len(candidates)
+
+            self.stats["phase"] = "gapfill"
+            self.stats["phase_current"] = 0
+            self.stats["phase_total"] = total
+            self.stats["confirmed_empty"] = 0
+            self.stats["eta_seconds"] = None
+            self.phase_start_time = time.time()
+            if total == 0:
+                self.log("✓ No gaps left — every historical catalog ID has been checked.", "green")
+            else:
+                self.log(
+                    f"Found {total_open:,} unchecked IDs below {INITIAL_MAX_FID:,}. Checking {total:,} "
+                    f"(about 2–3 seconds each). Safe to stop any time — progress is kept.",
+                    "cyan",
+                )
+
+            consecutive_failures = 0
+            network_checks = 0
+            for idx, fid in enumerate(candidates, start=1):
+                if self.cancel_requested:
+                    break
+                if idx % 25 == 0:
+                    self._save_gap_fill_state(confirmed_empty, {"last_checked_fid": fid})
+                self.stats["checked"] += 1
+                self.stats["phase_current"] = idx
+                self.stats["current_fid"] = fid
+                self.stats["current_title"] = ""
+                self.stats["current_format"] = ""
+                self.stats["current_year"] = None
+                self.stats["poster_found"] = False
+                elapsed = time.time() - (self.phase_start_time or time.time())
+                if network_checks >= 10 and elapsed > 0:
+                    per_item = elapsed / idx
+                    self.stats["eta_seconds"] = int(per_item * (total - idx))
+                self.status_message = f"Filling gaps: {idx:,} of {total:,} checked"
+                self.current_action = f"Checking FID {fid}"
+
+                raw_path = RAW_DIR / f"{fid}.html"
+                try:
+                    content = None
+                    sha256 = None
+                    if raw_path.exists():
+                        cached = raw_path.read_bytes()
+                        head = cached[:6000]
+                        if any(m in head for m in not_found_markers):
+                            confirmed_empty.add(fid)
+                            self.stats["confirmed_empty"] += 1
+                            continue
+                        if len(cached) > 2000:
+                            content = cached
+                            sha256 = hashlib.sha256(cached).hexdigest()
+
+                    if content is None:
+                        network_checks += 1
+                        status, content, meta = client.fetch_film(fid, save_to_raw=True)
+                        if meta.get("is_missing"):
+                            confirmed_empty.add(fid)
+                            self.stats["confirmed_empty"] += 1
+                            consecutive_failures = 0
+                            continue
+                        if status != 200 or not content:
+                            raise RuntimeError(f"DVDCompare answered HTTP {status}")
+                        sha256 = meta.get("content_sha256")
+
+                    parsed = parser.parse(content, fid=fid)
+                    if parsed.get("is_missing"):
+                        confirmed_empty.add(fid)
+                        self.stats["confirmed_empty"] += 1
+                        consecutive_failures = 0
+                        continue
+
+                    clean_title = parsed.get("clean_title", f"FID-{fid}")
+                    num_releases = len(parsed.get("releases", []))
+                    fmt = parsed.get("format_category", "?")
+                    repo.save_parsed_comparison(parsed, source_hash=sha256, raw_html_path=str(raw_path))
+
+                    p_url = None
+                    try:
+                        p_url = fetch_poster_from_tmdb(
+                            parsed.get("imdb_id"), clean_title, parsed.get("year"),
+                            format_category=parsed.get("format_category"),
+                        )
+                        if p_url:
+                            repo.update_poster_url(fid, p_url)
+                            self.stats["posters_fetched"] += 1
+                    except Exception as poster_error:
+                        self.log(f"Poster lookup failed for FID {fid}: {poster_error}", "dim")
+
+                    existing.add(fid)
+                    self.stats["new_titles"] += 1
+                    self._set_current_title(fid, parsed, poster_found=bool(p_url))
+                    self._record_discovery(fid, parsed, poster_found=bool(p_url))
+                    self.last_result = {
+                        "task": "gapfill",
+                        "status": "found",
+                        "fid": int(fid),
+                        "title": clean_title,
+                        "message": f"Recovered {clean_title}",
+                    }
+                    self.log(
+                        f"🎉 Recovered FID {fid}: {clean_title} [{fmt}] ({num_releases} releases) "
+                        f"— {idx:,}/{total:,}",
+                        "green",
+                    )
+                    consecutive_failures = 0
+                except Exception as e:
+                    consecutive_failures += 1
+                    self._record_error(fid, e, "gapfill")
+                    self.log(f"Error checking FID {fid}: {e} (will retry next run)", "red")
+                    if consecutive_failures >= 5:
+                        self.log("DVDCompare isn't answering normally — pausing 2 minutes before continuing...", "yellow")
+                        self.current_action = "Paused (DVDCompare not responding)"
+                        for _ in range(120):
+                            if self.cancel_requested:
+                                break
+                            time.sleep(1)
+                        consecutive_failures = 0
+
+            self._save_gap_fill_state(
+                confirmed_empty,
+                {"last_run_finished": datetime.now().isoformat(), "canceled": bool(self.cancel_requested)},
+            )
+            remaining = sum(
+                1 for f in range(1, INITIAL_MAX_FID + 1) if f not in existing and f not in confirmed_empty
+            )
+            final_status = "Archive gap fill stopped" if self.cancel_requested else "Archive gap fill complete"
+            self.stats["phase"] = "complete"
+            self.stats["eta_seconds"] = None
+            self.log(
+                f"🏁 {final_status}. Recovered {self.stats['new_titles']:,} titles, "
+                f"{self.stats['confirmed_empty']:,} IDs confirmed empty, {self.stats['errors']:,} errors. "
+                f"{remaining:,} IDs still unchecked.",
+                "bold",
+            )
+            self.last_result = {
+                "task": "gapfill",
+                "status": "canceled" if self.cancel_requested else "complete",
+                "message": f"{final_status}: {self.stats['new_titles']:,} titles recovered, {remaining:,} IDs still unchecked",
+            }
+            self.status_message = final_status
+        except Exception as e:
+            self.log(f"❌ Gap fill error: {e}", "red")
+            self.status_message = f"Error: {e}"
+        finally:
+            if repo is not None:
+                try:
+                    repo.close()
+                except Exception:
+                    pass
             self.is_running = False
             self.current_action = ""
 
