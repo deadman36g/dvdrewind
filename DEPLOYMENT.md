@@ -10,7 +10,7 @@
 ## 1. Local Run
 To test or browse locally without Docker:
 ```powershell
-cd C:\Users\deadman36g\.gemini\antigravity\scratch\dvdrewind
+cd C:\path\to\dvdrewind  # Replace with the path to your checkout
 python -m src.cli search "Blade Runner"
 python -m src.cli show 43651
 ```
@@ -50,7 +50,8 @@ When integrating behind an existing Caddy server, restrict access to private net
 dvdrewind.internal.lan {
     # Restrict to local subnet or Tailscale IP range
     @restricted {
-        not remote_ip 192.168.1.0/24 100.64.0.0/10 127.0.0.1
+        # Replace the documentation-only example subnet with your trusted LAN CIDR before deploying.
+        not remote_ip 192.0.2.0/24 100.64.0.0/10 127.0.0.1
     }
     respond @restricted "Access Denied" 403
 

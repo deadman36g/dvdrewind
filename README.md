@@ -133,7 +133,7 @@ dvdrewind web      # open the web UI
 dvdrewind shell    # enter the NAS container
 ```
 
-The helper connects to `deadman36g@192.168.50.39` over SSH and executes inside the NAS `dvdrewind` container, so Docker Desktop on Windows is not required.
+The helper connects over SSH to the NAS host specified by its local configuration and operates inside the `dvdrewind` container, so Docker Desktop on Windows is not required.
 
 ---
 

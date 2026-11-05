@@ -9,7 +9,7 @@
 ## 1. Project Overview
 
 - **Project Name:** DVDRewind (Rewind / DVDCompare Private Archive)
-- **Local Path:** `C:\Users\deadman36g\.gemini\antigravity\scratch\dvdrewind`
+- **Workspace Location:** Use the active checkout directory for this machine; do not assume a host-specific path.
 - **GitHub Repository:** https://github.com/deadman36g/dvdrewind
 - **Tech Stack:**
   - **Backend:** Python 3.12+, `aiohttp`, `aiohttp-jinja2`, `jinja2`, SQLite (with FTS5)
