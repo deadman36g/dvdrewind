@@ -32,7 +32,10 @@ CREATE INDEX IF NOT EXISTS idx_titles_fid ON titles(fid);
 CREATE INDEX IF NOT EXISTS idx_titles_clean_title ON titles(clean_title);
 CREATE INDEX IF NOT EXISTS idx_titles_year ON titles(year);
 CREATE INDEX IF NOT EXISTS idx_titles_format ON titles(format_category);
+CREATE INDEX IF NOT EXISTS idx_titles_browse ON titles(is_missing, format_category, clean_title);
+CREATE INDEX IF NOT EXISTS idx_titles_identity ON titles(clean_title, year, is_missing);
 CREATE INDEX IF NOT EXISTS idx_titles_imdb ON titles(imdb_id);
+CREATE INDEX IF NOT EXISTS idx_titles_imdb_active ON titles(imdb_id, is_missing);
 
 -- 2. Releases
 CREATE TABLE IF NOT EXISTS releases (
@@ -52,6 +55,7 @@ CREATE TABLE IF NOT EXISTS releases (
     tv_system TEXT,
     case_type TEXT,
     upc_number TEXT,
+    amazon_asin TEXT,
     notes_raw TEXT,
     easter_eggs TEXT,
     commentaries_raw TEXT,
@@ -66,6 +70,35 @@ CREATE INDEX IF NOT EXISTS idx_releases_title_id ON releases(title_id);
 CREATE INDEX IF NOT EXISTS idx_releases_country ON releases(country);
 CREATE INDEX IF NOT EXISTS idx_releases_distributor ON releases(distributor);
 CREATE INDEX IF NOT EXISTS idx_releases_region ON releases(region);
+
+-- The amazon_asin index is created by migrations.py after older databases
+-- have been upgraded with the amazon_asin column.
+
+-- 2b. Edition Cover Art
+CREATE TABLE IF NOT EXISTS edition_art (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title_id INTEGER NOT NULL REFERENCES titles(id) ON DELETE CASCADE,
+    release_signature TEXT NOT NULL,
+    release_index INTEGER,
+    format_category TEXT,
+    asset_sha256 TEXT NOT NULL,
+    dhash TEXT,
+    local_path TEXT NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    source_name TEXT NOT NULL,
+    source_url TEXT,
+    source_ref TEXT,
+    match_score REAL NOT NULL DEFAULT 1.0,
+    is_primary BOOLEAN NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(title_id, release_signature, asset_sha256)
+);
+
+CREATE INDEX IF NOT EXISTS idx_edition_art_title ON edition_art(title_id);
+CREATE INDEX IF NOT EXISTS idx_edition_art_signature ON edition_art(title_id, release_signature);
+CREATE INDEX IF NOT EXISTS idx_edition_art_sha256 ON edition_art(asset_sha256);
+CREATE INDEX IF NOT EXISTS idx_edition_art_dhash ON edition_art(dhash);
 
 -- 3. Audio Tracks
 CREATE TABLE IF NOT EXISTS audio_tracks (

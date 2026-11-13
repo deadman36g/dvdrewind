@@ -13,7 +13,9 @@ Enforces:
 """
 
 import json
+import random
 import re
+import threading
 import time
 from collections import defaultdict
 from typing import Any, Dict, List
@@ -21,10 +23,16 @@ from typing import Any, Dict, List
 MIN_SHELF_TITLES = 8
 MAX_SHELF_CARDS = 12
 MAX_DYNAMIC_DIRECTOR_SHELVES = 24
-SHELF_CACHE_TTL_SECONDS = 60
+INITIAL_SHELF_COUNT = 6
+SHELF_CACHE_TTL_SECONDS = 300
 
-_SHELF_CACHE_BUILT_AT = 0.0
+# Shelf construction scans the full archive and is intentionally expensive.
+# Requests always receive the hot cache immediately; expired caches refresh in
+# a background thread instead of blocking a page load for several seconds.
 _SHELF_CACHE = None
+_SHELF_CACHE_BUILT_AT = 0.0
+_SHELF_REFRESHING = False
+_SHELF_REFRESH_LOCK = threading.Lock()
 
 # 1. Curated Directors
 TARGET_DIRECTORS = [
@@ -161,11 +169,35 @@ def collapse_film_editions(titles: List[Dict[str, Any]], prefer_format: str = "D
     return collapsed
 
 
-def get_curated_shelves(repo) -> List[Dict[str, Any]]:
-    global _SHELF_CACHE_BUILT_AT, _SHELF_CACHE
+def _refresh_shelf_cache_in_background() -> None:
+    global _SHELF_REFRESHING
+    with _SHELF_REFRESH_LOCK:
+        if _SHELF_REFRESHING:
+            return
+        _SHELF_REFRESHING = True
 
-    now = time.monotonic()
-    if _SHELF_CACHE is not None and now - _SHELF_CACHE_BUILT_AT < SHELF_CACHE_TTL_SECONDS:
+    def worker():
+        global _SHELF_REFRESHING
+        repo = None
+        try:
+            from src.db.repository import ArchiveRepository
+            repo = ArchiveRepository()
+            get_curated_shelves(repo, force_refresh=True)
+        finally:
+            if repo is not None:
+                repo.close()
+            with _SHELF_REFRESH_LOCK:
+                _SHELF_REFRESHING = False
+
+    threading.Thread(target=worker, name="dvdrewind-shelf-refresh", daemon=True).start()
+
+
+def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any]]:
+    global _SHELF_CACHE, _SHELF_CACHE_BUILT_AT
+
+    if _SHELF_CACHE is not None and not force_refresh:
+        if time.monotonic() - _SHELF_CACHE_BUILT_AT >= SHELF_CACHE_TTL_SECONDS:
+            _refresh_shelf_cache_in_background()
         return _SHELF_CACHE
 
     # Avoid correlated subqueries over releases for every title. Reading the
@@ -325,6 +357,35 @@ def get_curated_shelves(repo) -> List[Dict[str, Any]]:
         ]
         add_shelf(s_id, f"📼 {d_title}", "decade", items, prefer_format="DVD")
 
-    _SHELF_CACHE_BUILT_AT = time.monotonic()
     _SHELF_CACHE = shelves
+    _SHELF_CACHE_BUILT_AT = time.monotonic()
     return shelves
+
+
+def select_shelf_mix(shelves: List[Dict[str, Any]], count: int = INITIAL_SHELF_COUNT) -> List[Dict[str, Any]]:
+    """Pick a small, varied shelf mix without making the browser parse hidden shelves."""
+    if len(shelves) <= count:
+        return list(shelves)
+
+    by_category = defaultdict(list)
+    for shelf in shelves:
+        by_category[shelf.get("category") or "other"].append(shelf)
+
+    categories = list(by_category)
+    random.shuffle(categories)
+    chosen = []
+    chosen_ids = set()
+
+    for category in categories:
+        if len(chosen) >= count:
+            break
+        shelf = random.choice(by_category[category])
+        chosen.append(shelf)
+        chosen_ids.add(shelf["id"])
+
+    if len(chosen) < count:
+        remaining = [s for s in shelves if s["id"] not in chosen_ids]
+        chosen.extend(random.sample(remaining, min(count - len(chosen), len(remaining))))
+
+    random.shuffle(chosen)
+    return chosen[:count]

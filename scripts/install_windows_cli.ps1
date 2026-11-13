@@ -56,7 +56,7 @@ function Invoke-DVDRewindWatch {
 
 function Invoke-DVDRewindCommandCenter {
     param([string]$Nas)
-    $webUrl = 'http://192.168.50.39:8091'
+    $webUrl = 'https://dvdrewind.d36g.xyz'
     while ($true) {
         ssh -t $Nas 'docker exec -it -e DVDREWIND_TUI_WRAPPER=1 dvdrewind python populate_all.py --command-center'
         $code = $LASTEXITCODE
@@ -119,7 +119,7 @@ function dvdrewind {
             ssh -t $nas 'docker exec -it dvdrewind python populate_all.py --help'
         }
         'web' {
-            Start-Process 'http://192.168.50.39:8091'
+            Start-Process 'https://dvdrewind.d36g.xyz'
         }
         'shell' {
             ssh -t $nas 'docker exec -it dvdrewind bash'

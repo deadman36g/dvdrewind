@@ -167,6 +167,44 @@ class DVDCompareParser:
             if contrib_match:
                 contributor = contrib_match.group(1).strip()
 
+        # Extract exact Amazon product identifiers tied to this DVDCompare release row.
+        # Purchase-widget evidence wins. Older comparisons often lack that widget but
+        # still contain one unambiguous Amazon product link in the exact release row;
+        # accept that only when there is a single distinct candidate. Multiple inline
+        # products remain deliberately unresolved rather than guessing.
+        amazon_asin = None
+        release_td = ul.find_parent("td")
+        release_row = release_td.find_parent("tr") if release_td else None
+        inline_asins: list[str] = []
+
+        def _asin_from_href(href: str) -> Optional[str]:
+            match = re.search(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", href, re.IGNORECASE)
+            if not match:
+                match = re.search(r"(?:ASIN|creativeASIN)=([A-Z0-9]{10})", href, re.IGNORECASE)
+            return match.group(1).upper() if match else None
+
+        if release_row:
+            for link in release_row.find_all("a", href=True):
+                candidate = _asin_from_href(link.get("href") or "")
+                if candidate and candidate not in inline_asins:
+                    inline_asins.append(candidate)
+
+            for td in release_row.find_all("td", recursive=False):
+                if td is release_td:
+                    continue
+                if "buy this disc" not in td.get_text(" ", strip=True).lower():
+                    continue
+                for link in td.find_all("a", href=True):
+                    candidate = _asin_from_href(link.get("href") or "")
+                    if candidate:
+                        amazon_asin = candidate
+                        break
+                if amazon_asin:
+                    break
+
+        if not amazon_asin and len(inline_asins) == 1:
+            amazon_asin = inline_asins[0]
+
         # Extract structured audio and subtitle tracks
         soundtracks_raw = fields.get("Soundtrack(s)", "")
         subtitles_raw = fields.get("Subtitles", "")
@@ -193,6 +231,7 @@ class DVDCompareParser:
             "tv_system": fields.get("TV System"),
             "case_type": fields.get("Case type"),
             "upc_number": fields.get("UPC Number"),
+            "amazon_asin": amazon_asin,
             "notes_raw": fields.get("Notes"),
             "easter_eggs": fields.get("Easter eggs"),
             "commentaries_raw": fields.get("Commentaries"),

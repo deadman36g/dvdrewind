@@ -8,9 +8,25 @@
     Search Results for <span style="color: var(--accent-blue);">"{{ query }}"</span>
   </h1>
   <p style="color: var(--text-secondary); font-size: 0.95rem;">
-    Found {{ results|length }} match{{ 'es' if results|length != 1 else '' }} in local FTS5 archive
+    {% if is_format_search %}
+      {{ total_results }} matches in the local archive{% if total_results %} &bull; showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total_results]|min }}{% endif %}
+    {% else %}
+      Found {{ total_results }} match{{ 'es' if total_results != 1 else '' }} in local FTS5 archive
+    {% endif %}
   </p>
 </div>
+
+{% if is_format_search and total_pages > 1 %}
+<div style="display:flex; align-items:center; justify-content:center; gap:0.75rem; margin:-0.75rem 0 1.5rem; flex-wrap:wrap;">
+  {% if page > 1 %}
+    <a href="{{ pagination_base }}{{ page - 1 }}" class="shelf-filter-btn">← Previous</a>
+  {% endif %}
+  <span style="color:var(--text-secondary); font-size:0.9rem;">Page <strong style="color:var(--text-primary);">{{ page }}</strong> of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="{{ pagination_base }}{{ page + 1 }}" class="shelf-filter-btn">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if results %}
 <div class="comparisons-grid">
@@ -45,6 +61,18 @@
   </a>
   {% endfor %}
 </div>
+
+{% if is_format_search and total_pages > 1 %}
+<div style="display:flex; align-items:center; justify-content:center; gap:0.75rem; margin:2rem 0 0.5rem; flex-wrap:wrap;">
+  {% if page > 1 %}
+    <a href="{{ pagination_base }}{{ page - 1 }}" class="shelf-filter-btn">← Previous</a>
+  {% endif %}
+  <span style="color:var(--text-secondary); font-size:0.9rem;">Page <strong style="color:var(--text-primary);">{{ page }}</strong> of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="{{ pagination_base }}{{ page + 1 }}" class="shelf-filter-btn">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
 {% else %}
 <div style="background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 3rem 1.5rem; text-align: center;">
   <p style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">No comparisons matched your query</p>

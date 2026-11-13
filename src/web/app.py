@@ -3,17 +3,17 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlsplit
+from urllib.parse import quote_plus, urlsplit
 
 from aiohttp import web
 import aiohttp_jinja2
 from bs4 import BeautifulSoup
 import jinja2
 
-from src.config import FIXTURES_DIR, PROJECT_ROOT, RAW_DIR
+from src.config import ARCHIVE_DIR, FIXTURES_DIR, PROJECT_ROOT, RAW_DIR
 from src.db.migrations import init_db
 from src.db.repository import ArchiveRepository
-from src.web.shelves import get_curated_shelves
+from src.web.shelves import get_curated_shelves, select_shelf_mix
 from src.web.security import (
     DEFAULT_MAX_HTML_BYTES,
     ResponseTooLarge,
@@ -26,6 +26,64 @@ from src.web.security import (
 
 STATIC_DIR = PROJECT_ROOT / "src" / "web" / "static"
 TEMPLATES_DIR = PROJECT_ROOT / "src" / "web" / "templates"
+
+# Rendered movie pages are expensive enough to notice but depend almost entirely
+# on SQLite-backed archive state. Keying the cache by both the database and WAL
+# generation keeps hot revisits fast while automatically invalidating after any
+# archive write. The small bound prevents long browsing sessions from growing
+# memory indefinitely.
+_MOVIE_PAGE_CACHE: dict[tuple[int, bool, tuple[int, int, int, int]], str] = {}
+_MOVIE_PAGE_CACHE_MAX_ENTRIES = 128
+_SEARCH_PAGE_CACHE: dict[tuple[str, str, int, tuple[int, int, int, int]], str] = {}
+_SEARCH_PAGE_CACHE_MAX_ENTRIES = 128
+_SHELF_FRAGMENT_CACHE: dict[tuple[str, tuple[int, int, int, int]], tuple[str, int]] = {}
+_SHELF_FRAGMENT_CACHE_MAX_ENTRIES = 32
+
+
+def _archive_db_generation() -> tuple[int, int, int, int]:
+    db_path = ARCHIVE_DIR / "dvdrewind.db"
+    wal_path = ARCHIVE_DIR / "dvdrewind.db-wal"
+
+    def _stamp(path: Path) -> tuple[int, int]:
+        try:
+            stat = path.stat()
+            return stat.st_mtime_ns, stat.st_size
+        except OSError:
+            return 0, 0
+
+    db_mtime, db_size = _stamp(db_path)
+    wal_mtime, wal_size = _stamp(wal_path)
+    return db_mtime, db_size, wal_mtime, wal_size
+
+
+def _movie_page_cache_key(fid: int, is_all: bool) -> tuple[int, bool, tuple[int, int, int, int]]:
+    return fid, is_all, _archive_db_generation()
+
+
+def _cache_movie_page(key: tuple[int, bool, tuple[int, int, int, int]], html_text: str) -> None:
+    _MOVIE_PAGE_CACHE[key] = html_text
+    while len(_MOVIE_PAGE_CACHE) > _MOVIE_PAGE_CACHE_MAX_ENTRIES:
+        _MOVIE_PAGE_CACHE.pop(next(iter(_MOVIE_PAGE_CACHE)))
+
+
+def _search_page_cache_key(q: str, fmt: str, page: int) -> tuple[str, str, int, tuple[int, int, int, int]]:
+    return q, fmt, page, _archive_db_generation()
+
+
+def _cache_search_page(key: tuple[str, str, int, tuple[int, int, int, int]], html_text: str) -> None:
+    _SEARCH_PAGE_CACHE[key] = html_text
+    while len(_SEARCH_PAGE_CACHE) > _SEARCH_PAGE_CACHE_MAX_ENTRIES:
+        _SEARCH_PAGE_CACHE.pop(next(iter(_SEARCH_PAGE_CACHE)))
+
+
+def _shelf_fragment_cache_key(category: str) -> tuple[str, tuple[int, int, int, int]]:
+    return category, _archive_db_generation()
+
+
+def _cache_shelf_fragment(key: tuple[str, tuple[int, int, int, int]], html_text: str, shelf_count: int) -> None:
+    _SHELF_FRAGMENT_CACHE[key] = (html_text, shelf_count)
+    while len(_SHELF_FRAGMENT_CACHE) > _SHELF_FRAGMENT_CACHE_MAX_ENTRIES:
+        _SHELF_FRAGMENT_CACHE.pop(next(iter(_SHELF_FRAGMENT_CACHE)))
 
 EMBED_SERVICE_DOMAINS = {
     "imdb": ("imdb.com",),
@@ -53,15 +111,38 @@ EMBED_RESPONSE_HEADERS = {
     "Referrer-Policy": "no-referrer",
 }
 
+
+@web.middleware
+async def performance_middleware(request: web.Request, handler):
+    """Cache versioned static assets and compress text assets before proxying."""
+    response = await handler(request)
+    if request.method.upper() != "GET":
+        return response
+
+    path = request.path
+    if path.startswith("/static/"):
+        # Posters/backdrops are immutable filenames in normal operation; app
+        # assets are versioned in base.html and can safely stay hot in-browser.
+        max_age = 604800 if path.startswith(("/static/posters/", "/static/backdrops/", "/static/edition-covers/")) else 86400
+        response.headers.setdefault("Cache-Control", f"public, max-age={max_age}")
+        if path.startswith("/static/edition-covers/") and path.endswith(".webp"):
+            response.content_type = "image/webp"
+        if path.endswith((".css", ".js", ".svg", ".json", ".txt")):
+            response.enable_compression()
+    return response
+
+
 async def handle_index(request: web.Request) -> web.Response:
     repo = ArchiveRepository()
     try:
-        shelves = get_curated_shelves(repo)
+        all_shelves = get_curated_shelves(repo)
+        shelves = select_shelf_mix(all_shelves)
         total_titles = repo.conn.execute("SELECT COUNT(*) FROM titles WHERE is_missing = 0").fetchone()[0]
         total_releases = repo.conn.execute("SELECT COUNT(*) FROM releases").fetchone()[0]
 
         return aiohttp_jinja2.render_template("index.html", request, {
             "shelves": shelves,
+            "total_shelves": len(all_shelves),
             "total_titles": total_titles,
             "total_releases": total_releases,
             "total_reviews": total_releases,
@@ -70,24 +151,105 @@ async def handle_index(request: web.Request) -> web.Response:
     finally:
         repo.close()
 
+
+async def handle_api_shelves(request: web.Request) -> web.Response:
+    """Render shelves on demand so the homepage only ships the six visible ones."""
+    category = request.query.get("category", "").strip().lower()
+    mode = request.query.get("mode", "").strip().lower()
+    allowed_categories = {"showcase", "controversy", "cult", "director", "franchise", "label", "genre", "decade"}
+    is_shuffle = mode == "shuffle" or not category
+    cache_key = None if is_shuffle else _shelf_fragment_cache_key(category)
+
+    if cache_key is not None:
+        cached = _SHELF_FRAGMENT_CACHE.get(cache_key)
+        if cached is not None:
+            html_fragment, shelf_count = cached
+            return web.Response(
+                text=html_fragment,
+                content_type="text/html",
+                charset="utf-8",
+                headers={
+                    "X-Shelf-Count": str(shelf_count),
+                    "Cache-Control": "private, max-age=15",
+                    "X-DVDRewind-Shelf-Cache": "HIT",
+                },
+            )
+
+    repo = ArchiveRepository()
+    try:
+        all_shelves = get_curated_shelves(repo)
+        if is_shuffle:
+            shelves = select_shelf_mix(all_shelves)
+        elif category == "all":
+            shelves = all_shelves
+        elif category in allowed_categories:
+            shelves = [shelf for shelf in all_shelves if shelf.get("category") == category]
+        else:
+            raise web.HTTPBadRequest(text="Unknown shelf category")
+
+        env = aiohttp_jinja2.get_env(request.app)
+        html_fragment = env.get_template("shelves_fragment.html").render(shelves=shelves)
+        if cache_key is not None:
+            _cache_shelf_fragment(cache_key, html_fragment, len(shelves))
+        return web.Response(
+            text=html_fragment,
+            content_type="text/html",
+            charset="utf-8",
+            headers={
+                "X-Shelf-Count": str(len(shelves)),
+                "Cache-Control": "private, max-age=15",
+                "X-DVDRewind-Shelf-Cache": "BYPASS" if is_shuffle else "MISS",
+            },
+        )
+    finally:
+        repo.close()
+
+
 async def handle_search(request: web.Request) -> web.Response:
     q = request.query.get("q", "").strip()
     fmt = request.query.get("format", "").strip()
+    try:
+        page = max(1, int(request.query.get("page", "1")))
+    except (TypeError, ValueError):
+        page = 1
+    per_page = 60
+    cache_key = _search_page_cache_key(q, fmt, page)
+    cached_html = _SEARCH_PAGE_CACHE.get(cache_key)
+    if cached_html is not None:
+        return web.Response(
+            text=cached_html,
+            content_type="text/html",
+            charset="utf-8",
+            headers={"X-DVDRewind-Search-Cache": "HIT"},
+        )
+
     repo = ArchiveRepository()
     try:
         results = []
+        total_results = 0
+        total_pages = 1
+        pagination_base = ""
         if q:
             results = repo.search_fts(q, limit=50)
+            total_results = len(results)
         elif fmt:
+            total_results = repo.conn.execute(
+                "SELECT COUNT(*) FROM titles WHERE is_missing = 0 AND format_category = ?",
+                (fmt,),
+            ).fetchone()[0]
+            total_pages = max(1, (total_results + per_page - 1) // per_page)
+            page = min(page, total_pages)
+            offset = (page - 1) * per_page
             rows = repo.conn.execute("""
                 SELECT t.id, t.fid, t.clean_title, t.year, t.format_category, t.aka_titles, t.poster_url,
                        r.overall_winner,
                        (SELECT COUNT(*) FROM releases rel WHERE rel.title_id = t.id) as release_count
                 FROM titles t
                 LEFT JOIN recommendations r ON r.title_id = t.id
-                WHERE t.is_missing = 0 AND t.format_category LIKE ?
-                ORDER BY t.clean_title ASC;
-            """, (f"%{fmt}%",)).fetchall()
+                WHERE t.is_missing = 0 AND t.format_category = ?
+                ORDER BY t.clean_title ASC
+                LIMIT ? OFFSET ?;
+            """, (fmt, per_page, offset)).fetchall()
             for r in rows:
                 results.append({
                     "id": r["id"],
@@ -100,11 +262,22 @@ async def handle_search(request: web.Request) -> web.Response:
                     "overall_winner": r["overall_winner"],
                     "release_count": r["release_count"],
                 })
+            pagination_base = f"/search?format={quote_plus(fmt)}&page="
 
-        return aiohttp_jinja2.render_template("search.html", request, {
+        response = aiohttp_jinja2.render_template("search.html", request, {
             "results": results,
             "query": q or fmt,
+            "total_results": total_results,
+            "page": page,
+            "total_pages": total_pages,
+            "per_page": per_page,
+            "pagination_base": pagination_base,
+            "is_format_search": bool(fmt and not q),
         })
+        rendered_html = response.text or response.body.decode(response.charset or "utf-8", errors="replace")
+        _cache_search_page(cache_key, rendered_html)
+        response.headers["X-DVDRewind-Search-Cache"] = "MISS"
+        return response
     finally:
         repo.close()
 
@@ -125,6 +298,15 @@ async def handle_movie(request: web.Request) -> web.Response:
     fid = int(request.match_info["fid"])
     format_param = request.query.get("format", "").strip().lower()
     is_all = (format_param == "all")
+    cache_key = _movie_page_cache_key(fid, is_all)
+    cached_html = _MOVIE_PAGE_CACHE.get(cache_key)
+    if cached_html is not None:
+        return web.Response(
+            text=cached_html,
+            content_type="text/html",
+            charset="utf-8",
+            headers={"X-DVDRewind-Page-Cache": "HIT"},
+        )
 
     repo = ArchiveRepository()
     try:
@@ -270,12 +452,73 @@ async def handle_movie(request: web.Request) -> web.Response:
                 badge_counts[btype] = badge_counts.get(btype, 0) + 1
         title["badge_counts"] = badge_counts
 
-        return aiohttp_jinja2.render_template("movie.html", request, {
+        # Build one deterministic cross-format collector view without changing
+        # the editions table's current-format scope. Sibling releases are loaded
+        # in batches and analyzed only from archived DVDCompare/spec data.
+        family_context = repo.get_collector_family_context(title)
+        cuts_by_fid = {}
+        for cut in family_context.get("cuts", []):
+            cuts_by_fid.setdefault(cut.get("parent_fid"), []).append(cut)
+        for release in family_context.get("releases", []):
+            if "badges" not in release:
+                release["badges"] = extract_release_badges(
+                    release,
+                    cuts_by_fid.get(release.get("parent_fid"), []),
+                )
+
+        from src.scraper.edition_art import attach_art_to_family
+        from src.web.collector_insights import build_collector_insights
+        title["cover_gallery"] = attach_art_to_family(repo, title, family_context)
+        title["collector_insights"] = build_collector_insights(title, family_context)
+
+        response = aiohttp_jinja2.render_template("movie.html", request, {
             "title": title,
             "query": "",
         })
+        rendered_html = response.text or response.body.decode(response.charset or "utf-8", errors="replace")
+        _cache_movie_page(cache_key, rendered_html)
+        response.headers["X-DVDRewind-Page-Cache"] = "MISS"
+        return response
     finally:
         repo.close()
+
+async def handle_release_specs(request: web.Request) -> web.Response:
+    """Render one edition's detailed specs on demand for the movie-page accordion."""
+    fid = int(request.match_info["fid"])
+    release_index = int(request.match_info["release_index"])
+    is_all = request.query.get("format", "").strip().lower() == "all"
+
+    repo = ArchiveRepository()
+    try:
+        title = repo.get_title_detail(fid, include_all_formats=is_all)
+        if not title:
+            raise web.HTTPNotFound(text=f"Film comparison FID {fid} not found.")
+
+        release = next(
+            (r for r in title.get("releases", []) if int(r.get("release_index") or 0) == release_index),
+            None,
+        )
+        if not release:
+            raise web.HTTPNotFound(text=f"Release {release_index} not found for FID {fid}.")
+
+        from src.web.lineage import extract_release_badges
+        release["badges"] = extract_release_badges(release, title.get("cuts"))
+        title["is_all_formats"] = is_all
+
+        env = aiohttp_jinja2.get_env(request.app)
+        html_fragment = env.get_template("release_specs_fragment.html").render(
+            title=title,
+            release=release,
+        )
+        return web.Response(
+            text=html_fragment,
+            content_type="text/html",
+            charset="utf-8",
+            headers={"Cache-Control": "private, max-age=300"},
+        )
+    finally:
+        repo.close()
+
 
 async def handle_compare(request: web.Request) -> web.Response:
     fid = int(request.query.get("fid", "0"))
@@ -634,6 +877,25 @@ async def handle_api_archive_posters(request: web.Request) -> web.Response:
     started = manager.start_posters_backfill(limit=limit)
     return web.json_response({"ok": started, "message": "Poster backfill started" if started else "A task is already running"})
 
+async def handle_api_archive_edition_art(request: web.Request) -> web.Response:
+    manager = ArchiveSyncManager()
+    limit = None
+    fid = None
+    try:
+        data = await request.json()
+        limit = data.get("limit")
+        fid = data.get("fid")
+        if limit is not None:
+            limit = int(limit)
+        if fid is not None:
+            fid = int(fid)
+    except Exception:
+        pass
+    started = manager.start_edition_art_backfill(limit=limit, fid=fid)
+    message = "Edition cover harvest started" if started else "A task is already running"
+    return web.json_response({"ok": started, "message": message})
+
+
 async def handle_api_archive_imdb(request: web.Request) -> web.Response:
     manager = ArchiveSyncManager()
     limit = None
@@ -648,6 +910,19 @@ async def handle_api_archive_imdb(request: web.Request) -> web.Response:
         pass
     started = manager.start_imdb_match(limit=limit, fid=fid)
     message = "IMDb repair started" if started else "A task is already running"
+    return web.json_response({"ok": started, "message": message})
+
+async def handle_api_archive_gap_fill(request: web.Request) -> web.Response:
+    manager = ArchiveSyncManager()
+    limit = None
+    try:
+        data = await request.json()
+        if data.get("limit") is not None:
+            limit = int(data.get("limit"))
+    except Exception:
+        pass
+    started = manager.start_gap_fill(limit=limit)
+    message = "Archive gap fill started" if started else "A task is already running"
     return web.json_response({"ok": started, "message": message})
 
 async def handle_api_archive_vacuum(request: web.Request) -> web.Response:
@@ -1160,7 +1435,7 @@ def create_app() -> web.Application:
     finally:
         warm_repo.close()
 
-    app = web.Application(middlewares=[archive_control_middleware])
+    app = web.Application(middlewares=[archive_control_middleware, performance_middleware])
     env = aiohttp_jinja2.setup(
         app,
         loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
@@ -1172,7 +1447,9 @@ def create_app() -> web.Application:
     app.router.add_get("/", handle_index)
     app.router.add_get("/search", handle_search)
     app.router.add_get("/api/search", handle_api_search)
+    app.router.add_get("/api/shelves", handle_api_shelves)
     app.router.add_get("/film/{fid}", handle_movie)
+    app.router.add_get("/api/film/{fid}/release/{release_index}", handle_release_specs)
     app.router.add_get("/embed/proxy", handle_embed_proxy)
     app.router.add_get("/api/poster/search", handle_api_poster_search)
     app.router.add_post("/api/poster/{fid}", handle_api_poster)
@@ -1182,8 +1459,10 @@ def create_app() -> web.Application:
     app.router.add_get("/api/archive/status", handle_api_archive_status)
     app.router.add_post("/api/archive/sync", handle_api_archive_sync)
     app.router.add_post("/api/archive/posters", handle_api_archive_posters)
+    app.router.add_post("/api/archive/edition-art", handle_api_archive_edition_art)
     app.router.add_post("/api/archive/imdb", handle_api_archive_imdb)
     app.router.add_post("/api/archive/vacuum", handle_api_archive_vacuum)
+    app.router.add_post("/api/archive/gap-fill", handle_api_archive_gap_fill)
     app.router.add_post("/api/archive/cancel", handle_api_archive_cancel)
 
     # Static assets
@@ -1192,8 +1471,11 @@ def create_app() -> web.Application:
     posters_dir.mkdir(parents=True, exist_ok=True)
     backdrops_dir = ARCHIVE_DIR / "backdrops"
     backdrops_dir.mkdir(parents=True, exist_ok=True)
+    edition_covers_dir = ARCHIVE_DIR / "edition_covers"
+    edition_covers_dir.mkdir(parents=True, exist_ok=True)
     app.router.add_static("/static/posters/", path=str(posters_dir), name="posters")
     app.router.add_static("/static/backdrops/", path=str(backdrops_dir), name="backdrops")
+    app.router.add_static("/static/edition-covers/", path=str(edition_covers_dir), name="edition-covers")
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
 
     return app

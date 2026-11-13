@@ -1,0 +1,124 @@
+{% import "icons.html" as icons %}
+<div class="accordion-header-bar">
+  <div class="accordion-header-title">
+    <span class="spec-num">#{{ release.release_index }}</span>
+    {% if title.is_all_formats %}
+    <span class="badge badge-{{ '4k' if '4k' in (release.parent_format or '')|lower else ('bluray' if 'blu' in (release.parent_format or '')|lower else 'dvd') }}" style="margin-right: 0.45rem; font-size: 0.72rem; padding: 0.18rem 0.5rem;">
+      {{ release.parent_format or title.format_category }}
+    </span>
+    {% endif %}
+    <strong>{{ release.header_raw }}</strong>
+    {% if release.release_year and release.release_year|string not in release.header_raw %}
+      <span class="text-muted">({{ release.release_year }})</span>
+    {% endif %}
+  </div>
+  <div class="accordion-header-badges">
+    {% if release.badges %}
+    <div class="accordion-badges-rack">
+      {% for b in release.badges %}
+      <span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {{ icons.globe_region(release.region, release.parent_format or title.format_category, size=26) }}
+  </div>
+</div>
+
+<div class="accordion-grid">
+  <div class="spec-card-box">
+    <div class="spec-card-header">
+      <div class="spec-card-title"><span class="spec-card-icon">🔊</span><span>Sound &amp; Subtitles</span></div>
+      <span class="spec-card-counter">{{ release.audio_tracks|length }} audio</span>
+    </div>
+    <div class="spec-card-body">
+      <div class="spec-subgroup">
+        <div class="spec-subgroup-label">Audio Tracks</div>
+        <ul class="accordion-tracks-list">
+          {% for a in release.audio_tracks %}
+          <li class="track-entry">{{ icons.audio_track_chip(a.raw_text) }}</li>
+          {% else %}
+          <li class="text-muted" style="padding: 0.25rem 0;">No explicit audio tracks cataloged</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="spec-subgroup" style="margin-top: 1.1rem;">
+        <div class="spec-subgroup-label">Subtitles</div>
+        <div class="subs-box">
+          {% if release.subtitle_tracks %}
+            {% for s in release.subtitle_tracks %}
+              {% if s.raw_text.strip().endswith(':') %}
+                <div class="subs-version-header" style="{% if not loop.first %}margin-top: 0.4rem;{% endif %}">{{ s.raw_text }}</div>
+              {% elif s.language|lower == 'none' %}
+                <div class="subs-group-item"><span class="sub-chip sub-chip-none">None</span></div>
+              {% else %}
+                <div class="subs-group-item">
+                  <span class="sub-chip">{% if s.is_hoh %}<span class="sub-cc">CC</span>{% endif %}<span>{{ s.language }}</span></span>
+                </div>
+              {% endif %}
+            {% endfor %}
+          {% elif release.subtitles_raw %}
+            <p class="accordion-subs-text">{{ release.subtitles_raw }}</p>
+          {% else %}
+            <span class="text-muted">No subtitles recorded</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="spec-card-box">
+    <div class="spec-card-header">
+      <div class="spec-card-title"><span class="spec-card-icon">🎁</span><span>Special Features</span></div>
+      <span class="spec-card-counter">{{ release.extras|length }} items</span>
+    </div>
+    <div class="spec-card-body">
+      {% if release.extras %}
+      <ul class="accordion-extras-list">
+        {% for ex in release.extras %}
+        {% set t = ex.title.lstrip('* -').strip() %}
+        {% set t_lower = t|lower %}
+        <li class="extra-check-item">
+          {% if 'commentary' in t_lower %}<span class="extra-type-icon" title="Audio Commentary">🎙️</span>
+          {% elif 'documentary' in t_lower or 'making of' in t_lower or 'featurette' in t_lower or 'retrospective' in t_lower %}<span class="extra-type-icon" title="Documentary / Featurette">🎬</span>
+          {% elif 'interview' in t_lower or 'conversation' in t_lower or 'q&a' in t_lower or 'discussion' in t_lower %}<span class="extra-type-icon" title="Interview">🗣️</span>
+          {% elif 'trailer' in t_lower or 'tv spot' in t_lower or 'teaser' in t_lower or 'promo' in t_lower %}<span class="extra-type-icon" title="Trailer / Promo">🎞️</span>
+          {% elif 'gallery' in t_lower or 'stills' in t_lower or 'photo' in t_lower %}<span class="extra-type-icon" title="Image Gallery">🖼️</span>
+          {% elif 'booklet' in t_lower or 'book' in t_lower or 'essay' in t_lower or 'comic' in t_lower or 'liner notes' in t_lower %}<span class="extra-type-icon" title="Booklet / Written Material">📖</span>
+          {% elif 'version' in t_lower or 'cut' in t_lower or 'presentation' in t_lower %}<span class="extra-type-icon" title="Film Version / Cut">🎞️</span>
+          {% else %}<span class="extra-bullet">✓</span>{% endif %}
+          <span class="extra-title-text">{{ t }}</span>
+          {% if ex.runtime %}<span class="extra-runtime-tag">{{ ex.runtime }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-muted" style="padding: 0.5rem 0;">No bonus materials recorded for this release.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="spec-card-box">
+    <div class="spec-card-header">
+      <div class="spec-card-title"><span class="spec-card-icon">📝</span><span>Technical Notes &amp; Provenance</span></div>
+      {% if release.badges %}<span class="spec-card-counter">{{ release.badges|length }} specs detected</span>{% endif %}
+    </div>
+    <div class="spec-card-body">
+      {% if release.badges %}
+      <div class="accordion-provenance-chips">
+        {% for b in release.badges %}<span class="badge-pill {{ b.type }}" title="{{ b.tooltip }}">{{ b.icon }} {{ b.label }}</span>{% endfor %}
+      </div>
+      {% endif %}
+      {% if release.notes_raw %}
+      <div class="notes-quote-box"><p class="notes-quote-text">{{ release.notes_raw }}</p></div>
+      {% else %}
+      <p class="text-muted" style="padding: 0.5rem 0;">No technical anomalies or notes reported.</p>
+      {% endif %}
+      {% if release.easter_eggs %}
+      <div class="easter-egg-box"><span class="easter-egg-tag">🥚 EASTER EGG</span><p>{{ release.easter_eggs }}</p></div>
+      {% endif %}
+      {% if release.contributor %}
+      <div class="contributor-tagline"><span class="contrib-icon">🛡️</span><span>Archived by <strong>{{ release.contributor }}</strong></span></div>
+      {% endif %}
+    </div>
+  </div>
+</div>

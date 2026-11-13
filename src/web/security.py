@@ -39,7 +39,9 @@ _LOCAL_HOST_SUFFIXES = (
 _ARCHIVE_CONTROL_PATHS = {
     "/api/archive/sync",
     "/api/archive/posters",
+    "/api/archive/edition-art",
     "/api/archive/imdb",
+    "/api/archive/gap-fill",
     "/api/archive/vacuum",
     "/api/archive/cancel",
 }

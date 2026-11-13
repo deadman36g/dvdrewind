@@ -33,7 +33,7 @@ from src.scraper.posters import fetch_poster_from_tmdb
 INITIAL_MAX_FID = 76200
 STATUS_URL = "http://127.0.0.1:8088/api/archive/status"
 CONTROL_BASE_URL = "http://127.0.0.1:8088/api/archive"
-WEB_URL = "http://192.168.50.39:8091"
+WEB_URL = "https://dvdrewind.d36g.xyz"
 FAILED_FIDS_FILE = ARCHIVE_DIR / "sync_failed_fids.json"
 console = Console()
 
@@ -779,7 +779,7 @@ def search_archive(query: str, limit: int = 25) -> List[Dict[str, Any]]:
     if not results:
         table.add_row("—", "No matching titles.", "—", "—", "—")
     console.print(table)
-    console.print("[dim]Movie URL pattern: http://192.168.50.39:8091/film/<FID>[/]")
+    console.print("[dim]Movie URL pattern: https://dvdrewind.d36g.xyz/film/<FID>[/]")
     return results
 
 

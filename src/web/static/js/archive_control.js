@@ -72,6 +72,8 @@ function renderArchiveStatus(data) {
       let label = "Working...";
       if (data.task_type === "sync") label = "Syncing with DVDCompare...";
       else if (data.task_type === "posters") label = "Backfilling posters...";
+      else if (data.task_type === "edition_art") label = "Harvesting edition covers...";
+      else if (data.task_type === "gapfill") label = "Filling archive gaps...";
       else if (data.task_type === "vacuum") label = "Optimizing database...";
       navBtn.title = `Archive Task: ${label}`;
     }
@@ -123,8 +125,16 @@ function renderArchiveStatus(data) {
       statProgress.textContent = data.task_type.toUpperCase();
       if (statProgressSub) {
         const stats = data.stats || {};
-        if (data.task_type === "sync") {
+        if (data.task_type === "gapfill") {
+          const done = stats.phase_current || 0;
+          const total = stats.phase_total || 0;
+          const pct = total ? Math.floor((done / total) * 100) : 0;
+          statProgress.textContent = `GAP FILL ${pct}%`;
+          statProgressSub.textContent = `${done.toLocaleString()} of ${total.toLocaleString()} checked • Recovered: ${stats.new_titles || 0} • ${formatEta(stats.eta_seconds)}`;
+        } else if (data.task_type === "sync") {
           statProgressSub.textContent = `New: ${stats.new_titles || 0} • Rev: ${stats.revisions_updated || 0} • Scanned: ${stats.scanned_fids || 0} • FID ${stats.current_fid || 0}`;
+        } else if (data.task_type === "edition_art") {
+          statProgressSub.textContent = `Checked: ${stats.checked || 0} • New covers: ${stats.covers_fetched || 0} • Reused: ${stats.covers_deduped || 0} • Errors: ${stats.errors || 0}`;
         } else {
           statProgressSub.textContent = `Checked: ${stats.checked || 0} • Errors: ${stats.errors || 0} (${data.elapsed_seconds || 0}s)`;
         }
@@ -139,12 +149,16 @@ function renderArchiveStatus(data) {
   const btnSync = document.getElementById("btn-start-sync");
   const btnCatchup = document.getElementById("btn-catchup-since-initial");
   const btnPosters = document.getElementById("btn-start-posters");
+  const btnEditionArt = document.getElementById("btn-start-edition-art");
+  const btnGapFill = document.getElementById("btn-start-gap-fill");
   const btnVacuum = document.getElementById("btn-start-vacuum");
   const btnCancel = document.getElementById("btn-cancel-task");
 
   if (btnSync) btnSync.disabled = data.is_running;
   if (btnCatchup) btnCatchup.disabled = data.is_running;
   if (btnPosters) btnPosters.disabled = data.is_running;
+  if (btnEditionArt) btnEditionArt.disabled = data.is_running;
+  if (btnGapFill) btnGapFill.disabled = data.is_running;
   if (btnVacuum) btnVacuum.disabled = data.is_running;
   if (btnCancel) {
     btnCancel.style.display = data.is_running ? "inline-flex" : "none";
@@ -187,82 +201,117 @@ function clearArchiveLog() {
   lastLogLinesLength = 0;
 }
 
-async function triggerArchiveSync() {
+const ARCHIVE_TOKEN_STORAGE_KEY = "dvdrewind.adminToken";
+
+function getArchiveAdminToken() {
   try {
-    const res = await fetch("/api/archive/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start sync task.");
-    }
-    pollArchiveStatus();
-  } catch (err) {
-    alert(`Failed to start sync: ${err.message}`);
+    return localStorage.getItem(ARCHIVE_TOKEN_STORAGE_KEY) || "";
+  } catch (_) {
+    return "";
   }
 }
 
-async function triggerArchiveCatchUp() {
+function setArchiveAdminToken(token) {
   try {
-    const res = await fetch("/api/archive/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ since_initial: true }),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start historical-tail verification.");
+    if (token) {
+      localStorage.setItem(ARCHIVE_TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(ARCHIVE_TOKEN_STORAGE_KEY);
     }
-    pollArchiveStatus();
-  } catch (err) {
-    alert(`Failed to start catch-up: ${err.message}`);
+  } catch (_) {
+    /* storage unavailable (private mode) - token just won't persist */
   }
 }
 
-async function triggerPostersBackfill() {
+async function sendArchiveControl(path, body) {
+  const headers = { "Content-Type": "application/json" };
+  const token = getArchiveAdminToken();
+  if (token) headers["X-DVDRewind-Admin-Token"] = token;
+  const res = await fetch(path, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body || {}),
+  });
+  let data = {};
   try {
-    const res = await fetch("/api/archive/posters", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start poster backfill.");
+    data = await res.json();
+  } catch (_) {
+    data = { ok: false, message: `Server answered with HTTP ${res.status}.` };
+  }
+  return { status: res.status, data };
+}
+
+/**
+ * POST to an archive control endpoint. When the archive is reached from
+ * outside localhost the server requires the DVDREWIND_ADMIN_TOKEN; if the
+ * request is refused we ask for the token once, remember it in this
+ * browser, and retry.
+ */
+async function archiveControlPost(path, body, fallbackMessage, { quiet = false } = {}) {
+  try {
+    let { status, data } = await sendArchiveControl(path, body);
+    if (status === 403) {
+      const hadToken = Boolean(getArchiveAdminToken());
+      const entered = window.prompt(
+        (hadToken
+          ? "That admin token wasn't accepted. "
+          : "Archive controls are locked when you're not on the server itself. ") +
+          "Enter the DVDREWIND_ADMIN_TOKEN set on the server to unlock them in this browser:"
+      );
+      if (entered && entered.trim()) {
+        setArchiveAdminToken(entered.trim());
+        ({ status, data } = await sendArchiveControl(path, body));
+        if (status === 403) setArchiveAdminToken("");
+      }
+    }
+    if (!data.ok && !quiet) {
+      alert(data.message || data.error || fallbackMessage);
     }
     pollArchiveStatus();
+    return data;
   } catch (err) {
-    alert(`Failed to start poster backfill: ${err.message}`);
+    if (!quiet) alert(`${fallbackMessage} (${err.message})`);
+    return { ok: false };
   }
 }
 
-async function triggerDatabaseVacuum() {
-  try {
-    const res = await fetch("/api/archive/vacuum", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      alert(data.message || "Could not start database optimization.");
-    }
-    pollArchiveStatus();
-  } catch (err) {
-    alert(`Failed to start optimization: ${err.message}`);
-  }
+function triggerArchiveSync() {
+  return archiveControlPost("/api/archive/sync", {}, "Could not start sync task.");
 }
 
-async function cancelArchiveTask() {
-  try {
-    const res = await fetch("/api/archive/cancel", { method: "POST" });
-    const data = await res.json();
-    pollArchiveStatus();
-  } catch (err) {
-    console.error("Cancel error:", err);
-  }
+function triggerArchiveCatchUp() {
+  return archiveControlPost(
+    "/api/archive/sync",
+    { since_initial: true },
+    "Could not start historical-tail verification."
+  );
+}
+
+function triggerPostersBackfill() {
+  return archiveControlPost("/api/archive/posters", {}, "Could not start poster backfill.");
+}
+
+function triggerEditionArtHarvest() {
+  return archiveControlPost("/api/archive/edition-art", {}, "Could not start edition cover harvest.");
+}
+
+function triggerArchiveGapFill() {
+  return archiveControlPost("/api/archive/gap-fill", {}, "Could not start the archive gap fill.");
+}
+
+function formatEta(seconds) {
+  if (seconds === null || seconds === undefined) return "estimating…";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+}
+
+function triggerDatabaseVacuum() {
+  return archiveControlPost("/api/archive/vacuum", {}, "Could not start database optimization.");
+}
+
+function cancelArchiveTask() {
+  return archiveControlPost("/api/archive/cancel", {}, "Could not cancel the running task.", { quiet: true });
 }
 
 // Global initialization and Escape key listener

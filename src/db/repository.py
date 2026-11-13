@@ -133,10 +133,10 @@ class ArchiveRepository:
                     INSERT INTO releases (
                         title_id, release_index, header_raw, media_format, region,
                         country, distributor, release_year, edition_name, aspect_ratio,
-                        picture_format, hdr_format, tv_system, case_type, upc_number,
+                        picture_format, hdr_format, tv_system, case_type, upc_number, amazon_asin,
                         notes_raw, easter_eggs, commentaries_raw, extras_raw, subtitles_raw,
                         soundtracks_raw, contributor
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     title_id,
                     rel["release_index"],
@@ -153,6 +153,7 @@ class ArchiveRepository:
                     rel.get("tv_system"),
                     rel.get("case_type"),
                     rel.get("upc_number"),
+                    rel.get("amazon_asin"),
                     rel.get("notes_raw"),
                     rel.get("easter_eggs"),
                     rel.get("commentaries_raw"),
@@ -283,6 +284,52 @@ class ArchiveRepository:
             })
         return results
 
+    def _load_releases_with_children(self, title_ids: List[int]) -> Dict[int, List[Dict[str, Any]]]:
+        """Load releases and all child rows in batches instead of N+1 queries."""
+        if not title_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in title_ids)
+        rel_rows = self.conn.execute(
+            f"SELECT * FROM releases WHERE title_id IN ({placeholders}) ORDER BY title_id, release_index ASC",
+            tuple(title_ids),
+        ).fetchall()
+        if not rel_rows:
+            return {title_id: [] for title_id in title_ids}
+
+        release_ids = [int(row["id"]) for row in rel_rows]
+        release_placeholders = ",".join("?" for _ in release_ids)
+        release_params = tuple(release_ids)
+
+        children = {
+            "audio_tracks": {},
+            "subtitle_tracks": {},
+            "extras": {},
+        }
+        for table, key, order_by in (
+            ("audio_tracks", "audio_tracks", "release_id, id"),
+            ("subtitle_tracks", "subtitle_tracks", "release_id, id"),
+            ("extras", "extras", "release_id, source_order, id"),
+        ):
+            rows = self.conn.execute(
+                f"SELECT * FROM {table} WHERE release_id IN ({release_placeholders}) ORDER BY {order_by}",
+                release_params,
+            ).fetchall()
+            grouped: Dict[int, List[Dict[str, Any]]] = {}
+            for row in rows:
+                grouped.setdefault(int(row["release_id"]), []).append(dict(row))
+            children[key] = grouped
+
+        grouped_releases: Dict[int, List[Dict[str, Any]]] = {title_id: [] for title_id in title_ids}
+        for row in rel_rows:
+            release = dict(row)
+            release_id = int(release["id"])
+            release["audio_tracks"] = children["audio_tracks"].get(release_id, [])
+            release["subtitle_tracks"] = children["subtitle_tracks"].get(release_id, [])
+            release["extras"] = children["extras"].get(release_id, [])
+            grouped_releases.setdefault(int(release["title_id"]), []).append(release)
+        return grouped_releases
+
     def get_title_detail(self, fid: int, include_all_formats: bool = False) -> Optional[Dict[str, Any]]:
         """
         Returns full structured title details including all releases, tracks, extras,
@@ -298,24 +345,32 @@ class ArchiveRepository:
         title_data["aka_titles"] = json.loads(title_data["aka_titles"]) if title_data["aka_titles"] else []
         title_data["display_title"] = format_display_title(title_data["clean_title"])
 
-        # Find sibling formats (grouping by clean_title and year or IMDb ID)
-        sibling_sql = """
+        # Find sibling formats using separate indexed lookups. A single OR across
+        # IMDb and title/year caused SQLite to scan most of the titles table on
+        # NAS storage, turning every film page into a 1–2 second request.
+        sibling_select = """
             SELECT t.id, t.fid, t.clean_title, t.format_category, t.year,
                    (SELECT COUNT(*) FROM releases r WHERE r.title_id = t.id) as release_count
             FROM titles t
-            WHERE t.id != ? AND t.is_missing = 0 AND (
-                (t.imdb_id IS NOT NULL AND t.imdb_id = ?)
-                OR (t.clean_title = ? AND t.year = ?)
-            )
-            ORDER BY t.format_category ASC;
         """
-        siblings = self.conn.execute(sibling_sql, (
-            title_id,
-            title_data.get("imdb_id") or "",
-            title_data["clean_title"],
-            title_data.get("year")
-        )).fetchall()
-        title_data["format_siblings"] = [dict(s) for s in siblings]
+        sibling_map: Dict[int, Dict[str, Any]] = {}
+        imdb_id = title_data.get("imdb_id") or ""
+        if imdb_id:
+            rows = self.conn.execute(
+                sibling_select + " WHERE t.id != ? AND t.is_missing = 0 AND t.imdb_id = ?",
+                (title_id, imdb_id),
+            ).fetchall()
+            sibling_map.update({int(row["id"]): dict(row) for row in rows})
+
+        if title_data.get("year") is not None:
+            rows = self.conn.execute(
+                sibling_select + " WHERE t.id != ? AND t.is_missing = 0 AND t.clean_title = ? AND t.year = ?",
+                (title_id, title_data["clean_title"], title_data["year"]),
+            ).fetchall()
+            sibling_map.update({int(row["id"]): dict(row) for row in rows})
+
+        siblings = sorted(sibling_map.values(), key=lambda row: row.get("format_category") or "")
+        title_data["format_siblings"] = siblings
 
         # Recommendation
         rec_row = self.conn.execute("SELECT * FROM recommendations WHERE title_id = ?", (title_id,)).fetchone()
@@ -354,33 +409,19 @@ class ArchiveRepository:
             cuts_seen = set()
             recs_all = []
 
+            releases_by_title = self._load_releases_with_children([int(item["id"]) for item in all_format_titles])
+
             for t_item in all_format_titles:
-                t_id = t_item["id"]
+                t_id = int(t_item["id"])
                 t_fid = t_item["fid"]
                 t_fmt = t_item.get("format_category", "")
 
-                rel_rows = self.conn.execute("SELECT * FROM releases WHERE title_id = ? ORDER BY release_index ASC", (t_id,)).fetchall()
-                for r in rel_rows:
-                    rel_id = r["id"]
-                    rel_dict = dict(r)
+                for rel_dict in releases_by_title.get(t_id, []):
                     rel_dict["parent_fid"] = t_fid
                     rel_dict["parent_format"] = t_fmt
                     rel_dict["original_release_index"] = rel_dict["release_index"]
                     rel_dict["release_index"] = global_index
                     global_index += 1
-
-                    # Audio
-                    a_rows = self.conn.execute("SELECT * FROM audio_tracks WHERE release_id = ?", (rel_id,)).fetchall()
-                    rel_dict["audio_tracks"] = [dict(a) for a in a_rows]
-
-                    # Subtitles
-                    s_rows = self.conn.execute("SELECT * FROM subtitle_tracks WHERE release_id = ?", (rel_id,)).fetchall()
-                    rel_dict["subtitle_tracks"] = [dict(s) for s in s_rows]
-
-                    # Extras
-                    e_rows = self.conn.execute("SELECT * FROM extras WHERE release_id = ? ORDER BY source_order ASC", (rel_id,)).fetchall()
-                    rel_dict["extras"] = [dict(e) for e in e_rows]
-
                     merged_releases.append(rel_dict)
 
                 # Cuts
@@ -409,32 +450,96 @@ class ArchiveRepository:
             cuts_rows = self.conn.execute("SELECT * FROM cuts WHERE title_id = ?", (title_id,)).fetchall()
             title_data["cuts"] = [dict(r) for r in cuts_rows]
 
-            # Releases
-            rel_rows = self.conn.execute("SELECT * FROM releases WHERE title_id = ? ORDER BY release_index ASC", (title_id,)).fetchall()
-            releases = []
-            for r in rel_rows:
-                rel_id = r["id"]
-                rel_dict = dict(r)
+            # Releases + audio/subtitle/extra children in four total queries.
+            releases = self._load_releases_with_children([int(title_id)]).get(int(title_id), [])
+            for rel_dict in releases:
                 rel_dict["parent_fid"] = fid
                 rel_dict["parent_format"] = title_data.get("format_category", "")
-
-                # Audio
-                a_rows = self.conn.execute("SELECT * FROM audio_tracks WHERE release_id = ?", (rel_id,)).fetchall()
-                rel_dict["audio_tracks"] = [dict(a) for a in a_rows]
-
-                # Subtitles
-                s_rows = self.conn.execute("SELECT * FROM subtitle_tracks WHERE release_id = ?", (rel_id,)).fetchall()
-                rel_dict["subtitle_tracks"] = [dict(s) for s in s_rows]
-
-                # Extras
-                e_rows = self.conn.execute("SELECT * FROM extras WHERE release_id = ? ORDER BY source_order ASC", (rel_id,)).fetchall()
-                rel_dict["extras"] = [dict(e) for e in e_rows]
-
-                releases.append(rel_dict)
-
             title_data["releases"] = releases
 
         return title_data
+
+    def get_collector_family_context(self, title_data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """Load the physical-format family used by collector-facing intelligence.
+
+        The normal movie view stays scoped to its current format. This helper reuses
+        those already-loaded releases and batch-loads only sibling formats, while
+        cuts and recommendations are fetched in one query each with parent-format
+        provenance attached.
+        """
+        current_id = int(title_data["id"])
+        current_fid = int(title_data["fid"])
+        current_format = title_data.get("format_category", "")
+        family_titles = [
+            {"id": current_id, "fid": current_fid, "format_category": current_format}
+        ] + [dict(sibling) for sibling in title_data.get("format_siblings", [])]
+
+        # Protect against an IMDb/title sibling lookup ever returning the same row
+        # through more than one path.
+        unique_titles: Dict[int, Dict[str, Any]] = {}
+        for item in family_titles:
+            unique_titles[int(item["id"])] = item
+        family_titles = list(unique_titles.values())
+        title_by_id = {int(item["id"]): item for item in family_titles}
+
+        releases: List[Dict[str, Any]] = []
+        if title_data.get("is_all_formats"):
+            releases = [dict(release) for release in title_data.get("releases", [])]
+        else:
+            for release in title_data.get("releases", []):
+                release_copy = dict(release)
+                release_copy.setdefault("parent_fid", current_fid)
+                release_copy.setdefault("parent_format", current_format)
+                release_copy.setdefault("original_release_index", release_copy.get("release_index"))
+                releases.append(release_copy)
+
+            sibling_ids = [title_id for title_id in title_by_id if title_id != current_id]
+            sibling_releases = self._load_releases_with_children(sibling_ids)
+            for title_id in sibling_ids:
+                parent = title_by_id[title_id]
+                for release in sibling_releases.get(title_id, []):
+                    release_copy = dict(release)
+                    release_copy["parent_fid"] = parent["fid"]
+                    release_copy["parent_format"] = parent.get("format_category", "")
+                    release_copy["original_release_index"] = release_copy.get("release_index")
+                    releases.append(release_copy)
+
+        title_ids = list(title_by_id)
+        placeholders = ",".join("?" for _ in title_ids)
+        params = tuple(title_ids)
+
+        cuts: List[Dict[str, Any]] = []
+        recommendations: List[Dict[str, Any]] = []
+        if title_ids:
+            cut_rows = self.conn.execute(
+                f"""
+                SELECT c.*, t.fid AS parent_fid, t.format_category AS parent_format
+                FROM cuts c
+                JOIN titles t ON t.id = c.title_id
+                WHERE c.title_id IN ({placeholders})
+                ORDER BY c.title_id, c.id
+                """,
+                params,
+            ).fetchall()
+            cuts = [dict(row) for row in cut_rows]
+
+            recommendation_rows = self.conn.execute(
+                f"""
+                SELECT r.*, t.fid AS parent_fid, t.format_category AS parent_format
+                FROM recommendations r
+                JOIN titles t ON t.id = r.title_id
+                WHERE r.title_id IN ({placeholders})
+                ORDER BY r.title_id
+                """,
+                params,
+            ).fetchall()
+            recommendations = [dict(row) for row in recommendation_rows]
+
+        return {
+            "releases": releases,
+            "cuts": cuts,
+            "recommendations": recommendations,
+        }
 
     def update_poster_url(self, fid: int, poster_url: str) -> None:
         """Updates the cached poster URL for a title and all sibling formats with the same IMDb ID."""

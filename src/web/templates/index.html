@@ -21,10 +21,9 @@
 </section>
 
 <section>
-  <!-- Shelf Category Filter Pills -->
   <div class="shelf-filter-bar">
     <button class="shelf-filter-btn active" id="btn-shuffle" onclick="shuffleShelves(this)">🎲 Shuffle Mix</button>
-    <button class="shelf-filter-btn" onclick="filterShelves('all', this)">📚 Show All ({{ shelves|length }})</button>
+    <button class="shelf-filter-btn" onclick="filterShelves('all', this)">📚 Show All ({{ total_shelves }})</button>
     <button class="shelf-filter-btn" onclick="filterShelves('showcase', this)">🌟 4K Reference</button>
     <button class="shelf-filter-btn" onclick="filterShelves('controversy', this)">⚡ Controversies</button>
     <button class="shelf-filter-btn" onclick="filterShelves('cult', this)">🔥 Cult Vault</button>
@@ -41,64 +40,8 @@
     </span>
   </div>
 
-  <div class="shelves-container">
-    {% for shelf in shelves %}
-    <div class="shelf-section" data-category="{{ shelf.category }}" id="shelf-{{ shelf.id }}">
-      <div class="shelf-header">
-        <div class="shelf-title-group">
-          <h2 class="shelf-title">{{ shelf.title }}</h2>
-          <span class="shelf-badge">
-            {{ shelf.count }} titles{% if shelf.count > shelf.titles|length %} · showing {{ shelf.titles|length }}{% endif %}
-          </span>
-        </div>
-        <div class="shelf-nav-controls">
-          <button class="shelf-nav-btn" onclick="scrollShelf('track-{{ shelf.id }}', -1)" title="Scroll Left">&#x2039;</button>
-          <button class="shelf-nav-btn" onclick="scrollShelf('track-{{ shelf.id }}', 1)" title="Scroll Right">&#x203A;</button>
-        </div>
-      </div>
-
-      <div class="shelf-track-wrapper">
-        <div class="shelf-track" id="track-{{ shelf.id }}">
-          {% for item in shelf.titles %}
-          <a href="/film/{{ item.fid }}" class="shelf-card" title="{{ item.clean_title }} ({{ item.year or '' }})">
-            <div class="shelf-card-poster">
-              {% if item.poster_url %}
-                <img src="{{ item.poster_url }}" alt="{{ item.clean_title }} poster" loading="lazy">
-              {% else %}
-                <div class="shelf-card-placeholder">
-                  <span class="placeholder-icon">🎬</span>
-                  <span class="placeholder-title">{{ item.clean_title }}</span>
-                </div>
-              {% endif %}
-
-              <!-- Toast-Style Graphic Overlay on Hover -->
-              <div class="shelf-card-toast">
-                <div class="toast-title">{{ item.clean_title }}</div>
-                <div class="toast-sub">
-                  <span class="toast-year">{{ item.year or '—' }}</span>
-                  {% if item.director %}
-                  <span class="toast-bullet">&bull;</span>
-                  <span class="toast-director">{{ item.director }}</span>
-                  {% endif %}
-                </div>
-                <div class="toast-meta-bar">
-                  <span class="toast-editions-pill">{{ item.release_count }} {{ 'edition' if item.release_count == 1 else 'editions' }}</span>
-                  {% if item.formats %}
-                  <div class="toast-formats-strip">
-                    {% for f in item.formats %}
-                    <span class="toast-fmt-pill fmt-{{ '4k' if '4k' in f.category|lower else ('bd' if 'blu-ray' in f.category|lower else 'dvd') }}">{{ '4K' if '4k' in f.category|lower else ('BD' if 'blu-ray' in f.category|lower else 'DVD') }}</span>
-                    {% endfor %}
-                  </div>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-          </a>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-    {% endfor %}
+  <div class="shelves-container" id="shelves-container" aria-live="polite">
+    {% include "shelves_fragment.html" %}
   </div>
 </section>
 
@@ -106,98 +49,57 @@
 function scrollShelf(trackId, direction) {
   const track = document.getElementById(trackId);
   if (!track) return;
-  const scrollAmount = 560; // scroll ~3 cards at a time
-  track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+  track.scrollBy({ left: direction * 560, behavior: 'smooth' });
+}
+
+let shelfLoadController = null;
+
+function setActiveShelfButton(btn) {
+  document.querySelectorAll('.shelf-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+async function loadShelfFragment(url, btn, label, isShuffle = false) {
+  setActiveShelfButton(btn);
+  if (shelfLoadController) shelfLoadController.abort();
+  shelfLoadController = new AbortController();
+
+  const container = document.getElementById('shelves-container');
+  const statusEl = document.getElementById('shelf-status-text');
+  if (!container || !statusEl) return;
+
+  container.setAttribute('aria-busy', 'true');
+  statusEl.innerHTML = '<strong style="color: #38BDF8;">Loading shelves…</strong>';
+
+  try {
+    const requestUrl = isShuffle ? `${url}&_=${Date.now()}` : url;
+    const response = await fetch(requestUrl, { signal: shelfLoadController.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const html = await response.text();
+    const count = Number(response.headers.get('X-Shelf-Count') || 0);
+    container.innerHTML = html;
+
+    if (isShuffle) {
+      statusEl.innerHTML = '<strong style="color: #FCD34D;">⭐ {{ total_reviews }} Total Reviews</strong> &bull; <strong style="color: #F8FAFC;">{{ total_titles }}</strong> Film Comparisons';
+    } else {
+      statusEl.innerHTML = `Showing <strong style="color: #38BDF8;">${count} shelves</strong> in <strong>${label}</strong> &bull; Click <strong>🎲 Shuffle Mix</strong> for a compact randomized view`;
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      statusEl.innerHTML = '<strong style="color: #F87171;">Could not load shelves.</strong> Try again.';
+    }
+  } finally {
+    container.removeAttribute('aria-busy');
+  }
 }
 
 function shuffleShelves(btn) {
-  if (btn) {
-    document.querySelectorAll('.shelf-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  }
-
-  const allShelves = Array.from(document.querySelectorAll('.shelf-section'));
-  allShelves.forEach(s => s.style.display = 'none');
-
-  // Group shelves by category
-  const byCat = {};
-  allShelves.forEach(s => {
-    const cat = s.getAttribute('data-category') || 'other';
-    if (!byCat[cat]) byCat[cat] = [];
-    byCat[cat].push(s);
-  });
-
-  const pickRandom = (arr, count) => {
-    const shuffled = [...arr].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, count);
-  };
-
-  // Pick exactly 6 distinct non-repetitive shelves across categories
-  const chosen = [];
-  const usedIds = new Set();
-
-  const tryAdd = (cat) => {
-    if (byCat[cat]) {
-      const candidates = byCat[cat].filter(s => !usedIds.has(s.id));
-      if (candidates.length) {
-        const picked = pickRandom(candidates, 1)[0];
-        chosen.push(picked);
-        usedIds.add(picked.id);
-      }
-    }
-  };
-
-  // Pick categories in randomized order
-  const categories = ['showcase', 'controversy', 'cult', 'director', 'label', 'genre', 'decade', 'franchise'].sort(() => 0.5 - Math.random());
-  categories.forEach(cat => tryAdd(cat));
-
-  // If any category was empty, fill up to exactly 6 from remaining shelves
-  if (chosen.length < 6) {
-    const remaining = allShelves.filter(s => !usedIds.has(s.id));
-    const extra = pickRandom(remaining, 6 - chosen.length);
-    chosen.push(...extra);
-  }
-
-  // Shuffle final order so the top shelf varies across all categories
-  const finalOrder = pickRandom(chosen, 6);
-
-  const container = document.querySelector('.shelves-container');
-  finalOrder.forEach(shelf => {
-    shelf.style.display = 'flex';
-    container.appendChild(shelf);
-  });
-
-  const statusEl = document.getElementById('shelf-status-text');
-  if (statusEl) {
-    statusEl.innerHTML = `<strong style="color: #FCD34D;">⭐ {{ total_reviews }} Total Reviews</strong> &bull; <strong style="color: #F8FAFC;">{{ total_titles }}</strong> Film Comparisons`;
-  }
+  return loadShelfFragment('/api/shelves?mode=shuffle', btn, 'Shuffle Mix', true);
 }
 
 function filterShelves(category, btn) {
-  document.querySelectorAll('.shelf-filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-
-  const shelves = document.querySelectorAll('.shelf-section');
-  let visibleCount = 0;
-  shelves.forEach(shelf => {
-    if (category === 'all' || shelf.getAttribute('data-category') === category) {
-      shelf.style.display = 'flex';
-      visibleCount++;
-    } else {
-      shelf.style.display = 'none';
-    }
-  });
-
-  const statusEl = document.getElementById('shelf-status-text');
-  if (statusEl) {
-    const label = btn.innerText.replace(/[0-9()]/g, '').trim();
-    statusEl.innerHTML = `Showing all <strong style="color: #38BDF8;">${visibleCount} shelves</strong> in <strong>${label}</strong> &bull; Click <strong>🎲 Shuffle Mix</strong> to return to randomized view`;
-  }
+  const label = btn ? btn.innerText.replace(/[0-9()]/g, '').trim() : category;
+  return loadShelfFragment(`/api/shelves?category=${encodeURIComponent(category)}`, btn, label, false);
 }
-
-// Randomize automatically on every page refresh!
-document.addEventListener('DOMContentLoaded', () => {
-  shuffleShelves(document.getElementById('btn-shuffle'));
-});
 </script>
 {% endblock %}

@@ -40,6 +40,35 @@ class TestWebServer(AioHTTPTestCase):
         self.assertIn("4K UHD", text)
 
     @unittest_run_loop
+    async def test_home_page_only_renders_initial_shelf_mix(self):
+        resp = await self.client.request("GET", "/")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertLessEqual(text.count('class="shelf-section"'), 6)
+        self.assertIn("/api/shelves?category=", text)
+
+    @unittest_run_loop
+    async def test_shelf_fragment_loads_on_demand(self):
+        resp = await self.client.request("GET", "/api/shelves?category=director")
+        self.assertEqual(resp.status, 200)
+        self.assertIn("X-Shelf-Count", resp.headers)
+        text = await resp.text()
+        self.assertNotIn("<!DOCTYPE html>", text)
+
+    @unittest_run_loop
+    async def test_format_search_is_paginated(self):
+        resp = await self.client.request("GET", "/search?format=DVD&page=1")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertLessEqual(text.count('class="comparison-card"'), 60)
+
+    @unittest_run_loop
+    async def test_static_assets_receive_cache_headers(self):
+        resp = await self.client.request("GET", "/static/app.js?v=3.0")
+        self.assertEqual(resp.status, 200)
+        self.assertIn("max-age=", resp.headers.get("Cache-Control", ""))
+
+    @unittest_run_loop
     async def test_api_search(self):
         resp = await self.client.request("GET", "/api/search?q=Blade")
         self.assertEqual(resp.status, 200)
@@ -59,6 +88,31 @@ class TestWebServer(AioHTTPTestCase):
         self.assertIn("Cuts &amp; Censorship Differences", text)
         self.assertIn("format-tabs-list", text)
         self.assertIn("imdb.com", text)
+
+    @unittest_run_loop
+    async def test_movie_page_hot_cache_hits_on_repeat(self):
+        first = await self.client.request("GET", "/film/43651")
+        self.assertEqual(first.status, 200)
+        await first.text()
+        second = await self.client.request("GET", "/film/43651")
+        self.assertEqual(second.status, 200)
+        self.assertEqual(second.headers.get("X-DVDRewind-Page-Cache"), "HIT")
+
+    @unittest_run_loop
+    async def test_movie_page_lazy_loads_release_specs(self):
+        resp = await self.client.request("GET", "/film/43651")
+        self.assertEqual(resp.status, 200)
+        text = await resp.text()
+        self.assertIn("accordion-lazy-panel", text)
+        self.assertIn("/api/film/43651/release/1", text)
+        self.assertNotIn('<div class="accordion-grid">', text)
+
+        detail = await self.client.request("GET", "/api/film/43651/release/1")
+        self.assertEqual(detail.status, 200)
+        detail_text = await detail.text()
+        self.assertIn("Sound &amp; Subtitles", detail_text)
+        self.assertIn("Special Features", detail_text)
+        self.assertIn("Technical Notes &amp; Provenance", detail_text)
 
     @unittest_run_loop
     async def test_compare_page(self):

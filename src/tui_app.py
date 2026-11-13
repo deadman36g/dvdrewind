@@ -24,7 +24,7 @@ from src.db.repository import ArchiveRepository
 STATUS_URL = "http://127.0.0.1:8088/api/archive/status"
 CONTROL_BASE_URL = "http://127.0.0.1:8088/api/archive"
 STATE_FILE = ARCHIVE_DIR / "tui_state.json"
-WEB_URL = "http://192.168.50.39:8091"
+WEB_URL = "https://dvdrewind.d36g.xyz"
 INITIAL_MAX_FID = 76200  # Historical baseline only; live frontier is persisted separately.
 
 SECTIONS = [

@@ -2897,6 +2897,19 @@ main {
   animation: fadeInAccordion 0.2s ease-out;
 }
 
+.accordion-lazy-status {
+  min-height: 84px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+}
+
+.accordion-lazy-error {
+  color: #fca5a5;
+}
+
 @keyframes fadeInAccordion {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -8821,5 +8834,610 @@ main {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+/* ========================================================
+   V2 COLLECTOR INTELLIGENCE: VERDICT, OLD-DISC CHECK, TIMELINE
+   ======================================================== */
+.collector-intelligence {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.collector-intelligence-deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.collector-insight-card,
+.release-history-panel {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(10, 15, 27, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+.collector-insight-card {
+  position: relative;
+  padding: 1rem 1.1rem;
+  overflow: hidden;
+}
+
+.verdict-insight-card {
+  border-left: 4px solid #F59E0B;
+}
+
+.keep-disc-card.needs-keep {
+  border-left: 4px solid #F97316;
+  background: linear-gradient(180deg, rgba(67, 31, 13, 0.3), rgba(10, 15, 27, 0.96));
+}
+
+.keep-disc-card.all-clear {
+  border-left: 4px solid #10B981;
+}
+
+.collector-insight-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #94A3B8;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.45rem;
+}
+
+.collector-insight-icon {
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.collector-insight-headline,
+.release-history-title {
+  margin: 0;
+  color: #F8FAFC;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.collector-insight-headline {
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.collector-insight-copy {
+  margin: 0.45rem 0 0;
+  color: #CBD5E1;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.collector-source-note {
+  display: block;
+  margin-top: 0.65rem;
+  color: #64748B;
+  font-size: 0.7rem;
+}
+
+.collector-signal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+}
+
+.collector-signal-chip,
+.release-timeline-tags span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  background: rgba(245, 158, 11, 0.11);
+  color: #FCD34D;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.16rem 0.48rem;
+}
+
+.keep-warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.keep-warning-item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.18);
+}
+
+.keep-warning-icon {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+}
+
+.keep-warning-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.keep-warning-text strong {
+  color: #FDBA74;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.keep-warning-text span {
+  color: #94A3B8;
+  font-size: 0.72rem;
+  line-height: 1.42;
+}
+
+.keep-clear-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.1);
+  color: #6EE7B7;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.release-history-panel {
+  padding: 0.95rem 1.1rem 1.05rem;
+}
+
+.release-history-heading-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.release-history-heading-row .collector-insight-eyebrow {
+  margin-bottom: 0.2rem;
+}
+
+.release-history-title {
+  font-size: 0.98rem;
+}
+
+.release-history-sub {
+  color: #64748B;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.release-timeline-track {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  padding: 0.25rem 0 0.35rem;
+  scrollbar-width: thin;
+}
+
+.release-timeline-item {
+  position: relative;
+  flex: 1 0 215px;
+  min-width: 215px;
+  padding-top: 18px;
+}
+
+.release-timeline-item::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.26);
+}
+
+.release-timeline-item:first-child::before {
+  left: 12px;
+}
+
+.release-timeline-item:last-child::before {
+  right: calc(100% - 12px);
+}
+
+.release-timeline-marker {
+  position: absolute;
+  top: 1px;
+  left: 8px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #64748B;
+  border-radius: 50%;
+  background: #0B0F19;
+  z-index: 2;
+}
+
+.timeline-format-dvd .release-timeline-marker { border-color: #F87171; }
+.timeline-format-bluray .release-timeline-marker { border-color: #38BDF8; }
+.timeline-format-4k .release-timeline-marker { border-color: #FBBF24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.28); }
+
+.release-timeline-card {
+  margin: 0 0.55rem 0 0;
+  min-height: 118px;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.release-timeline-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.release-timeline-year {
+  font-family: var(--font-mono);
+  color: #CBD5E1;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.release-timeline-count {
+  color: #64748B;
+  font-size: 0.66rem;
+}
+
+.release-timeline-format {
+  color: #F8FAFC;
+  font-size: 0.88rem;
+}
+
+.timeline-format-dvd .release-timeline-format { color: #FCA5A5; }
+.timeline-format-bluray .release-timeline-format { color: #7DD3FC; }
+.timeline-format-4k .release-timeline-format { color: #FDE68A; }
+
+.release-timeline-labels {
+  color: #94A3B8;
+  font-size: 0.69rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-timeline-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.release-timeline-tags span {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.08);
+  color: #CBD5E1;
+  font-size: 0.61rem;
+  padding: 0.1rem 0.35rem;
+}
+
+[data-theme="light"] .collector-insight-card,
+[data-theme="light"] .release-history-panel {
+  background: #FFFFFF;
+  border-color: #D8DEE4;
+  box-shadow: 0 4px 14px rgba(31, 35, 40, 0.06);
+}
+
+[data-theme="light"] .keep-disc-card.needs-keep {
+  background: #FFF7ED;
+}
+
+[data-theme="light"] .collector-insight-headline,
+[data-theme="light"] .release-history-title,
+[data-theme="light"] .release-timeline-format {
+  color: #1F2328;
+}
+
+[data-theme="light"] .collector-insight-copy {
+  color: #475569;
+}
+
+[data-theme="light"] .release-timeline-card {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+
+[data-theme="light"] .release-timeline-marker {
+  background: #FFFFFF;
+}
+
+@media (max-width: 900px) {
+  .collector-intelligence-deck {
+    grid-template-columns: 1fr;
+  }
+
+  .release-history-heading-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .release-history-sub {
+    text-align: left;
+  }
+}
+
+/* Edition cover art: secondary collector imagery, never a replacement for the movie poster. */
+.release-timeline-card.has-winner-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: stretch;
+}
+
+.release-timeline-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-winner-cover {
+  width: 56px;
+  padding: 0;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.72);
+  color: #FDE68A;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.timeline-winner-cover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(250, 204, 21, 0.8);
+}
+
+.timeline-winner-cover img {
+  width: 100%;
+  min-height: 76px;
+  max-height: 86px;
+  object-fit: contain;
+  background: #090E18;
+}
+
+.timeline-winner-cover span {
+  display: block;
+  padding: 0.22rem 0.1rem 0.26rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cover-history-panel {
+  margin-top: 0.15rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(8, 13, 24, 0.96));
+}
+
+.cover-history-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.cover-history-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 0.65rem;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.cover-history-grid::-webkit-scrollbar {
+  height: 8px;
+}
+
+.cover-history-grid::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.32);
+  border-radius: 999px;
+}
+
+.cover-history-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.edition-cover-card {
+  flex: 0 0 142px;
+  width: 142px;
+  min-width: 142px;
+  scroll-snap-align: start;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.68);
+  color: inherit;
+  text-align: left;
+  cursor: zoom-in;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.edition-cover-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(125, 211, 252, 0.52);
+  box-shadow: 0 9px 24px rgba(0, 0, 0, 0.24);
+}
+
+.edition-cover-image-wrap {
+  display: grid;
+  place-items: center;
+  height: 184px;
+  padding: 0.45rem;
+  background: #080D16;
+}
+
+.edition-cover-image-wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.edition-cover-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  padding: 0.55rem 0.6rem 0.65rem;
+}
+
+.edition-cover-format {
+  align-self: flex-start;
+  padding: 0.09rem 0.32rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #7DD3FC;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.edition-cover-info strong {
+  color: #E2E8F0;
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
+.edition-cover-info small {
+  color: #94A3B8;
+  font-size: 0.61rem;
+  line-height: 1.3;
+}
+
+.edition-cover-dialog {
+  width: min(92vw, 760px);
+  max-height: 92vh;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #080D16;
+  color: #E2E8F0;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+}
+
+.edition-cover-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.edition-cover-dialog-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.65rem;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(8, 13, 22, 0.88);
+  color: white;
+  font-size: 1.45rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.edition-cover-dialog-stage {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  max-height: 76vh;
+  padding: 1.2rem;
+  background: radial-gradient(circle at center, rgba(30, 41, 59, 0.7), #070B12 70%);
+}
+
+.edition-cover-dialog-stage img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+
+.edition-cover-dialog-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem 1rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.edition-cover-dialog-caption strong {
+  font-size: 0.9rem;
+}
+
+.edition-cover-dialog-caption span {
+  color: #94A3B8;
+  font-size: 0.73rem;
+}
+
+[data-theme="light"] .cover-history-panel,
+[data-theme="light"] .edition-cover-card {
+  background: #FFFFFF;
+  border-color: #D8DEE4;
+}
+
+[data-theme="light"] .edition-cover-image-wrap {
+  background: #F8FAFC;
+}
+
+[data-theme="light"] .edition-cover-info strong {
+  color: #1F2328;
+}
+
+@media (max-width: 720px) {
+  .cover-history-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .edition-cover-card {
+    flex-basis: 128px;
+    width: 128px;
+    min-width: 128px;
+  }
+
+  .edition-cover-image-wrap {
+    height: 168px;
+  }
 }
 

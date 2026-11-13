@@ -34,6 +34,15 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 conn.execute("ALTER TABLE titles ADD COLUMN director TEXT;")
             if "synopsis" not in cols:
                 conn.execute("ALTER TABLE titles ADD COLUMN synopsis TEXT;")
+
+            release_cols = [r["name"] for r in conn.execute("PRAGMA table_info(releases);").fetchall()]
+            if "amazon_asin" not in release_cols:
+                conn.execute("ALTER TABLE releases ADD COLUMN amazon_asin TEXT;")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_releases_amazon_asin ON releases(amazon_asin);")
+
+            curr = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
+            if curr < 2:
+                conn.execute("INSERT INTO schema_version (version) VALUES (2);")
     finally:
         conn.close()
 

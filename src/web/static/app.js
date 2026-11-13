@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initHeroInlineShelf();
   initMasteringShelf();
   initArchiveShelf();
+  initEditionCoverGallery();
   initKeyboardShortcuts();
   initFixPosterButtons();
 });
@@ -135,6 +136,7 @@ function initTableFilters() {
       const dist = (row.getAttribute("data-distributor") || "").toLowerCase();
       const fmt = (row.getAttribute("data-format") || "").toLowerCase();
       const rowText = (row.textContent || "").toLowerCase();
+      const detailSearchText = (row.getAttribute("data-search-text") || "").toLowerCase();
 
       // Check pill filter condition
       let matchesPill = true;
@@ -164,8 +166,9 @@ function initTableFilters() {
       // Check text search condition
       let matchesSearch = true;
       if (searchKeyword) {
-        matchesSearch = rowText.includes(searchKeyword) || 
-                        caseType.includes(searchKeyword) || 
+        matchesSearch = rowText.includes(searchKeyword) ||
+                        detailSearchText.includes(searchKeyword) ||
+                        caseType.includes(searchKeyword) ||
                         dist.includes(searchKeyword) ||
                         country.includes(searchKeyword);
       }
@@ -215,8 +218,33 @@ function initAccordions() {
   const toggleButtons = document.querySelectorAll(".btn-toggle-accordion");
   if (!toggleButtons.length) return;
 
+  async function loadAccordionDetails(targetRow) {
+    const panel = targetRow.querySelector(".accordion-lazy-panel");
+    if (!panel || panel.dataset.loaded === "true" || panel.dataset.loading === "true") return;
+
+    const detailUrl = panel.dataset.detailUrl;
+    if (!detailUrl) return;
+
+    panel.dataset.loading = "true";
+    const status = panel.querySelector(".accordion-lazy-status");
+    if (status) status.textContent = "Loading edition specs…";
+
+    try {
+      const response = await fetch(detailUrl, { headers: { "X-Requested-With": "DVDRewind" } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      panel.innerHTML = await response.text();
+      panel.dataset.loaded = "true";
+    } catch (err) {
+      panel.innerHTML = '<div class="accordion-lazy-status accordion-lazy-error">Could not load edition specs. Close and reopen to retry.</div>';
+      panel.dataset.loading = "false";
+      return;
+    }
+
+    panel.dataset.loading = "false";
+  }
+
   toggleButtons.forEach(btn => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const targetId = btn.getAttribute("data-target");
@@ -234,11 +262,12 @@ function initAccordions() {
         btn.classList.add("open");
         const arrow = btn.querySelector(".accordion-arrow");
         if (arrow) arrow.innerHTML = "&uarr;";
+        await loadAccordionDetails(targetRow);
       }
     });
   });
 
-  // Deep linking: auto-expand edition if #row-X or #accordion-row-X is in URL
+  // Deep linking still works; the requested drawer is fetched only when needed.
   const hash = window.location.hash;
   if (hash) {
     const cleanId = hash.replace("#", "");
@@ -250,9 +279,11 @@ function initAccordions() {
       btn.classList.add("open");
       const arrow = btn.querySelector(".accordion-arrow");
       if (arrow) arrow.innerHTML = "&uarr;";
-      setTimeout(() => {
-        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 150);
+      loadAccordionDetails(targetRow).finally(() => {
+        setTimeout(() => {
+          targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 50);
+      });
     }
   }
 }
@@ -678,6 +709,38 @@ function initArchiveShelf() {
       }
     });
   }
+}
+
+function initEditionCoverGallery() {
+  const dialog = document.getElementById("edition-cover-dialog");
+  const openers = document.querySelectorAll(".edition-cover-open");
+  if (!dialog || !openers.length) return;
+
+  const image = document.getElementById("edition-cover-dialog-image");
+  const title = document.getElementById("edition-cover-dialog-title");
+  const meta = document.getElementById("edition-cover-dialog-meta");
+  const closeBtn = document.getElementById("edition-cover-dialog-close");
+
+  function closeDialog() {
+    if (dialog.open) dialog.close();
+  }
+
+  openers.forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (image) {
+        image.src = btn.dataset.coverSrc || "";
+        image.alt = `${btn.dataset.coverTitle || "Edition"} cover art`;
+      }
+      if (title) title.textContent = btn.dataset.coverTitle || "Edition cover";
+      if (meta) meta.textContent = btn.dataset.coverMeta || "";
+      if (!dialog.open) dialog.showModal();
+    });
+  });
+
+  if (closeBtn) closeBtn.addEventListener("click", closeDialog);
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) closeDialog();
+  });
 }
 
 // 8. Collector Mastering Reference Shelf & Table Header Links

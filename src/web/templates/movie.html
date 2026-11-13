@@ -583,6 +583,7 @@
               data-audio-rank="{{ audio_rank }}"
               data-case="{{ (r.case_type or '')|lower }}"
               data-badges="{{ r.badges|map(attribute='type')|join(' ') }}"
+              data-search-text="{{ ((r.audio_tracks|map(attribute='raw_text')|join(' ')) ~ ' ' ~ (r.extras|map(attribute='title')|join(' ')))|lower|e }}"
               id="row-{{ r.release_index }}">
             <td class="td-num">
               <div class="num-cell-wrap">
@@ -690,7 +691,9 @@
           <!-- Slide-down Inline Accordion Row for Edition #{{ r.release_index }} -->
           <tr class="edition-accordion-row" id="accordion-row-{{ r.release_index }}" style="display: none;">
             <td colspan="10" class="accordion-td">
-              <div class="accordion-inner-panel">
+              <div class="accordion-inner-panel accordion-lazy-panel" data-detail-url="/api/film/{{ title.fid }}/release/{{ r.release_index }}{% if title.is_all_formats %}?format=all{% endif %}" data-loaded="false">
+                <div class="accordion-lazy-status">Loading edition specs…</div>
+                {% if false %}
                 <div class="accordion-header-bar">
                   <div class="accordion-header-title">
                     <span class="spec-num">#{{ r.release_index }}</span>
@@ -867,6 +870,7 @@
                     </div>
                   </div>
                 </div>
+                {% endif %}
               </div>
             </td>
           </tr>
@@ -1069,6 +1073,150 @@
       {% endif %}
     </div>
   </div>
+
+  {% if title.collector_insights %}
+  {% set intelligence = title.collector_insights %}
+  <section class="collector-intelligence" aria-label="Collector Intelligence">
+    <div class="collector-intelligence-deck">
+      <article class="collector-insight-card verdict-insight-card">
+        <div class="collector-insight-eyebrow">
+          <span class="collector-insight-icon">🏆</span>
+          <span>Why This Edition Wins</span>
+        </div>
+        <h2 class="collector-insight-headline">{{ intelligence.verdict.headline }}</h2>
+        <p class="collector-insight-copy">{{ intelligence.verdict.text }}</p>
+        {% if intelligence.verdict.signals %}
+        <div class="collector-signal-row" aria-label="Winner highlights">
+          {% for signal in intelligence.verdict.signals %}
+          <span class="collector-signal-chip">{{ signal }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <span class="collector-source-note">Based on the archived DVDCompare recommendation and edition specs.</span>
+      </article>
+
+      <article class="collector-insight-card keep-disc-card {{ 'needs-keep' if intelligence.keep_old_disc.protect else 'all-clear' }}">
+        <div class="collector-insight-eyebrow">
+          <span class="collector-insight-icon">📀</span>
+          <span>Keep Your Old Disc?</span>
+        </div>
+        <h2 class="collector-insight-headline">{{ intelligence.keep_old_disc.headline }}</h2>
+        <p class="collector-insight-copy">{{ intelligence.keep_old_disc.detail }}</p>
+        {% if intelligence.keep_old_disc.warnings %}
+        <div class="keep-warning-list">
+          {% for warning in intelligence.keep_old_disc.warnings %}
+          <div class="keep-warning-item">
+            <span class="keep-warning-icon">{{ warning.icon }}</span>
+            <div class="keep-warning-text">
+              <strong>{{ warning.title }}</strong>
+              <span>{{ warning.detail }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% elif intelligence.keep_old_disc.available %}
+        <div class="keep-clear-pill"><span>✓</span> No obvious older-disc holdback found</div>
+        {% endif %}
+      </article>
+    </div>
+
+    {% if intelligence.timeline %}
+    <div class="release-history-panel">
+      <div class="release-history-heading-row">
+        <div>
+          <div class="collector-insight-eyebrow">
+            <span class="collector-insight-icon">🕰️</span>
+            <span>Release Timeline</span>
+          </div>
+          <h2 class="release-history-title">This film&rsquo;s physical-media path</h2>
+        </div>
+        <span class="release-history-sub">Major archived formats, release years and mastering signals</span>
+      </div>
+      <div class="release-timeline-track">
+        {% for item in intelligence.timeline %}
+        {% set fmt_lower = item.format|lower %}
+        <div class="release-timeline-item {{ 'timeline-format-4k' if '4k' in fmt_lower else ('timeline-format-bluray' if 'blu' in fmt_lower else ('timeline-format-dvd' if 'dvd' in fmt_lower else 'timeline-format-other')) }}">
+          <div class="release-timeline-marker"><span></span></div>
+          <div class="release-timeline-card {{ 'has-winner-cover' if item.winner_cover else '' }}">
+            <div class="release-timeline-copy">
+              <div class="release-timeline-topline">
+                <span class="release-timeline-year">{{ item.span }}</span>
+                <span class="release-timeline-count">{{ item.count }} {{ 'edition' if item.count == 1 else 'editions' }}</span>
+              </div>
+              <strong class="release-timeline-format">{{ item.format }}</strong>
+              {% if item.distributors %}
+              <span class="release-timeline-labels">{{ item.distributors|join(' • ') }}</span>
+              {% endif %}
+              {% if item.tags %}
+              <div class="release-timeline-tags">
+                {% for tag in item.tags %}<span>{{ tag }}</span>{% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% if item.winner_cover and item.winner_release %}
+            <button type="button"
+                    class="timeline-winner-cover edition-cover-open"
+                    data-cover-src="{{ item.winner_cover.local_path }}"
+                    data-cover-title="{{ item.winner_release.header_raw|e }}"
+                    data-cover-meta="{{ item.format }} • {{ item.winner_release.release_year or 'Year unknown' }} • {{ item.winner_release.country or 'Region unknown' }}"
+                    title="View winning {{ item.format }} edition cover">
+              <img src="{{ item.winner_cover.local_path }}" alt="Winning {{ item.format }} edition cover" loading="lazy">
+              <span>Winner</span>
+            </button>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if title.cover_gallery %}
+    <div class="cover-history-panel" id="cover-art-history" aria-label="Edition Cover Art History">
+      <div class="cover-history-heading">
+        <div>
+          <div class="collector-insight-eyebrow">
+            <span class="collector-insight-icon">🎨</span>
+            <span>Cover Art History</span>
+          </div>
+          <h2 class="release-history-title">Physical-edition artwork through the years</h2>
+        </div>
+        <span class="release-history-sub">{{ title.cover_gallery|length }} verified {{ 'cover' if title.cover_gallery|length == 1 else 'covers' }} • standardized, deduplicated, original aspect preserved</span>
+      </div>
+      <div class="cover-history-grid">
+        {% for art in title.cover_gallery %}
+        <button type="button"
+                class="edition-cover-card edition-cover-open"
+                data-cover-src="{{ art.local_path }}"
+                data-cover-title="{{ art.header_raw|e }}"
+                data-cover-meta="{{ art.format }} • {{ art.release_year or 'Year unknown' }} • {{ art.country or 'Region unknown' }} • {{ art.distributor or 'Label unknown' }}"
+                title="View {{ art.header_raw }} cover">
+          <span class="edition-cover-image-wrap">
+            <img src="{{ art.local_path }}" alt="{{ art.header_raw }} cover" loading="lazy">
+          </span>
+          <span class="edition-cover-info">
+            <span class="edition-cover-format">{{ art.format }}</span>
+            <strong>{{ art.release_year or 'Year unknown' }}{% if art.edition_name %} • {{ art.edition_name }}{% endif %}</strong>
+            <small>{{ art.country or 'Region unknown' }}{% if art.distributor %} • {{ art.distributor }}{% endif %}</small>
+          </span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <dialog class="edition-cover-dialog" id="edition-cover-dialog">
+      <button type="button" class="edition-cover-dialog-close" id="edition-cover-dialog-close" aria-label="Close cover art viewer">×</button>
+      <div class="edition-cover-dialog-stage">
+        <img id="edition-cover-dialog-image" src="" alt="Edition cover art">
+      </div>
+      <div class="edition-cover-dialog-caption">
+        <strong id="edition-cover-dialog-title"></strong>
+        <span id="edition-cover-dialog-meta"></span>
+      </div>
+    </dialog>
+    {% endif %}
+  </section>
+  {% endif %}
 
   <!-- Floating Bottom Compare Action Dock (Slides up when editions are selected) -->
   <aside id="compare-floating-dock" class="compare-floating-dock" style="display: none;" aria-label="Comparison dock">
