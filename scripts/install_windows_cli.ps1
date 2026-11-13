@@ -90,7 +90,8 @@ function dvdrewind {
         [string[]]$Rest
     )
 
-    $nas = 'deadman36g@192.168.50.39'
+    # SSH host or alias for the NAS; override with $env:DVDREWIND_NAS
+    $nas = if ($env:DVDREWIND_NAS) { $env:DVDREWIND_NAS } else { 'nas' }
     switch ($Command.ToLowerInvariant()) {
         'menu' {
             Invoke-DVDRewindCommandCenter -Nas $nas
