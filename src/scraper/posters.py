@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,11 @@ from src.web.security import (
     fetch_public_bytes,
 )
 
+
+def _stable_hash(text: str) -> str:
+    # hash() is salted per process, so cache files keyed by it never hit after a restart.
+    return hashlib.md5((text or "").encode("utf-8")).hexdigest()[:16]
+
 POSTERS_DIR = ARCHIVE_DIR / "posters"
 POSTERS_DIR.mkdir(parents=True, exist_ok=True)
 BACKDROPS_DIR = ARCHIVE_DIR / "backdrops"
@@ -20,6 +26,7 @@ BACKDROPS_DIR.mkdir(parents=True, exist_ok=True)
 METADATA_DIR = ARCHIVE_DIR / "metadata"
 METADATA_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = ARCHIVE_DIR / "config.json"
+METADATA_MISS_TTL_SECONDS = 7 * 24 * 3600
 
 def get_saved_tmdb_key() -> Optional[str]:
     # 1. Environment variable
@@ -324,7 +331,7 @@ def fetch_poster_from_wikipedia(clean_title: str, imdb_id: Optional[str] = None,
                 data = resp.json()
                 img_url = data.get("originalimage", {}).get("source") or data.get("thumbnail", {}).get("source")
                 if img_url:
-                    cache_key = imdb_id or f"wiki_{abs(hash(clean_title))}"
+                    cache_key = imdb_id or f"wiki_{_stable_hash(clean_title)}"
                     local_file = POSTERS_DIR / f"{cache_key}.jpg"
                     img_resp = requests.get(img_url, headers=headers, timeout=15)
                     if img_resp.status_code == 200:
@@ -371,7 +378,7 @@ def fetch_poster_from_tmdb(
     """Fetch artwork with movie lookup first and explicit TV fallbacks when indicated."""
     key = api_key or get_saved_tmdb_key()
     is_tv = looks_like_tv_title(clean_title, format_category)
-    cache_key = imdb_id or f"title_{abs(hash(clean_title))}"
+    cache_key = imdb_id or f"title_{_stable_hash(clean_title)}"
 
     if trace is not None:
         trace.clear()
@@ -611,7 +618,7 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
     Retrieves enriched movie metadata (overview, runtime, genres, tagline, backdrop_url)
     from local cache or fetches on-demand from TMDB.
     """
-    cache_key = imdb_id or f"meta_{abs(hash(clean_title))}"
+    cache_key = imdb_id or f"meta_{_stable_hash(clean_title)}"
     cache_file = METADATA_DIR / f"{cache_key}.json"
 
     if cache_file.exists():
@@ -619,6 +626,11 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
             with open(cache_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 # Verify backdrop file exists if referenced
+                if data.get("_miss_at"):
+                    # Remembered "TMDB has no match"; retry weekly, not every page view.
+                    if time.time() - data["_miss_at"] < METADATA_MISS_TTL_SECONDS:
+                        return {}
+                    raise ValueError("stale miss")
                 if data.get("backdrop_url"):
                     bd_fname = Path(data["backdrop_url"]).name
                     if not (BACKDROPS_DIR / bd_fname).exists():
@@ -633,6 +645,7 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
 
     headers = {"User-Agent": DEFAULT_USER_AGENT}
     movie_id = None
+    lookup_failed = False
 
     # 1. Look up by IMDb ID
     if imdb_id and imdb_id.startswith("tt"):
@@ -643,7 +656,10 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
                 mr = resp.json().get("movie_results", [])
                 if mr:
                     movie_id = mr[0].get("id")
+            else:
+                lookup_failed = True
         except Exception as e:
+            lookup_failed = True
             print(f"Metadata TMDB find error: {e}")
 
     # 2. Look up by title + year
@@ -658,10 +674,19 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
                 res = s_resp.json().get("results", [])
                 if res:
                     movie_id = res[0].get("id")
+            else:
+                lookup_failed = True
         except Exception as e:
+            lookup_failed = True
             print(f"Metadata TMDB search error: {e}")
 
     if not movie_id:
+        if not lookup_failed:
+            try:
+                with open(cache_file, "w", encoding="utf-8") as f:
+                    json.dump({"_miss_at": time.time()}, f)
+            except Exception:
+                pass
         return {}
 
     # 3. Fetch comprehensive details

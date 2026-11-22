@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 import requests
 
 from src.config import ARCHIVE_DIR, RAW_DIR, DB_PATH
-from src.db.repository import ArchiveRepository
+from src.db.repository import ArchiveRepository, bump_data_generation
 from src.parser.html_parser import DVDCompareParser
 from src.parser.warnings import WarningCollector
 from src.scraper.client import ScraperClient
@@ -694,6 +694,7 @@ class ArchiveSyncManager:
             self.status_message = f"Error: {e}"
         finally:
             self.is_running = False
+            bump_data_generation()
             self.current_action = ""
 
     def _run_imdb_matches(self, limit: Optional[int] = None, fid: Optional[int] = None):
@@ -816,6 +817,7 @@ class ArchiveSyncManager:
             if repo is not None:
                 repo.close()
             self.is_running = False
+            bump_data_generation()
             self.current_action = ""
 
     def _run_posters(self, limit: Optional[int] = None):
@@ -908,6 +910,7 @@ class ArchiveSyncManager:
             self.status_message = f"Error: {e}"
         finally:
             self.is_running = False
+            bump_data_generation()
             self.current_action = ""
 
     def _run_edition_art(self, limit: Optional[int] = None, fid: Optional[int] = None):
@@ -1000,6 +1003,7 @@ class ArchiveSyncManager:
             if repo is not None:
                 repo.close()
             self.is_running = False
+            bump_data_generation()
             self.current_action = ""
 
     @staticmethod
@@ -1200,6 +1204,7 @@ class ArchiveSyncManager:
                 except Exception:
                     pass
             self.is_running = False
+            bump_data_generation()
             self.current_action = ""
 
     def _run_vacuum_internal(self):
@@ -1246,4 +1251,5 @@ class ArchiveSyncManager:
             self.status_message = "Database optimization complete"
         finally:
             self.is_running = False
+            bump_data_generation()
             self.current_action = ""

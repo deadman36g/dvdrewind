@@ -1,6 +1,10 @@
+import asyncio
+import functools
 import html
 import json
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote_plus, urlsplit
@@ -10,9 +14,9 @@ import aiohttp_jinja2
 from bs4 import BeautifulSoup
 import jinja2
 
-from src.config import ARCHIVE_DIR, FIXTURES_DIR, PROJECT_ROOT, RAW_DIR
+from src.config import ARCHIVE_DIR, DB_PATH, FIXTURES_DIR, PROJECT_ROOT, RAW_DIR
 from src.db.migrations import init_db
-from src.db.repository import ArchiveRepository
+from src.db.repository import ArchiveRepository, data_generation
 from src.web.shelves import get_curated_shelves, select_shelf_mix
 from src.web.security import (
     DEFAULT_MAX_HTML_BYTES,
@@ -27,63 +31,142 @@ from src.web.security import (
 STATIC_DIR = PROJECT_ROOT / "src" / "web" / "static"
 TEMPLATES_DIR = PROJECT_ROOT / "src" / "web" / "templates"
 
-# Rendered movie pages are expensive enough to notice but depend almost entirely
-# on SQLite-backed archive state. Keying the cache by both the database and WAL
-# generation keeps hot revisits fast while automatically invalidating after any
-# archive write. The small bound prevents long browsing sessions from growing
-# memory indefinitely.
-_MOVIE_PAGE_CACHE: dict[tuple[int, bool, tuple[int, int, int, int]], str] = {}
+# Rendered pages depend almost entirely on SQLite-backed archive state. Keys
+# include data_generation(), which archive writes bump, so hot revisits stay
+# fast until titles, releases or posters actually change. The small bounds keep
+# long browsing sessions from growing memory indefinitely.
+_MOVIE_PAGE_CACHE: dict[tuple, str] = {}
 _MOVIE_PAGE_CACHE_MAX_ENTRIES = 128
-_SEARCH_PAGE_CACHE: dict[tuple[str, str, int, tuple[int, int, int, int]], str] = {}
+_SEARCH_PAGE_CACHE: dict[tuple, str] = {}
 _SEARCH_PAGE_CACHE_MAX_ENTRIES = 128
-_SHELF_FRAGMENT_CACHE: dict[tuple[str, tuple[int, int, int, int]], tuple[str, int]] = {}
+_SHELF_FRAGMENT_CACHE: dict[tuple, tuple[str, int]] = {}
 _SHELF_FRAGMENT_CACHE_MAX_ENTRIES = 32
 
 
-def _archive_db_generation() -> tuple[int, int, int, int]:
-    db_path = ARCHIVE_DIR / "dvdrewind.db"
-    wal_path = ARCHIVE_DIR / "dvdrewind.db-wal"
+_PAGE_CACHE_LOCK = threading.Lock()
 
-    def _stamp(path: Path) -> tuple[int, int]:
+
+def _cache_put(cache: dict, key, value, max_entries: int) -> None:
+    # Handlers run in worker threads, so eviction must not race another writer.
+    with _PAGE_CACHE_LOCK:
+        cache[key] = value
+        while len(cache) > max_entries:
+            cache.pop(next(iter(cache)))
+
+
+def _movie_page_cache_key(fid: int, is_all: bool) -> tuple:
+    return fid, is_all, data_generation()
+
+
+def _cache_movie_page(key: tuple, html_text: str) -> None:
+    _cache_put(_MOVIE_PAGE_CACHE, key, html_text, _MOVIE_PAGE_CACHE_MAX_ENTRIES)
+
+
+def _search_page_cache_key(q: str, fmt: str, page: int) -> tuple:
+    return q, fmt, page, data_generation()
+
+
+def _cache_search_page(key: tuple, html_text: str) -> None:
+    _cache_put(_SEARCH_PAGE_CACHE, key, html_text, _SEARCH_PAGE_CACHE_MAX_ENTRIES)
+
+
+def _shelf_fragment_cache_key(category: str) -> tuple:
+    return category, data_generation()
+
+
+def _cache_shelf_fragment(key: tuple, html_text: str, shelf_count: int) -> None:
+    _cache_put(_SHELF_FRAGMENT_CACHE, key, (html_text, shelf_count), _SHELF_FRAGMENT_CACHE_MAX_ENTRIES)
+
+
+def _blocking(handler):
+    """Run a synchronous handler (SQLite, file I/O, rendering) in a worker thread.
+
+    aiohttp serves every visitor from one event loop; a slow query or network
+    lookup run directly on it stalls the whole site.
+    """
+    @functools.wraps(handler)
+    async def wrapper(request: web.Request) -> web.StreamResponse:
+        return await asyncio.to_thread(handler, request)
+    return wrapper
+
+
+# Film pages enrich titles from TMDB, Wikipedia and Movie-Censorship. Results are
+# cached on disk, but a first visit can take seconds per service, so the page
+# waits at most ENRICH_WAIT_SECONDS and the lookup finishes in the background.
+ENRICH_WAIT_SECONDS = 1.5
+_ENRICH_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="dvdrewind-enrich")
+_ENRICH_PENDING: dict[int, Any] = {}
+_ENRICH_LOCK = threading.Lock()
+
+
+def _fetch_enrichment(snapshot: dict[str, Any]) -> tuple[dict, dict]:
+    from src.scraper.posters import get_or_fetch_movie_metadata
+    from src.web.external_links import enrich_title_external_links
+    meta = get_or_fetch_movie_metadata(snapshot.get("imdb_id"), snapshot.get("clean_title"), snapshot.get("year"))
+    enrich_title_external_links(snapshot, db_path=str(DB_PATH))
+    return meta or {}, snapshot
+
+
+def _enrichment_for(title: dict[str, Any]):
+    """Return (metadata, links) or None if the lookup is still running."""
+    fid = title["fid"]
+    with _ENRICH_LOCK:
+        future = _ENRICH_PENDING.get(fid)
+        if future is None:
+            snapshot = {k: title.get(k) for k in (
+                "fid", "format_siblings", "clean_title", "year", "imdb_id",
+                "movie_censorship_url", "wikipedia_url", "dvdbeaver_url",
+            )}
+            future = _ENRICH_POOL.submit(_fetch_enrichment, snapshot)
+            _ENRICH_PENDING[fid] = future
+            future.add_done_callback(lambda _f, fid=fid: _ENRICH_PENDING.pop(fid, None))
+    try:
+        return future.result(timeout=ENRICH_WAIT_SECONDS)
+    except FutureTimeout:
+        return None
+    except Exception:
+        return {}, {}
+
+
+THUMBS_DIR = ARCHIVE_DIR / "thumbs"
+THUMB_WIDTH = 352  # shelf cards are 176px wide; 2x for high-density screens
+_THUMB_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*\.webp$")
+
+
+def poster_thumb(url: Optional[str]) -> Optional[str]:
+    """Jinja filter: small WebP for locally cached posters, other URLs untouched."""
+    if url and url.startswith("/static/posters/") and "?" not in url:
+        return "/thumbs/" + url.rsplit("/", 1)[1] + ".webp"
+    return url
+
+
+@_blocking
+def handle_poster_thumb(request: web.Request) -> web.StreamResponse:
+    name = request.match_info["name"]
+    if not _THUMB_NAME_RE.match(name):
+        raise web.HTTPNotFound()
+    source_name = name[: -len(".webp")]
+    thumb = THUMBS_DIR / name
+    if not thumb.exists():
+        source = ARCHIVE_DIR / "posters" / source_name
+        if not source.is_file():
+            raise web.HTTPNotFound()
         try:
-            stat = path.stat()
-            return stat.st_mtime_ns, stat.st_size
-        except OSError:
-            return 0, 0
-
-    db_mtime, db_size = _stamp(db_path)
-    wal_mtime, wal_size = _stamp(wal_path)
-    return db_mtime, db_size, wal_mtime, wal_size
-
-
-def _movie_page_cache_key(fid: int, is_all: bool) -> tuple[int, bool, tuple[int, int, int, int]]:
-    return fid, is_all, _archive_db_generation()
-
-
-def _cache_movie_page(key: tuple[int, bool, tuple[int, int, int, int]], html_text: str) -> None:
-    _MOVIE_PAGE_CACHE[key] = html_text
-    while len(_MOVIE_PAGE_CACHE) > _MOVIE_PAGE_CACHE_MAX_ENTRIES:
-        _MOVIE_PAGE_CACHE.pop(next(iter(_MOVIE_PAGE_CACHE)))
-
-
-def _search_page_cache_key(q: str, fmt: str, page: int) -> tuple[str, str, int, tuple[int, int, int, int]]:
-    return q, fmt, page, _archive_db_generation()
-
-
-def _cache_search_page(key: tuple[str, str, int, tuple[int, int, int, int]], html_text: str) -> None:
-    _SEARCH_PAGE_CACHE[key] = html_text
-    while len(_SEARCH_PAGE_CACHE) > _SEARCH_PAGE_CACHE_MAX_ENTRIES:
-        _SEARCH_PAGE_CACHE.pop(next(iter(_SEARCH_PAGE_CACHE)))
-
-
-def _shelf_fragment_cache_key(category: str) -> tuple[str, tuple[int, int, int, int]]:
-    return category, _archive_db_generation()
-
-
-def _cache_shelf_fragment(key: tuple[str, tuple[int, int, int, int]], html_text: str, shelf_count: int) -> None:
-    _SHELF_FRAGMENT_CACHE[key] = (html_text, shelf_count)
-    while len(_SHELF_FRAGMENT_CACHE) > _SHELF_FRAGMENT_CACHE_MAX_ENTRIES:
-        _SHELF_FRAGMENT_CACHE.pop(next(iter(_SHELF_FRAGMENT_CACHE)))
+            from PIL import Image
+            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+            with Image.open(source) as im:
+                im = im.convert("RGB")
+                if im.width > THUMB_WIDTH:
+                    im = im.resize((THUMB_WIDTH, round(im.height * THUMB_WIDTH / im.width)), Image.LANCZOS)
+                tmp = thumb.with_name(f".{name}.{threading.get_ident()}.tmp")
+                im.save(tmp, "WEBP", quality=80, method=4)
+            tmp.replace(thumb)
+        except Exception:
+            raise web.HTTPFound(f"/static/posters/{source_name}")
+    return web.FileResponse(thumb, headers={
+        "Cache-Control": "public, max-age=604800",
+        "Content-Type": "image/webp",
+    })
 
 EMBED_SERVICE_DOMAINS = {
     "imdb": ("imdb.com",),
@@ -125,14 +208,15 @@ async def performance_middleware(request: web.Request, handler):
         # assets are versioned in base.html and can safely stay hot in-browser.
         max_age = 604800 if path.startswith(("/static/posters/", "/static/backdrops/", "/static/edition-covers/")) else 86400
         response.headers.setdefault("Cache-Control", f"public, max-age={max_age}")
-        if path.startswith("/static/edition-covers/") and path.endswith(".webp"):
+        if path.endswith(".webp"):
             response.content_type = "image/webp"
         if path.endswith((".css", ".js", ".svg", ".json", ".txt")):
             response.enable_compression()
     return response
 
 
-async def handle_index(request: web.Request) -> web.Response:
+@_blocking
+def handle_index(request: web.Request) -> web.Response:
     repo = ArchiveRepository()
     try:
         all_shelves = get_curated_shelves(repo)
@@ -152,7 +236,8 @@ async def handle_index(request: web.Request) -> web.Response:
         repo.close()
 
 
-async def handle_api_shelves(request: web.Request) -> web.Response:
+@_blocking
+def handle_api_shelves(request: web.Request) -> web.Response:
     """Render shelves on demand so the homepage only ships the six visible ones."""
     category = request.query.get("category", "").strip().lower()
     mode = request.query.get("mode", "").strip().lower()
@@ -205,7 +290,8 @@ async def handle_api_shelves(request: web.Request) -> web.Response:
         repo.close()
 
 
-async def handle_search(request: web.Request) -> web.Response:
+@_blocking
+def handle_search(request: web.Request) -> web.Response:
     q = request.query.get("q", "").strip()
     fmt = request.query.get("format", "").strip()
     try:
@@ -281,9 +367,13 @@ async def handle_search(request: web.Request) -> web.Response:
     finally:
         repo.close()
 
-async def handle_api_search(request: web.Request) -> web.Response:
+@_blocking
+def handle_api_search(request: web.Request) -> web.Response:
     q = request.query.get("q", "").strip()
-    limit = int(request.query.get("limit", "25"))
+    try:
+        limit = min(max(int(request.query.get("limit", "25")), 1), 100)
+    except ValueError:
+        limit = 25
     if not q:
         return web.json_response([])
 
@@ -294,7 +384,8 @@ async def handle_api_search(request: web.Request) -> web.Response:
     finally:
         repo.close()
 
-async def handle_movie(request: web.Request) -> web.Response:
+@_blocking
+def handle_movie(request: web.Request) -> web.Response:
     fid = int(request.match_info["fid"])
     format_param = request.query.get("format", "").strip().lower()
     is_all = (format_param == "all")
@@ -376,8 +467,11 @@ async def handle_movie(request: web.Request) -> web.Response:
         title["is_all_formats"] = is_all
 
         # Enrich movie metadata (plot overview, runtime, genres, tagline, backdrop)
-        from src.scraper.posters import get_or_fetch_movie_metadata
-        enriched = get_or_fetch_movie_metadata(title.get("imdb_id"), title.get("clean_title"), title.get("year"))
+        # and external links. Waits briefly; a slow first lookup finishes in the
+        # background and this page is simply not cached until it has.
+        enrichment = _enrichment_for(title)
+        enrichment_pending = enrichment is None
+        enriched, links = enrichment or ({}, {})
         if enriched:
             for k in ("overview", "runtime", "genres", "tagline"):
                 if enriched.get(k) and not title.get(k):
@@ -386,11 +480,9 @@ async def handle_movie(request: web.Request) -> web.Response:
                     title[k] = enriched[k]
             if enriched.get("backdrop_url"):
                 title["backdrop_url"] = enriched["backdrop_url"]
-
-        # Enrich external resources and cinephile links (Wikipedia, Movie-Censorship, DVDBeaver, Letterboxd)
-        from src.web.external_links import enrich_title_external_links
-        from src.config import ARCHIVE_DIR
-        enrich_title_external_links(title, db_path=str(ARCHIVE_DIR / "dvdrewind.db"))
+        for k, v in links.items():
+            if k.endswith(("_url", "_summary")) and v:
+                title[k] = v
 
         # Collect distinct distributors across releases
         dists = []
@@ -475,14 +567,18 @@ async def handle_movie(request: web.Request) -> web.Response:
             "title": title,
             "query": "",
         })
-        rendered_html = response.text or response.body.decode(response.charset or "utf-8", errors="replace")
-        _cache_movie_page(cache_key, rendered_html)
-        response.headers["X-DVDRewind-Page-Cache"] = "MISS"
+        if enrichment_pending:
+            response.headers["X-DVDRewind-Page-Cache"] = "PENDING"
+        else:
+            rendered_html = response.text or response.body.decode(response.charset or "utf-8", errors="replace")
+            _cache_movie_page(cache_key, rendered_html)
+            response.headers["X-DVDRewind-Page-Cache"] = "MISS"
         return response
     finally:
         repo.close()
 
-async def handle_release_specs(request: web.Request) -> web.Response:
+@_blocking
+def handle_release_specs(request: web.Request) -> web.Response:
     """Render one edition's detailed specs on demand for the movie-page accordion."""
     fid = int(request.match_info["fid"])
     release_index = int(request.match_info["release_index"])
@@ -520,7 +616,8 @@ async def handle_release_specs(request: web.Request) -> web.Response:
         repo.close()
 
 
-async def handle_compare(request: web.Request) -> web.Response:
+@_blocking
+def handle_compare(request: web.Request) -> web.Response:
     fid = int(request.query.get("fid", "0"))
     indices_raw = request.query.get("indices", "")
     indices = [int(x.strip()) for x in indices_raw.split(",") if x.strip().isdigit()]
@@ -609,7 +706,8 @@ async def handle_compare(request: web.Request) -> web.Response:
     finally:
         repo.close()
 
-async def handle_archive_view(request: web.Request) -> web.Response:
+@_blocking
+def handle_archive_view(request: web.Request) -> web.Response:
     fid = int(request.match_info["fid"])
     repo = ArchiveRepository()
     try:
@@ -624,7 +722,8 @@ async def handle_archive_view(request: web.Request) -> web.Response:
     finally:
         repo.close()
 
-async def handle_raw_archive_file(request: web.Request) -> web.Response:
+@_blocking
+def handle_raw_archive_file(request: web.Request) -> web.Response:
     fid = int(request.match_info["fid"])
     raw_path = RAW_DIR / f"{fid}.html"
     if not raw_path.exists():
@@ -696,7 +795,8 @@ async def handle_api_poster(request: web.Request) -> web.Response:
 
         # 3. Auto-Fetch
         trace = {}
-        poster = fetch_poster_from_tmdb(
+        poster = await asyncio.to_thread(
+            fetch_poster_from_tmdb,
             imdb_id=title.get("imdb_id"),
             clean_title=title["clean_title"],
             year=title.get("year"),
@@ -706,7 +806,7 @@ async def handle_api_poster(request: web.Request) -> web.Response:
         )
         if not poster:
             is_tv = bool(trace.get("tv_detected"))
-            poster = fetch_poster_from_wikipedia(title["clean_title"], title.get("imdb_id"), is_tv=is_tv)
+            poster = await asyncio.to_thread(fetch_poster_from_wikipedia, title["clean_title"], title.get("imdb_id"), is_tv=is_tv)
             if poster:
                 trace.update({"source": "Wikipedia TV" if is_tv else "Wikipedia", "tv_fallback": is_tv})
 
@@ -727,7 +827,8 @@ async def handle_api_poster(request: web.Request) -> web.Response:
     finally:
         repo.close()
 
-async def handle_api_poster_search(request: web.Request) -> web.Response:
+@_blocking
+def handle_api_poster_search(request: web.Request) -> web.Response:
     from src.scraper.posters import search_poster_candidates
     query = request.query.get("query", "").strip()
     fid_str = request.query.get("fid", "").strip()
@@ -845,7 +946,8 @@ def parse_audio_track(raw_text: str) -> dict:
 
 from src.web.sync_manager import ArchiveSyncManager
 
-async def handle_api_archive_status(request: web.Request) -> web.Response:
+@_blocking
+def handle_api_archive_status(request: web.Request) -> web.Response:
     manager = ArchiveSyncManager()
     return web.json_response(manager.get_status())
 
@@ -1442,6 +1544,7 @@ def create_app() -> web.Application:
         autoescape=jinja2.select_autoescape(["html", "xml"]),
     )
     env.filters['parse_audio'] = parse_audio_track
+    env.filters['thumb'] = poster_thumb
 
     # Routes
     app.router.add_get("/", handle_index)
@@ -1452,6 +1555,7 @@ def create_app() -> web.Application:
     app.router.add_get("/api/film/{fid}/release/{release_index}", handle_release_specs)
     app.router.add_get("/embed/proxy", handle_embed_proxy)
     app.router.add_get("/api/poster/search", handle_api_poster_search)
+    app.router.add_get("/thumbs/{name}", handle_poster_thumb)
     app.router.add_post("/api/poster/{fid}", handle_api_poster)
     app.router.add_get("/compare", handle_compare)
     app.router.add_get("/archive/{fid}", handle_archive_view)

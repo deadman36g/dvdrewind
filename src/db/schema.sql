@@ -36,6 +36,10 @@ CREATE INDEX IF NOT EXISTS idx_titles_browse ON titles(is_missing, format_catego
 CREATE INDEX IF NOT EXISTS idx_titles_identity ON titles(clean_title, year, is_missing);
 CREATE INDEX IF NOT EXISTS idx_titles_imdb ON titles(imdb_id);
 CREATE INDEX IF NOT EXISTS idx_titles_imdb_active ON titles(imdb_id, is_missing);
+-- Covering indexes for the archive status counts (MAX(fid), poster and raw-HTML counts).
+CREATE INDEX IF NOT EXISTS idx_titles_active_fid ON titles(is_missing, fid);
+CREATE INDEX IF NOT EXISTS idx_titles_active_poster ON titles(is_missing, poster_url);
+CREATE INDEX IF NOT EXISTS idx_titles_raw_html ON titles(raw_html_path);
 
 -- 2. Releases
 CREATE TABLE IF NOT EXISTS releases (

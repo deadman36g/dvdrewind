@@ -34,7 +34,7 @@
   <a href="/film/{{ r.fid }}" class="comparison-card">
     <div class="card-poster-thumb">
       {% if r.poster_url %}
-        <img src="{{ r.poster_url }}" alt="{{ r.clean_title }} poster" loading="lazy">
+        <img src="{{ r.poster_url|thumb }}" alt="{{ r.clean_title }} poster" loading="lazy">
       {% else %}
         <div class="card-poster-placeholder">📀</div>
       {% endif %}

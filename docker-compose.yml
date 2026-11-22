@@ -11,6 +11,9 @@ services:
       - ./archive:/app/archive
     environment:
       - PYTHONUNBUFFERED=1
+      # Optional: keep the SQLite DB outside ./archive, e.g. on a plain disk when
+      # ./archive sits on a FUSE pool such as mergerfs (mount its folder at /app/db)
+      # - DVDREWIND_DB_PATH=/app/db/dvdrewind.db
       # Optional: lets archive controls (sync, backfill, vacuum) work from non-localhost browsers
       - DVDREWIND_ADMIN_TOKEN=${DVDREWIND_ADMIN_TOKEN}
       # Optional TMDB API key override (default built-in key works out of the box)

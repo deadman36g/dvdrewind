@@ -4,6 +4,20 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 from src.db.migrations import get_connection
 
+# Bumped after every archive write made through this process. Web page caches
+# key on it, so they survive unrelated writes (like a resolved Wikipedia link)
+# and are dropped as soon as titles, releases, posters or IMDb IDs change.
+_DATA_GENERATION = 0
+
+
+def data_generation() -> int:
+    return _DATA_GENERATION
+
+
+def bump_data_generation() -> None:
+    global _DATA_GENERATION
+    _DATA_GENERATION += 1
+
 def format_display_title(clean_title: str) -> str:
     if not clean_title:
         return ""
@@ -34,7 +48,13 @@ class ArchiveRepository:
         if self.conn:
             self.conn.close()
 
-    def save_parsed_comparison(
+    def save_parsed_comparison(self, *args, **kwargs) -> int:
+        try:
+            return self._save_parsed_comparison(*args, **kwargs)
+        finally:
+            bump_data_generation()
+
+    def _save_parsed_comparison(
         self,
         data: Dict[str, Any],
         source_hash: str,
@@ -255,17 +275,23 @@ class ArchiveRepository:
         tokens = [t.replace('"', '') for t in clean_q.split() if t.strip()]
         fts_query = " ".join(f'"{tok}"*' for tok in tokens)
 
+        # Rank and limit inside FTS first, then join only the kept rows. Joining
+        # before the LIMIT looked up every match ("the" matches 61k titles).
         sql = """
-            SELECT 
+            WITH hits AS (
+                SELECT title_id, rank FROM titles_fts
+                WHERE titles_fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+            )
+            SELECT
                 t.id, t.fid, t.clean_title, t.year, t.format_category, t.aka_titles, t.poster_url,
                 r.overall_winner,
                 (SELECT COUNT(*) FROM releases rel WHERE rel.title_id = t.id) as release_count
-            FROM titles_fts fts
-            JOIN titles t ON t.id = fts.title_id
+            FROM hits
+            JOIN titles t ON t.id = hits.title_id
             LEFT JOIN recommendations r ON r.title_id = t.id
-            WHERE titles_fts MATCH ?
-            ORDER BY bm25(titles_fts)
-            LIMIT ?;
+            ORDER BY hits.rank;
         """
         rows = self.conn.execute(sql, (fts_query, limit)).fetchall()
         results = []
@@ -555,6 +581,7 @@ class ArchiveRepository:
                 self.conn.execute("UPDATE titles SET poster_url = ? WHERE clean_title = ? AND year = ?", (poster_url, clean_title, year))
             else:
                 self.conn.execute("UPDATE titles SET poster_url = ? WHERE fid = ?", (poster_url, fid))
+        bump_data_generation()
 
     def update_imdb_id(self, fid: int, imdb_id: str) -> int:
         """Attach a verified IMDb ID and propagate it to same-title/year format siblings."""
@@ -583,4 +610,5 @@ class ArchiveRepository:
                     "AND (imdb_id IS NULL OR TRIM(imdb_id) = '')",
                     (imdb_id, fid, clean_title, year),
                 )
-            return int(cur.rowcount or 0)
+        bump_data_generation()
+        return int(cur.rowcount or 0)

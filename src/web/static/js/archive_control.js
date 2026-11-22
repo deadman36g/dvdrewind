@@ -6,6 +6,8 @@
 let archivePollTimer = null;
 let isArchiveModalOpen = false;
 let lastLogLinesLength = 0;
+// Only the nav status dot needs updates while the console is closed.
+const IDLE_POLL_MS = 60000;
 
 function openArchiveModal() {
   const modal = document.getElementById("archive-modal");
@@ -23,7 +25,7 @@ function closeArchiveModal() {
   modal.style.display = "none";
   isArchiveModalOpen = false;
   // Slow polling down when modal is closed
-  startArchivePolling(20000);
+  startArchivePolling(IDLE_POLL_MS);
 }
 
 function startArchivePolling(ms) {
@@ -32,6 +34,8 @@ function startArchivePolling(ms) {
 }
 
 async function pollArchiveStatus() {
+  // Background tabs never need live status; refreshed on visibilitychange.
+  if (document.hidden) return;
   try {
     const res = await fetch("/api/archive/status");
     if (!res.ok) return;
@@ -317,7 +321,10 @@ function cancelArchiveTask() {
 // Global initialization and Escape key listener
 document.addEventListener("DOMContentLoaded", () => {
   pollArchiveStatus();
-  startArchivePolling(20000);
+  startArchivePolling(IDLE_POLL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) pollArchiveStatus();
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isArchiveModalOpen) {

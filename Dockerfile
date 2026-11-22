@@ -8,13 +8,14 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Install Python dependencies
+# rich/textual only power the desktop TUI (tui_app.py, cli_monitor.py), not the server.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN grep -v -E '^(rich|textual)\b' requirements.txt > /tmp/requirements-server.txt \
+    && pip install --no-cache-dir -r /tmp/requirements-server.txt
 
 # Copy application code
 COPY src/ ./src/
 COPY populate_all.py .
-COPY tests/ ./tests/
 
 # Prepare persistent archive directories
 RUN mkdir -p /app/archive/posters /app/archive/raw /app/archive/backdrops

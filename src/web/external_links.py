@@ -2,6 +2,7 @@
 DVDRewind External Resources and Cinephile Review Link Resolver
 """
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,11 @@ import urllib.request
 import sqlite3
 
 from src.config import ARCHIVE_DIR
+
+def _stable_hash(text: str) -> str:
+    # hash() is salted per process, so cache files keyed by it never hit after a restart.
+    return hashlib.md5((text or "").encode("utf-8")).hexdigest()[:16]
+
 
 WIKI_CACHE_DIR = ARCHIVE_DIR / "metadata" / "wikipedia"
 WIKI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -35,7 +41,7 @@ def resolve_wikipedia_url(clean_title: str, year: Optional[int] = None, imdb_id:
     Resolves the exact Wikipedia film article URL via Wikidata or Wikipedia OpenSearch API.
     Caches results on-disk in archive/metadata/wikipedia/.
     """
-    cache_key = imdb_id if (imdb_id and imdb_id.startswith("tt")) else f"wiki_{abs(hash(clean_title))}"
+    cache_key = imdb_id if (imdb_id and imdb_id.startswith("tt")) else f"wiki_{_stable_hash(clean_title)}"
     cache_file = WIKI_CACHE_DIR / f"{cache_key}.json"
 
     if cache_file.exists():
@@ -150,7 +156,7 @@ def get_wikipedia_summary(clean_title: str, year: Optional[int] = None, imdb_id:
     if not wikipedia_url and not clean_title:
         return None
 
-    cache_key = imdb_id if (imdb_id and imdb_id.startswith("tt")) else f"wiki_sum_{abs(hash(clean_title))}"
+    cache_key = imdb_id if (imdb_id and imdb_id.startswith("tt")) else f"wiki_sum_{_stable_hash(clean_title)}"
     cache_file = WIKI_SUMMARY_DIR / f"{cache_key}.json"
 
     if cache_file.exists():
@@ -205,7 +211,7 @@ def get_movie_censorship_summary(movie_censorship_url: str, clean_title: str = "
 
     # Extract ID from URL
     id_m = re.search(r'ID=(\d+)', movie_censorship_url, re.I)
-    cache_id = id_m.group(1) if id_m else str(abs(hash(movie_censorship_url)))
+    cache_id = id_m.group(1) if id_m else str(_stable_hash(movie_censorship_url))
     cache_file = MC_SUMMARY_DIR / f"mc_{cache_id}.json"
 
     if cache_file.exists():

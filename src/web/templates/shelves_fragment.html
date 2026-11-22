@@ -19,7 +19,7 @@
       <a href="/film/{{ item.fid }}" class="shelf-card" title="{{ item.clean_title }} ({{ item.year or '' }})">
         <div class="shelf-card-poster">
           {% if item.poster_url %}
-            <img src="{{ item.poster_url }}" alt="{{ item.clean_title }} poster" loading="lazy">
+            <img src="{{ item.poster_url|thumb }}" alt="{{ item.clean_title }} poster" loading="lazy">
           {% else %}
             <div class="shelf-card-placeholder">
               <span class="placeholder-icon">🎬</span>
