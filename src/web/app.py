@@ -6,6 +6,7 @@ import json
 import os
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
 from typing import Any, Optional
@@ -41,6 +42,11 @@ _MOVIE_PAGE_CACHE: dict[tuple, str] = {}
 _MOVIE_PAGE_CACHE_MAX_ENTRIES = 128
 _SEARCH_PAGE_CACHE: dict[tuple, str] = {}
 _SEARCH_PAGE_CACHE_MAX_ENTRIES = 128
+# Typeahead fires on every keystroke and the same short prefixes repeat.
+_API_SEARCH_CACHE: dict[tuple, list] = {}
+_API_SEARCH_CACHE_MAX_ENTRIES = 512
+_COMPARE_PAGE_CACHE: dict[tuple, str] = {}
+_COMPARE_PAGE_CACHE_MAX_ENTRIES = 64
 _SHELF_FRAGMENT_CACHE: dict[tuple, tuple[str, int]] = {}
 _SHELF_FRAGMENT_CACHE_MAX_ENTRIES = 32
 
@@ -94,8 +100,9 @@ def _blocking(handler):
 
 # Film pages enrich titles from TMDB, Wikipedia and Movie-Censorship. Results are
 # cached on disk, but a first visit can take seconds per service, so the page
-# waits at most ENRICH_WAIT_SECONDS and the lookup finishes in the background.
-ENRICH_WAIT_SECONDS = 1.5
+# waits at most ENRICH_WAIT_SECONDS (enough for disk-cache hits), the lookup
+# finishes in the background, and movie.html re-fetches itself to fill in.
+ENRICH_WAIT_SECONDS = 0.3
 _ENRICH_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="dvdrewind-enrich")
 _ENRICH_PENDING: dict[int, Any] = {}
 _ENRICH_LOCK = threading.Lock()
@@ -135,23 +142,62 @@ THUMB_WIDTH = 352  # shelf cards are 176px wide; 2x for high-density screens
 _THUMB_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*\.webp$")
 
 
-def poster_thumb(url: Optional[str]) -> Optional[str]:
-    """Jinja filter: small WebP for locally cached posters, other URLs untouched."""
+# Other WebP sizes, served from /thumbs/<kind>/<file>.webp:
+# kind -> (source folder, max width, WebP quality)
+THUMB_KINDS = {
+    "w440": ("posters", 440, 80),       # film-page poster, shown at 220px
+    "backdrops": ("backdrops", 1280, 72),  # film/compare hero background
+}
+
+
+def poster_thumb(url: Optional[str], width: int = THUMB_WIDTH) -> Optional[str]:
+    """Jinja filter: WebP copy of a locally cached poster, other URLs untouched."""
     if url and url.startswith("/static/posters/") and "?" not in url:
-        return "/thumbs/" + url.rsplit("/", 1)[1] + ".webp"
+        name = url.rsplit("/", 1)[1] + ".webp"
+        return f"/thumbs/w{width}/{name}" if width != THUMB_WIDTH else f"/thumbs/{name}"
     return url
 
 
-def _make_thumb(source: Path, thumb: Path) -> None:
+def backdrop_webp(url: Optional[str]) -> Optional[str]:
+    """Jinja filter: WebP copy of a locally cached TMDB backdrop."""
+    if url and url.startswith("/static/backdrops/") and "?" not in url:
+        return "/thumbs/backdrops/" + url.rsplit("/", 1)[1] + ".webp"
+    return url
+
+
+def _make_thumb(source: Path, thumb: Path, width: int = THUMB_WIDTH, quality: int = 80) -> None:
     from PIL import Image
-    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+    thumb.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(source) as im:
+        # Big JPEGs decode straight at 1/2, 1/4 or 1/8 scale (never below the
+        # target size); most posters are 500px, so this only helps the large ones.
+        im.draft("RGB", (width, max(1, round(im.height * width / im.width))))
         im = im.convert("RGB")
-        if im.width > THUMB_WIDTH:
-            im = im.resize((THUMB_WIDTH, round(im.height * THUMB_WIDTH / im.width)), Image.LANCZOS)
+        if im.width > width:
+            im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
         tmp = thumb.with_name(f".{thumb.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-        im.save(tmp, "WEBP", quality=80, method=4)
+        # Encoding dominates: method=2 is ~2x faster than 4 for ~3% bigger files.
+        im.save(tmp, "WEBP", quality=quality, method=2)
     tmp.replace(thumb)
+
+
+def _thumb_response(source_dir: str, thumb_dir: Path, name: str, width: int, quality: int) -> web.StreamResponse:
+    if not _THUMB_NAME_RE.match(name):
+        raise web.HTTPNotFound()
+    source_name = name[: -len(".webp")]
+    thumb = thumb_dir / name
+    if not thumb.exists():
+        source = ARCHIVE_DIR / source_dir / source_name
+        if not source.is_file():
+            raise web.HTTPNotFound()
+        try:
+            _make_thumb(source, thumb, width, quality)
+        except Exception:
+            raise web.HTTPFound(f"/static/{source_dir}/{source_name}")
+    return web.FileResponse(thumb, headers={
+        "Cache-Control": "public, max-age=604800",
+        "Content-Type": "image/webp",
+    })
 
 
 def pregenerate_thumbs() -> None:
@@ -159,6 +205,13 @@ def pregenerate_thumbs() -> None:
     `serve`, so shelves rarely wait on a first-time resize; it restarts with
     the server and skips thumbnails that already exist."""
     THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+    # Temp files left by a resize that was killed mid-write (e.g. a restart).
+    for entry in os.scandir(THUMBS_DIR):
+        if entry.name.endswith(".tmp") and time.time() - entry.stat().st_mtime > 600:
+            try:
+                os.remove(entry.path)
+            except OSError:
+                pass
     existing = set(os.listdir(THUMBS_DIR))
     made = failed = 0
     for entry in os.scandir(ARCHIVE_DIR / "posters"):
@@ -175,23 +228,16 @@ def pregenerate_thumbs() -> None:
 
 @_blocking
 def handle_poster_thumb(request: web.Request) -> web.StreamResponse:
-    name = request.match_info["name"]
-    if not _THUMB_NAME_RE.match(name):
+    return _thumb_response("posters", THUMBS_DIR, request.match_info["name"], THUMB_WIDTH, 80)
+
+
+@_blocking
+def handle_sized_thumb(request: web.Request) -> web.StreamResponse:
+    kind = THUMB_KINDS.get(request.match_info["kind"])
+    if kind is None:
         raise web.HTTPNotFound()
-    source_name = name[: -len(".webp")]
-    thumb = THUMBS_DIR / name
-    if not thumb.exists():
-        source = ARCHIVE_DIR / "posters" / source_name
-        if not source.is_file():
-            raise web.HTTPNotFound()
-        try:
-            _make_thumb(source, thumb)
-        except Exception:
-            raise web.HTTPFound(f"/static/posters/{source_name}")
-    return web.FileResponse(thumb, headers={
-        "Cache-Control": "public, max-age=604800",
-        "Content-Type": "image/webp",
-    })
+    source_dir, width, quality = kind
+    return _thumb_response(source_dir, THUMBS_DIR / request.match_info["kind"], request.match_info["name"], width, quality)
 
 EMBED_SERVICE_DOMAINS = {
     "imdb": ("imdb.com",),
@@ -282,6 +328,51 @@ def _render_page(template_name: str, request: web.Request, context: dict[str, An
 async def handle_healthz(request: web.Request) -> web.Response:
     """Liveness only: no database work, so the Docker check stays cheap."""
     return web.Response(text="ok")
+
+
+SLOW_REQUEST_SECONDS = 1.0
+
+
+@web.middleware
+async def timing_middleware(request: web.Request, handler):
+    """Log any request slower than SLOW_REQUEST_SECONDS, so slowdowns show up
+    in `docker logs dvdrewind` without anyone measuring by hand."""
+    start = time.monotonic()
+    status = 500
+    try:
+        response = await handler(request)
+        status = response.status
+        return response
+    except web.HTTPException as exc:
+        status = exc.status
+        raise
+    finally:
+        elapsed = time.monotonic() - start
+        if elapsed >= SLOW_REQUEST_SECONDS:
+            print(f"SLOW {elapsed:.2f}s {status} {request.method} {request.path_qs}", flush=True)
+
+
+@web.middleware
+async def etag_middleware(request: web.Request, handler):
+    """Let browsers revalidate HTML pages: same content -> 304, no body."""
+    response = await handler(request)
+    if (
+        request.method == "GET"
+        and response.status == 200
+        and isinstance(response, web.Response)
+        and response.content_type == "text/html"
+        and response.body
+    ):
+        etag = '"' + hashlib.md5(response.body).hexdigest()[:20] + '"'
+        response.headers["ETag"] = etag
+        response.headers.setdefault("Cache-Control", "no-cache")
+        if etag in request.headers.get("If-None-Match", ""):
+            return web.Response(status=304, headers={
+                "ETag": etag,
+                "Cache-Control": response.headers["Cache-Control"],
+                **{k: v for k, v in response.headers.items() if k.startswith("X-DVDRewind-")},
+            })
+    return response
 
 
 @web.middleware
@@ -473,12 +564,16 @@ def handle_api_search(request: web.Request) -> web.Response:
     if not q:
         return web.json_response([])
 
-    repo = ArchiveRepository()
-    try:
-        results = repo.search_fts(q, limit=limit)
-        return web.json_response(results)
-    finally:
-        repo.close()
+    cache_key = (q.lower(), limit, data_generation())
+    results = _API_SEARCH_CACHE.get(cache_key)
+    if results is None:
+        repo = ArchiveRepository()
+        try:
+            results = repo.search_fts(q, limit=limit)
+        finally:
+            repo.close()
+        _cache_put(_API_SEARCH_CACHE, cache_key, results, _API_SEARCH_CACHE_MAX_ENTRIES)
+    return web.json_response(results)
 
 @_blocking
 def handle_movie(request: web.Request) -> web.Response:
@@ -662,6 +757,7 @@ def handle_movie(request: web.Request) -> web.Response:
         response = _render_page("movie.html", request, {
             "title": title,
             "query": "",
+            "enrich_pending": enrichment_pending,
         })
         if enrichment_pending:
             response.headers["X-DVDRewind-Page-Cache"] = "PENDING"
@@ -718,6 +814,11 @@ def handle_compare(request: web.Request) -> web.Response:
     indices_raw = request.query.get("indices", "")
     indices = [int(x.strip()) for x in indices_raw.split(",") if x.strip().isdigit()]
     is_all = (request.query.get("format", "").lower() == "all")
+    cache_key = (fid, tuple(indices), is_all, data_generation())
+    cached_html = _COMPARE_PAGE_CACHE.get(cache_key)
+    if cached_html is not None:
+        return web.Response(text=cached_html, content_type="text/html", charset="utf-8",
+                            headers={"X-DVDRewind-Page-Cache": "HIT"})
 
     repo = ArchiveRepository()
     try:
@@ -791,7 +892,7 @@ def handle_compare(request: web.Request) -> web.Response:
             "notes": len(set((e.get("notes_raw") or "").strip() for e in selected_editions)) > 1,
         }
 
-        return _render_page("compare.html", request, {
+        response = _render_page("compare.html", request, {
             "title": title,
             "editions": selected_editions,
             "all_releases": title.get("releases", []),
@@ -799,6 +900,9 @@ def handle_compare(request: web.Request) -> web.Response:
             "diffs": diffs,
             "query": "",
         })
+        _cache_put(_COMPARE_PAGE_CACHE, cache_key, response.text, _COMPARE_PAGE_CACHE_MAX_ENTRIES)
+        response.headers["X-DVDRewind-Page-Cache"] = "MISS"
+        return response
     finally:
         repo.close()
 
@@ -833,8 +937,14 @@ def handle_raw_archive_file(request: web.Request) -> web.Response:
     with open(raw_path, "rb") as f:
         content = f.read()
 
-    # Deliver with UTF-8 or CP1252
-    return web.Response(body=content, content_type="text/html", charset="utf-8")
+    # Deliver with UTF-8 or CP1252. The page is DVDCompare's own HTML,
+    # including its scripts and Google Analytics: the sandbox keeps those from
+    # running on this site's origin, wherever the page is opened.
+    return web.Response(body=content, content_type="text/html", charset="utf-8", headers={
+        "Content-Security-Policy": "sandbox allow-same-origin",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+    })
 
 async def handle_api_poster(request: web.Request) -> web.Response:
     from src.scraper.posters import fetch_poster_from_tmdb, fetch_poster_from_wikipedia, save_tmdb_key, cache_custom_poster, save_uploaded_poster
@@ -1633,7 +1743,7 @@ def create_app() -> web.Application:
     finally:
         warm_repo.close()
 
-    app = web.Application(middlewares=[archive_control_middleware, performance_middleware])
+    app = web.Application(middlewares=[timing_middleware, archive_control_middleware, etag_middleware, performance_middleware])
     env = aiohttp_jinja2.setup(
         app,
         loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
@@ -1643,6 +1753,7 @@ def create_app() -> web.Application:
     )
     env.filters['parse_audio'] = parse_audio_track
     env.filters['thumb'] = poster_thumb
+    env.filters['backdrop_webp'] = backdrop_webp
     # Compile now (movie.html alone takes ~0.5 s) instead of on the first
     # visitor after every restart.
     for template_name in env.list_templates(extensions=["html"]):
@@ -1659,6 +1770,7 @@ def create_app() -> web.Application:
     app.router.add_get("/embed/proxy", handle_embed_proxy)
     app.router.add_get("/api/poster/search", handle_api_poster_search)
     app.router.add_get("/thumbs/{name}", handle_poster_thumb)
+    app.router.add_get("/thumbs/{kind}/{name}", handle_sized_thumb)
     app.router.add_post("/api/poster/{fid}", handle_api_poster)
     app.router.add_get("/compare", handle_compare)
     app.router.add_get("/archive/{fid}", handle_archive_view)

@@ -91,12 +91,26 @@ class TestWebServer(AioHTTPTestCase):
 
     @unittest_run_loop
     async def test_movie_page_hot_cache_hits_on_repeat(self):
-        first = await self.client.request("GET", "/film/43651")
-        self.assertEqual(first.status, 200)
-        await first.text()
-        second = await self.client.request("GET", "/film/43651")
+        # Stub the TMDB/Wikipedia lookups: a still-pending first visit is not
+        # cached on purpose, and network speed must not decide this test.
+        from unittest.mock import patch
+        with patch("src.web.app._enrichment_for", return_value=({}, {})):
+            first = await self.client.request("GET", "/film/43651")
+            self.assertEqual(first.status, 200)
+            await first.text()
+            second = await self.client.request("GET", "/film/43651")
         self.assertEqual(second.status, 200)
         self.assertEqual(second.headers.get("X-DVDRewind-Page-Cache"), "HIT")
+
+    @unittest_run_loop
+    async def test_pending_film_page_fills_itself_in(self):
+        from unittest.mock import patch
+        with patch("src.web.app._enrichment_for", return_value=None):
+            resp = await self.client.request("GET", "/film/45272")
+            text = await resp.text()
+        self.assertEqual(resp.headers.get("X-DVDRewind-Page-Cache"), "PENDING")
+        self.assertIn("fillIn", text)
+        self.assertIn('data-enrich="overview"', text)
 
     @unittest_run_loop
     async def test_movie_page_lazy_loads_release_specs(self):
@@ -135,6 +149,25 @@ class TestWebServer(AioHTTPTestCase):
         resp = await self.client.request("GET", "/archive/raw/43651")
         self.assertEqual(resp.status, 200)
         self.assertIn("text/html", resp.headers["Content-Type"])
+        # The saved DVDCompare page must never run its scripts on this origin.
+        self.assertEqual(resp.headers["Content-Security-Policy"], "sandbox allow-same-origin")
+
+    @unittest_run_loop
+    async def test_unchanged_html_page_revalidates_with_304(self):
+        first = await self.client.request("GET", "/archive/43651")
+        etag = first.headers["ETag"]
+        await first.text()
+        again = await self.client.request("GET", "/archive/43651", headers={"If-None-Match": etag})
+        self.assertEqual(again.status, 304)
+        self.assertEqual(again.headers["ETag"], etag)
+
+    @unittest_run_loop
+    async def test_short_word_search_matches_title_starts(self):
+        resp = await self.client.request("GET", "/api/search?q=bla")
+        data = await resp.json()
+        self.assertIn("Blade Runner", [d["clean_title"] for d in data])
+        again = await self.client.request("GET", "/api/search?q=bla")
+        self.assertEqual(await again.json(), data)
 
     @unittest_run_loop
     async def test_movie_not_found(self):
@@ -186,6 +219,20 @@ class TestCompactHtml(unittest.TestCase):
         self.assertIn('<svg width="20" fill="red"><use', out)
         self.assertIn(script, out)
         self.assertNotIn("\n    <p>", out)
+
+    def test_image_filters_map_local_files_only(self):
+        from src.web.app import backdrop_webp, poster_thumb
+        self.assertEqual(poster_thumb("/static/posters/tt1.jpg"), "/thumbs/tt1.jpg.webp")
+        self.assertEqual(poster_thumb("/static/posters/tt1.jpg", 440), "/thumbs/w440/tt1.jpg.webp")
+        self.assertEqual(backdrop_webp("/static/backdrops/tt1.jpg"), "/thumbs/backdrops/tt1.jpg.webp")
+        self.assertEqual(poster_thumb("https://image.tmdb.org/x.jpg", 440), "https://image.tmdb.org/x.jpg")
+        self.assertIsNone(backdrop_webp(None))
+
+    def test_secrets_are_redacted(self):
+        from src.config import redact_secrets
+        msg = redact_secrets("Max retries exceeded with url: /3/find/tt1?api_key=abc123&external_source=imdb_id")
+        self.assertNotIn("abc123", msg)
+        self.assertIn("api_key=***&external_source", msg)
 
 
 if __name__ == "__main__":

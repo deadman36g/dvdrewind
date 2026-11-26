@@ -7,9 +7,11 @@
 <article class="movie-page">
   <!-- Cinematic Backdrop Banner with Gradient Vignette -->
   {% if title.backdrop_url %}
-  <div class="cinematic-hero-banner" style="background-image: url('{{ title.backdrop_url }}');">
+  <div class="cinematic-hero-banner" data-enrich="banner" style="background-image: url('{{ title.backdrop_url|backdrop_webp }}');">
     <div class="banner-gradient-overlay"></div>
   </div>
+  {% else %}
+  <div data-enrich="banner" hidden></div>
   {% endif %}
 
   <!-- Movie Hero Stage: Overlapping Elevated Poster & Integrated Title Bar -->
@@ -18,7 +20,7 @@
     <div class="movie-poster-pane">
       <div class="movie-poster-box" id="poster-wrapper">
         {% if title.poster_url %}
-        <img src="{{ title.poster_url }}" alt="{{ title.clean_title }} poster" class="movie-poster-img" id="main-poster-img">
+        <img src="{{ title.poster_url|thumb(440) }}" alt="{{ title.clean_title }} poster" class="movie-poster-img" id="main-poster-img">
         {% else %}
         <div class="movie-poster-placeholder" id="poster-placeholder">
           <div class="placeholder-icon">🎬</div>
@@ -42,27 +44,31 @@
 
       <!-- Official Movie Tagline Right Below Title -->
       {% if title.tagline %}
-      <div class="movie-tagline-wrapper">
+      <div class="movie-tagline-wrapper" data-enrich="tagline">
         <p class="movie-tagline-text">&ldquo;{{ title.tagline }}&rdquo;</p>
       </div>
       {% elif title.synopsis and title.synopsis|length < 90 %}
-      <div class="movie-tagline-wrapper">
+      <div class="movie-tagline-wrapper" data-enrich="tagline">
         <p class="movie-tagline-text">&ldquo;{{ title.synopsis }}&rdquo;</p>
       </div>
+      {% else %}
+      <div data-enrich="tagline" hidden></div>
       {% endif %}
 
       {% if title.overview %}
-      <div class="movie-overview-wrapper">
+      <div class="movie-overview-wrapper" data-enrich="overview">
         <p class="movie-overview-text">{{ title.overview }}</p>
       </div>
       {% elif title.synopsis and title.synopsis|length >= 90 %}
-      <div class="movie-overview-wrapper">
+      <div class="movie-overview-wrapper" data-enrich="overview">
         <p class="movie-overview-text">{{ title.synopsis }}</p>
       </div>
+      {% else %}
+      <div data-enrich="overview" hidden></div>
       {% endif %}
 
       <!-- Quick Specs Bar: Universal Movie Metadata Only -->
-      <div class="movie-specs-shelf">
+      <div class="movie-specs-shelf" data-enrich="specs">
         {% if title.runtime %}
         <span class="spec-pill" title="Film Runtime"><span class="spec-icon">⏱️</span> <strong>{{ title.runtime }} min</strong></span>
         {% endif %}
@@ -1237,5 +1243,38 @@
       <button type="button" id="dock-clear-btn" class="btn-dock-clear" title="Clear selection">Clear</button>
     </div>
   </aside>
+  {% if enrich_pending %}
+  <script>
+  // TMDB/Wikipedia lookups were still running when this page was rendered.
+  // Re-fetch it shortly and swap in the parts they fill (backdrop, tagline,
+  // overview, runtime/genres). Buttons with their own handlers stay put.
+  (function () {
+    let tries = 0;
+    async function fillIn() {
+      tries += 1;
+      try {
+        const res = await fetch(location.href, { credentials: "same-origin" });
+        if (res.headers.get("X-DVDRewind-Page-Cache") === "PENDING") {
+          if (tries < 6) setTimeout(fillIn, 2000 * tries);
+          return;
+        }
+        const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+        const sprite = doc.body.firstElementChild;
+        if (sprite && sprite.tagName.toLowerCase() === "svg") document.body.prepend(sprite);
+        document.querySelectorAll("[data-enrich]").forEach((el) => {
+          const fresh = doc.querySelector(`[data-enrich="${el.dataset.enrich}"]`);
+          if (fresh) el.replaceWith(fresh);
+        });
+        const hero = document.querySelector(".movie-hero");
+        const freshHero = doc.querySelector(".movie-hero");
+        if (hero && freshHero) hero.className = freshHero.className;
+      } catch (err) {
+        console.debug("Film details fill-in failed:", err);
+      }
+    }
+    setTimeout(fillIn, 1500);
+  })();
+  </script>
+  {% endif %}
 </article>
 {% endblock %}

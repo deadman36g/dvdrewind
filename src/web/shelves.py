@@ -34,6 +34,9 @@ SHELF_CACHE_TTL_SECONDS = 6 * 3600
 # Saved after each build so a restart (e.g. a nightly container restart)
 # serves shelves at once and rebuilds in the background.
 SHELF_CACHE_FILE = ARCHIVE_DIR / "shelf_cache.json"
+# While a sync or backfill keeps writing, a rebuild (~11 s of CPU) on every
+# data change would run back to back; space them out instead.
+SHELF_REBUILD_DURING_TASK_SECONDS = 600
 
 # Shelf construction scans the full archive and is intentionally expensive.
 # Requests always receive the hot cache immediately; stale caches refresh in
@@ -212,6 +215,11 @@ def _refresh_shelf_cache_in_background() -> None:
     threading.Thread(target=worker, name="dvdrewind-shelf-refresh", daemon=True).start()
 
 
+def _archive_task_running() -> bool:
+    from src.web.sync_manager import ArchiveSyncManager
+    return ArchiveSyncManager().is_running
+
+
 def _load_saved_shelves() -> bool:
     global _SHELF_CACHE, _SHELF_CACHE_BUILT_AT, _SHELF_CACHE_GENERATION
     try:
@@ -239,10 +247,11 @@ def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any
     global _SHELF_CACHE, _SHELF_CACHE_BUILT_AT, _SHELF_CACHE_GENERATION
 
     if not force_refresh and (_SHELF_CACHE is not None or _load_saved_shelves()):
-        stale = (
-            _SHELF_CACHE_GENERATION != data_generation()
-            or time.monotonic() - _SHELF_CACHE_BUILT_AT >= SHELF_CACHE_TTL_SECONDS
-        )
+        age = time.monotonic() - _SHELF_CACHE_BUILT_AT
+        data_changed = _SHELF_CACHE_GENERATION != data_generation()
+        if data_changed and age < SHELF_REBUILD_DURING_TASK_SECONDS and _archive_task_running():
+            data_changed = False  # a long sync: refresh at most every few minutes
+        stale = data_changed or age >= SHELF_CACHE_TTL_SECONDS
         if stale:
             _refresh_shelf_cache_in_background()
         return _SHELF_CACHE

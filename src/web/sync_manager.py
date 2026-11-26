@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 
 import requests
 
-from src.config import ARCHIVE_DIR, RAW_DIR, DB_PATH
+from src.config import ARCHIVE_DIR, RAW_DIR, DB_PATH, redact_secrets
 from src.db.repository import ArchiveRepository, bump_data_generation
 from src.parser.html_parser import DVDCompareParser
 from src.parser.warnings import WarningCollector
@@ -85,6 +85,24 @@ class ArchiveSyncManager:
             "current_year": None,
             "poster_found": False,
         }
+
+    def _task_finished(self) -> None:
+        """Publish the task's writes to page caches and refresh planner stats.
+
+        PRAGMA optimize re-runs ANALYZE only on tables whose size changed a lot,
+        so the query plans keep up as syncs add titles.
+        """
+        bump_data_generation(immediate=True)
+        repo = None
+        try:
+            repo = ArchiveRepository()
+            repo.conn.execute("PRAGMA analysis_limit = 1000;")
+            repo.conn.execute("PRAGMA optimize;")
+        except Exception as exc:
+            print(f"PRAGMA optimize skipped: {redact_secrets(exc)}")
+        finally:
+            if repo is not None:
+                repo.close()
 
     def _snapshot_metrics(self, force: bool = False) -> Dict[str, Any]:
         if force or not self._metrics_cache:
@@ -203,7 +221,8 @@ class ArchiveSyncManager:
 
     def log(self, msg: str, style: str = ""):
         ts = datetime.now().strftime("%H:%M:%S")
-        entry = {"ts": ts, "msg": msg, "style": style}
+        # The status API shows these lines in the browser; keep keys out.
+        entry = {"ts": ts, "msg": redact_secrets(msg), "style": style}
         self.log_lines.append(entry)
         if len(self.log_lines) > 200:
             self.log_lines = self.log_lines[-200:]
@@ -694,7 +713,7 @@ class ArchiveSyncManager:
             self.status_message = f"Error: {e}"
         finally:
             self.is_running = False
-            bump_data_generation()
+            self._task_finished()
             self.current_action = ""
 
     def _run_imdb_matches(self, limit: Optional[int] = None, fid: Optional[int] = None):
@@ -817,7 +836,7 @@ class ArchiveSyncManager:
             if repo is not None:
                 repo.close()
             self.is_running = False
-            bump_data_generation()
+            self._task_finished()
             self.current_action = ""
 
     def _run_posters(self, limit: Optional[int] = None):
@@ -910,7 +929,7 @@ class ArchiveSyncManager:
             self.status_message = f"Error: {e}"
         finally:
             self.is_running = False
-            bump_data_generation()
+            self._task_finished()
             self.current_action = ""
 
     def _run_edition_art(self, limit: Optional[int] = None, fid: Optional[int] = None):
@@ -1003,7 +1022,7 @@ class ArchiveSyncManager:
             if repo is not None:
                 repo.close()
             self.is_running = False
-            bump_data_generation()
+            self._task_finished()
             self.current_action = ""
 
     @staticmethod
@@ -1204,7 +1223,7 @@ class ArchiveSyncManager:
                 except Exception:
                     pass
             self.is_running = False
-            bump_data_generation()
+            self._task_finished()
             self.current_action = ""
 
     def _run_vacuum_internal(self):
@@ -1251,5 +1270,5 @@ class ArchiveSyncManager:
             self.status_message = "Database optimization complete"
         finally:
             self.is_running = False
-            bump_data_generation()
+            self._task_finished()
             self.current_action = ""

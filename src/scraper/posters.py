@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 import requests
 
-from src.config import ARCHIVE_DIR, DEFAULT_USER_AGENT
+from src.config import ARCHIVE_DIR, DEFAULT_USER_AGENT, redact_secrets
 from src.web.security import (
     DEFAULT_MAX_IMAGE_BYTES,
     URLSecurityError,
@@ -339,7 +339,7 @@ def fetch_poster_from_wikipedia(clean_title: str, imdb_id: Optional[str] = None,
                             f.write(img_resp.content)
                         return f"/static/posters/{cache_key}.jpg"
         except Exception as e:
-            print(f"Wikipedia poster fallback error: {e}")
+            print(f"Wikipedia poster fallback error: {redact_secrets(e)}")
     return None
 
 async def cache_custom_poster(url: str, cache_key: str) -> str:
@@ -413,7 +413,7 @@ def fetch_poster_from_tmdb(
                         source = label
                         break
         except Exception as exc:
-            print(f"Error finding by IMDb ID: {exc}")
+            print(f"Error finding by IMDb ID: {redact_secrets(exc)}")
 
     # 2. Search the appropriate TMDB catalog. Explicit TV titles search TV first.
     if not poster_path and clean_title:
@@ -480,7 +480,7 @@ def fetch_poster_from_tmdb(
                 trace.update({"source": source or "TMDB", "tv_fallback": "TV" in source})
             return f"/static/posters/{cache_key}.jpg"
     except Exception as exc:
-        print(f"Error caching TMDB poster: {exc}")
+        print(f"Error caching TMDB poster: {redact_secrets(exc)}")
 
     if trace is not None:
         trace.update({"source": source or "TMDB", "tv_fallback": "TV" in source})
@@ -519,7 +519,7 @@ def search_poster_candidates(query: str, year: Optional[int] = None, imdb_id: Op
                     if mr:
                         movie_id = mr[0].get("id")
             except Exception as e:
-                print(f"TMDB find by IMDb error: {e}")
+                print(f"TMDB find by IMDb error: {redact_secrets(e)}")
 
         # If not found by IMDb, search by title + year
         if not movie_id and query:
@@ -534,7 +534,7 @@ def search_poster_candidates(query: str, year: Optional[int] = None, imdb_id: Op
                     if res:
                         movie_id = res[0].get("id")
             except Exception as e:
-                print(f"TMDB title search error: {e}")
+                print(f"TMDB title search error: {redact_secrets(e)}")
 
         # Fetch image gallery for this movie (first 10 posters)
         if movie_id:
@@ -564,7 +564,7 @@ def search_poster_candidates(query: str, year: Optional[int] = None, imdb_id: Op
                                     "thumb": thumb_url
                                 })
             except Exception as e:
-                print(f"TMDB images fetch error: {e}")
+                print(f"TMDB images fetch error: {redact_secrets(e)}")
 
     # 2. Supplement with Wikipedia OpenSearch if needed
     if len(candidates) < 10:
@@ -608,7 +608,7 @@ def search_poster_candidates(query: str, year: Optional[int] = None, imdb_id: Op
                 except Exception:
                     pass
         except Exception as e:
-            print(f"Wikipedia candidate search error: {e}")
+            print(f"Wikipedia candidate search error: {redact_secrets(e)}")
 
     return candidates
 
@@ -660,7 +660,7 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
                 lookup_failed = True
         except Exception as e:
             lookup_failed = True
-            print(f"Metadata TMDB find error: {e}")
+            print(f"Metadata TMDB find error: {redact_secrets(e)}")
 
     # 2. Look up by title + year
     if not movie_id and clean_title:
@@ -678,7 +678,7 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
                 lookup_failed = True
         except Exception as e:
             lookup_failed = True
-            print(f"Metadata TMDB search error: {e}")
+            print(f"Metadata TMDB search error: {redact_secrets(e)}")
 
     if not movie_id:
         if not lookup_failed:
@@ -709,7 +709,7 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
                             f.write(img_resp.content)
                         bd_url = f"/static/backdrops/{cache_key}.jpg"
                 except Exception as e:
-                    print(f"Backdrop download error: {e}")
+                    print(f"Backdrop download error: {redact_secrets(e)}")
             else:
                 bd_url = f"/static/backdrops/{cache_key}.jpg"
 
@@ -730,7 +730,7 @@ def get_or_fetch_movie_metadata(imdb_id: Optional[str], clean_title: str, year: 
 
         return meta
     except Exception as e:
-        print(f"TMDB details fetch error: {e}")
+        print(f"TMDB details fetch error: {redact_secrets(e)}")
         return {}
 
 

@@ -1200,4 +1200,32 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-
+// Warm film pages before the click: after a short hover (or on touch/focus),
+// fetch the film page in the background so the click opens it right away.
+(function () {
+  if (navigator.connection && navigator.connection.saveData) return;
+  const done = new Set();
+  let timer = null;
+  function prefetch(link) {
+    const url = link.href;
+    if (done.has(url) || done.size > 60) return;
+    done.add(url);
+    // A plain low-priority fetch (not <link rel=prefetch>, which some
+    // browsers ignore): the server builds and caches the page now, and the
+    // click then revalidates against the browser's copy (304).
+    fetch(url, { credentials: "same-origin", priority: "low" }).catch(() => {});
+  }
+  function filmLink(e) {
+    const link = e.target.closest && e.target.closest('a[href^="/film/"]');
+    return link && link.origin === location.origin && link.pathname !== location.pathname ? link : null;
+  }
+  document.addEventListener("mouseover", (e) => {
+    const link = filmLink(e);
+    if (!link) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => prefetch(link), 80);
+  });
+  document.addEventListener("mouseout", () => clearTimeout(timer));
+  document.addEventListener("touchstart", (e) => { const link = filmLink(e); if (link) prefetch(link); }, { passive: true });
+  document.addEventListener("focusin", (e) => { const link = filmLink(e); if (link) prefetch(link); });
+})();

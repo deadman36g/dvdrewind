@@ -1,22 +1,37 @@
 import json
 import re
 import sqlite3
+import time
 from typing import Any, Dict, List, Optional
 from src.db.migrations import get_connection
 
 # Bumped after every archive write made through this process. Web page caches
 # key on it, so they survive unrelated writes (like a resolved Wikipedia link)
-# and are dropped as soon as titles, releases, posters or IMDb IDs change.
+# and are dropped once titles, releases, posters or IMDb IDs change.
+# A sync saves a title every few seconds for hours, so imported titles publish
+# a new generation at most once a minute; edits a person makes (poster, IMDb
+# ID) and finished tasks publish at once.
+GENERATION_PUBLISH_SECONDS = 60
 _DATA_GENERATION = 0
+_PUBLISHED_GENERATION = 0
+_PUBLISHED_AT = 0.0
 
 
 def data_generation() -> int:
-    return _DATA_GENERATION
+    global _PUBLISHED_GENERATION, _PUBLISHED_AT
+    if (
+        _PUBLISHED_GENERATION != _DATA_GENERATION
+        and time.monotonic() - _PUBLISHED_AT >= GENERATION_PUBLISH_SECONDS
+    ):
+        _PUBLISHED_GENERATION, _PUBLISHED_AT = _DATA_GENERATION, time.monotonic()
+    return _PUBLISHED_GENERATION
 
 
-def bump_data_generation() -> None:
-    global _DATA_GENERATION
+def bump_data_generation(immediate: bool = False) -> None:
+    global _DATA_GENERATION, _PUBLISHED_GENERATION, _PUBLISHED_AT
     _DATA_GENERATION += 1
+    if immediate:
+        _PUBLISHED_GENERATION, _PUBLISHED_AT = _DATA_GENERATION, time.monotonic()
 
 def format_display_title(clean_title: str) -> str:
     if not clean_title:
@@ -177,9 +192,12 @@ class ArchiveRepository:
                     rel.get("notes_raw"),
                     rel.get("easter_eggs"),
                     rel.get("commentaries_raw"),
-                    rel.get("extras_raw"),
+                    # extras_raw/soundtracks_raw are parsed into the extras and
+                    # audio_tracks tables and never read back (~130 MB);
+                    # archive/raw keeps the source HTML if they're ever needed.
+                    None,
                     rel.get("subtitles_raw"),
-                    rel.get("soundtracks_raw"),
+                    None,
                     rel.get("contributor"),
                 ))
                 release_id = cur.lastrowid
@@ -203,7 +221,9 @@ class ArchiveRepository:
                     self.conn.execute("""
                         INSERT INTO extras (release_id, extra_type, title, runtime, source_order, raw_text)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    """, (release_id, e.get("extra_type"), e["title"], e.get("runtime"), e.get("source_order"), e["raw_text"]))
+                    """, (release_id, e.get("extra_type"), e["title"], e.get("runtime"), e.get("source_order"),
+                          # Parsed extras repeat the title as raw_text; store it once.
+                          "" if e["raw_text"] == e["title"] else e["raw_text"]))
 
             # 4. Insert Cuts
             for c in data.get("cuts", []):
@@ -275,10 +295,18 @@ class ArchiveRepository:
         # finished words ("the", "of", "ii") match exactly: "the"* expands to
         # every title word starting with "the" and dominated query time.
         tokens = [t.replace('"', '') for t in clean_q.split() if t.strip()]
-        fts_query = " ".join(
-            f'"{tok}"*' if i == len(tokens) - 1 or len(tok) > 3 else f'"{tok}"'
-            for i, tok in enumerate(tokens)
-        )
+        if not tokens:
+            return []
+        if len(tokens) == 1 and len(tokens[0]) <= 3:
+            # A lone short word ("the", "a") matches most of the archive and
+            # ranking it all took 1-10 s. While typing, titles that start with
+            # it are both faster and what the person is after.
+            fts_query = f'clean_title : ^ "{tokens[0]}" *'
+        else:
+            fts_query = " ".join(
+                f'"{tok}"*' if i == len(tokens) - 1 or len(tok) > 3 else f'"{tok}"'
+                for i, tok in enumerate(tokens)
+            )
 
         # Rank and limit inside FTS first, then join only the kept rows. Joining
         # before the LIMIT looked up every match ("the" matches 61k titles).
@@ -315,6 +343,16 @@ class ArchiveRepository:
             })
         return results
 
+    _RELEASE_COLUMNS: Optional[str] = None
+    # Never displayed; skip reading them for every film page.
+    _UNREAD_RELEASE_COLUMNS = {"extras_raw", "soundtracks_raw"}
+
+    def _release_columns(self) -> str:
+        if ArchiveRepository._RELEASE_COLUMNS is None:
+            names = [row[1] for row in self.conn.execute("PRAGMA table_info(releases)")]
+            ArchiveRepository._RELEASE_COLUMNS = ", ".join(n for n in names if n not in self._UNREAD_RELEASE_COLUMNS)
+        return ArchiveRepository._RELEASE_COLUMNS
+
     def _load_releases_with_children(self, title_ids: List[int]) -> Dict[int, List[Dict[str, Any]]]:
         """Load releases and all child rows in batches instead of N+1 queries."""
         if not title_ids:
@@ -322,7 +360,7 @@ class ArchiveRepository:
 
         placeholders = ",".join("?" for _ in title_ids)
         rel_rows = self.conn.execute(
-            f"SELECT * FROM releases WHERE title_id IN ({placeholders}) ORDER BY title_id, release_index ASC",
+            f"SELECT {self._release_columns()} FROM releases WHERE title_id IN ({placeholders}) ORDER BY title_id, release_index ASC",
             tuple(title_ids),
         ).fetchall()
         if not rel_rows:
@@ -348,7 +386,10 @@ class ArchiveRepository:
             ).fetchall()
             grouped: Dict[int, List[Dict[str, Any]]] = {}
             for row in rows:
-                grouped.setdefault(int(row["release_id"]), []).append(dict(row))
+                item = dict(row)
+                if table == "extras" and not item["raw_text"]:
+                    item["raw_text"] = item["title"]
+                grouped.setdefault(int(row["release_id"]), []).append(item)
             children[key] = grouped
 
         grouped_releases: Dict[int, List[Dict[str, Any]]] = {title_id: [] for title_id in title_ids}
@@ -586,7 +627,7 @@ class ArchiveRepository:
                 self.conn.execute("UPDATE titles SET poster_url = ? WHERE clean_title = ? AND year = ?", (poster_url, clean_title, year))
             else:
                 self.conn.execute("UPDATE titles SET poster_url = ? WHERE fid = ?", (poster_url, fid))
-        bump_data_generation()
+        bump_data_generation(immediate=True)
 
     def update_imdb_id(self, fid: int, imdb_id: str) -> int:
         """Attach a verified IMDb ID and propagate it to same-title/year format siblings."""
@@ -615,5 +656,5 @@ class ArchiveRepository:
                     "AND (imdb_id IS NULL OR TRIM(imdb_id) = '')",
                     (imdb_id, fid, clean_title, year),
                 )
-        bump_data_generation()
+        bump_data_generation(immediate=True)
         return int(cur.rowcount or 0)

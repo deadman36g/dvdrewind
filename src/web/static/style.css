@@ -405,11 +405,7 @@ main {
   letter-spacing: 0.04em;
   border: 1px solid transparent;
 }
-.format-4k {
-  background-color: rgba(210, 153, 34, 0.15);
-  border-color: var(--accent-gold);
-  color: var(--accent-gold);
-}
+
 .format-bluray {
   background-color: rgba(88, 166, 255, 0.12);
   border-color: var(--accent-blue);
@@ -476,11 +472,7 @@ main {
   text-decoration: none;
   transition: all 0.15s ease;
 }
-.format-tab:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-  text-decoration: none;
-}
+
 .format-tab.active {
   background-color: var(--bg-primary);
   border-color: var(--accent-blue);
@@ -690,13 +682,6 @@ main {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background-color: var(--bg-secondary);
-}
-
-.editions-summary-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.84rem;
-  text-align: left;
 }
 
 .editions-summary-table th {
@@ -1513,13 +1498,6 @@ footer {
    ======================================================== */
 
 /* Requirement G: Larger Poster Frame, Zero Cutoff, Ambient Autofill */
-.movie-poster-pane {
-  flex-shrink: 0;
-  width: 210px !important;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
 
 .movie-poster-box {
   width: 100% !important;
@@ -2084,18 +2062,6 @@ footer {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-}
-
-.movie-poster-img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important; /* ALWAYS A FULL 2:3 RECTANGULAR MOVIE POSTER */
-  display: block !important;
-  transition: transform 0.3s ease;
-}
-
-.movie-poster-box:hover .movie-poster-img {
-  transform: scale(1.03);
 }
 
 /* Country Flags: Prominent Flag, Text ONLY on Hover */
@@ -4187,8 +4153,6 @@ main {
   font-size: 0.85rem;
 }
 
-
-
 /* ========================================================
    REFINED PRESTIGE OVERHAUL & POLISH
    ======================================================== */
@@ -4374,7 +4338,6 @@ main {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
-
 
 /* ========================================================
    SECTION 1: CINEMATIC BANNER HERO & TITLE MEDIA BAR
@@ -7547,195 +7510,17 @@ main {
   transition: all 0.15s ease;
 }
 
-.archive-action-btn-sm:hover {
-  color: #38BDF8;
-  border-color: #38BDF8;
-  background: rgba(56, 189, 248, 0.1);
-  text-decoration: none;
-}
-
-.archive-frame-wrap {
-  position: relative;
-  width: 100%;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  background: #FFFFFF;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-
-.archive-embedded-iframe {
-  width: 100%;
-  height: 420px;
-  border: none;
-  display: block;
-}
-
 /* Panel 11: Poster Changer Panel */
-.poster-embedded-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.poster-card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.poster-tmdb-glyph {
-  font-size: 1.4rem;
-}
-
-.poster-card-title {
-  margin: 0;
-  font-size: 1.02rem;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.poster-card-sub {
-  margin: 0.2rem 0 0 0;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-}
-
-.poster-card-body {
-  padding-top: 0.25rem;
-}
-
-.poster-preview-box {
-  display: flex;
-  gap: 1.25rem;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0.85rem 1.1rem;
-}
-
-[data-theme="light"] .poster-preview-box {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.poster-current-thumb {
-  width: 72px;
-  height: auto;
-  max-height: 110px;
-  border-radius: 6px;
-  object-fit: cover;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  flex-shrink: 0;
-}
-
-.poster-current-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  flex: 1;
-}
-
-.poster-meta-tag {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-
-.poster-meta-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.btn-launch-poster-modal {
-  align-self: flex-start;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #38BDF8;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  padding: 0.4rem 0.85rem;
-  border-radius: 6px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  transition: all 0.15s ease;
-  margin-top: 0.2rem;
-}
-
-.btn-launch-poster-modal:hover {
-  background: rgba(56, 189, 248, 0.22);
-  border-color: #38BDF8;
-  color: #7DD3FC;
-}
 
 /* External Toolbar Trigger Buttons Glowing Active Open State */
-.ext-icon-btn-sm.is-open {
-  border-color: #F59E0B !important;
-  background: rgba(245, 158, 11, 0.2) !important;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.55) !important;
-  transform: translateY(-2px);
-}
 
 /* ========================================================
    GREENISH BACKGROUND ROW HIGHLIGHT (TOP TRANSFERS & WINNERS)
    ======================================================== */
-.summary-row.row-green-highlight {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.14) 0%, rgba(16, 185, 129, 0.06) 45%, rgba(16, 185, 129, 0.015) 100%) !important;
-  border-left: 4px solid #10B981 !important;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.summary-row.row-green-highlight:hover {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.1) 45%, rgba(16, 185, 129, 0.03) 100%) !important;
-  border-left-color: #34D399 !important;
-}
-
-.summary-row.row-green-highlight td {
-  border-bottom-color: rgba(16, 185, 129, 0.15) !important;
-}
-
-[data-theme="light"] .summary-row.row-green-highlight {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0.06) 45%, transparent 100%) !important;
-  border-left: 4px solid #059669 !important;
-}
-
-[data-theme="light"] .summary-row.row-green-highlight:hover {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.25) 0%, rgba(16, 185, 129, 0.1) 45%, transparent 100%) !important;
-}
 
 /* ========================================================
    TABLE HEADER KEY TRIGGER BUTTONS
    ======================================================== */
-.th-content-with-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.th-key-btn {
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: rgba(245, 158, 11, 0.18);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  color: #FBBF24;
-  font-size: 0.65rem;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-  transition: all 0.15s ease;
-}
 
 .th-key-btn:hover {
   gap: 0.25rem;
@@ -8392,11 +8177,6 @@ main {
   background: rgba(0, 0, 0, 0.25);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   gap: 0.75rem;
-}
-
-[data-theme="light"] .inline-shelf-header {
-  background: #f8fafc;
-  border-bottom-color: rgba(0, 0, 0, 0.08);
 }
 
 .inline-shelf-tabs {

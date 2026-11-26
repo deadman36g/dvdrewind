@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 # Project root
@@ -37,3 +38,11 @@ TIMEOUT_SECONDS = 15.0
 
 # Parser Version
 PARSER_VERSION = "1.0.0"
+
+
+_SECRET_PARAM_RE = re.compile(r"((?:api_?key|apikey|token)=)[^&\s'\"]+", re.IGNORECASE)
+
+
+def redact_secrets(text) -> str:
+    """Hide API keys in messages: request errors repeat the full URL."""
+    return _SECRET_PARAM_RE.sub(r"\1***", str(text))

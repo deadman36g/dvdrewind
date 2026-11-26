@@ -6,7 +6,7 @@
 {% block content %}
 <div class="compare-page-wrapper">
   <!-- Cinematic Hero Banner (Single, Clean) -->
-  <div class="compare-hero-banner" {% if title.backdrop_url %}style="--compare-hero-bg: url('{{ title.backdrop_url }}');"{% endif %}>
+  <div class="compare-hero-banner" {% if title.backdrop_url %}style="--compare-hero-bg: url('{{ title.backdrop_url|backdrop_webp }}');"{% endif %}>
     <div class="compare-hero-overlay"></div>
     <div class="compare-hero-content">
       <div class="compare-hero-nav">
