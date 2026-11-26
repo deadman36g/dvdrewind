@@ -12,6 +12,7 @@ Enforces:
 2. Deduplicates multiple formats of the same film down to 1 dominant card (starting from DVD).
 """
 
+import functools
 import json
 import random
 import re
@@ -20,17 +21,26 @@ import time
 from collections import defaultdict
 from typing import Any, Dict, List
 
+from src.config import ARCHIVE_DIR
+from src.db.repository import data_generation
+
 MIN_SHELF_TITLES = 8
 MAX_SHELF_CARDS = 12
 MAX_DYNAMIC_DIRECTOR_SHELVES = 24
 INITIAL_SHELF_COUNT = 6
-SHELF_CACHE_TTL_SECONDS = 300
+# Shelves are rebuilt when this process changes archive data (data_generation)
+# and otherwise at most every few hours, to pick up writes from other processes.
+SHELF_CACHE_TTL_SECONDS = 6 * 3600
+# Saved after each build so a restart (e.g. a nightly container restart)
+# serves shelves at once and rebuilds in the background.
+SHELF_CACHE_FILE = ARCHIVE_DIR / "shelf_cache.json"
 
 # Shelf construction scans the full archive and is intentionally expensive.
-# Requests always receive the hot cache immediately; expired caches refresh in
-# a background thread instead of blocking a page load for several seconds.
+# Requests always receive the hot cache immediately; stale caches refresh in
+# a background thread instead of blocking a page load.
 _SHELF_CACHE = None
 _SHELF_CACHE_BUILT_AT = 0.0
+_SHELF_CACHE_GENERATION = None
 _SHELF_REFRESHING = False
 _SHELF_REFRESH_LOCK = threading.Lock()
 
@@ -112,10 +122,20 @@ GENRE_KEYWORDS = {
 }
 
 
+@functools.lru_cache(maxsize=None)
+def _edition_group_name(clean_title: str) -> str:
+    return re.sub(r'\s*\((The|A|An)\)\s*$', '', clean_title, flags=re.IGNORECASE).strip().lower()
+
+
+def _keyword_matcher(keywords):
+    """One compiled search equivalent to any(k in text for k in keywords)."""
+    return re.compile("|".join(re.escape(k) for k in keywords)).search
+
+
 def collapse_film_editions(titles: List[Dict[str, Any]], prefer_format: str = "DVD") -> List[Dict[str, Any]]:
     groups = {}
     for t in titles:
-        raw_name = re.sub(r'\s*\((The|A|An)\)\s*$', '', t["clean_title"], flags=re.IGNORECASE).strip().lower()
+        raw_name = _edition_group_name(t["clean_title"])
         key = (raw_name, t.get("year"))
         if key not in groups:
             groups[key] = []
@@ -192,13 +212,42 @@ def _refresh_shelf_cache_in_background() -> None:
     threading.Thread(target=worker, name="dvdrewind-shelf-refresh", daemon=True).start()
 
 
-def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any]]:
-    global _SHELF_CACHE, _SHELF_CACHE_BUILT_AT
+def _load_saved_shelves() -> bool:
+    global _SHELF_CACHE, _SHELF_CACHE_BUILT_AT, _SHELF_CACHE_GENERATION
+    try:
+        shelves = json.loads(SHELF_CACHE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(shelves, list) or not shelves:
+        return False
+    _SHELF_CACHE = shelves
+    _SHELF_CACHE_BUILT_AT = time.monotonic()
+    _SHELF_CACHE_GENERATION = None  # unknown age: rebuild in the background
+    return True
 
-    if _SHELF_CACHE is not None and not force_refresh:
-        if time.monotonic() - _SHELF_CACHE_BUILT_AT >= SHELF_CACHE_TTL_SECONDS:
+
+def _save_shelves(shelves: List[Dict[str, Any]]) -> None:
+    tmp = SHELF_CACHE_FILE.with_name(SHELF_CACHE_FILE.name + ".tmp")
+    try:
+        tmp.write_text(json.dumps(shelves, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(SHELF_CACHE_FILE)
+    except OSError:
+        pass
+
+
+def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any]]:
+    global _SHELF_CACHE, _SHELF_CACHE_BUILT_AT, _SHELF_CACHE_GENERATION
+
+    if not force_refresh and (_SHELF_CACHE is not None or _load_saved_shelves()):
+        stale = (
+            _SHELF_CACHE_GENERATION != data_generation()
+            or time.monotonic() - _SHELF_CACHE_BUILT_AT >= SHELF_CACHE_TTL_SECONDS
+        )
+        if stale:
             _refresh_shelf_cache_in_background()
         return _SHELF_CACHE
+
+    generation = data_generation()
 
     # Avoid correlated subqueries over releases for every title. Reading the
     # compact tables once is substantially faster on large NAS-hosted archives.
@@ -242,6 +291,13 @@ def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any
             "distributors": " || ".join(distributors[title_id]),
         })
 
+    # Lowercase once; the shelf filters below scan every title dozens of times.
+    lowered = [(t["clean_title"].lower(), t["director"].lower(), t) for t in titles_list]
+
+    def titles_matching(keywords):
+        match = _keyword_matcher(keywords)
+        return [t for name, _director, t in lowered if match(name)]
+
     shelves = []
     used_shelf_ids = set()
 
@@ -264,17 +320,10 @@ def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any
         used_shelf_ids.add(shelf_id)
 
     # 1. Special Curations
-    best_4k = [
-        t for t in titles_list 
-        if "4k" in t["format_category"].lower() 
-        and any(k in t["clean_title"].lower() for k in BEST_4K_TITLES)
-    ]
+    best_4k = [t for t in titles_matching(BEST_4K_TITLES) if "4k" in t["format_category"].lower()]
     add_shelf("best-4k", "🌟 Reference 4K Ultra HD Showcases", "showcase", best_4k, prefer_format="4K UHD")
 
-    controversial = [
-        t for t in titles_list
-        if any(k in t["clean_title"].lower() for k in CONTROVERSIAL_TITLES)
-    ]
+    controversial = titles_matching(CONTROVERSIAL_TITLES)
     add_shelf("controversial", "⚡ Infamous Transfer Controversies & DNR Debates", "controversy", controversial, prefer_format="DVD")
 
     cult_keywords = [
@@ -282,31 +331,24 @@ def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any
         "cannibal", "re-animator", "toxic avenger", "eraserhead", "basket case",
         "texas chain saw", "hellraiser", "videodrome", "scanners", "near dark"
     ]
-    cult = [
-        t for t in titles_list
-        if any(k in t["clean_title"].lower() for k in cult_keywords)
-    ]
+    cult = titles_matching(cult_keywords)
     add_shelf("cult-vault", "🔥 Cult Cinema & Midnight Movie Vault", "cult", cult, prefer_format="DVD")
 
     # 2. Curated Franchises
     for canon_name, keywords, shelf_title, cat, s_id in TARGET_FRANCHISES:
-        items = [
-            t for t in titles_list
-            if any(k in t["clean_title"].lower() for k in keywords)
-        ]
-        add_shelf(s_id, shelf_title, "franchise", items, prefer_format="DVD")
+        add_shelf(s_id, shelf_title, "franchise", titles_matching(keywords), prefer_format="DVD")
 
     # 3. Curated Directors
     for dir_name, shelf_title, cat, s_id in TARGET_DIRECTORS:
-        items = [
-            t for t in titles_list
-            if dir_name.lower() in t["director"].lower()
-        ]
+        dir_lower = dir_name.lower()
+        items = [t for _name, director, t in lowered if dir_lower in director]
         add_shelf(s_id, shelf_title, "director", items, prefer_format="DVD")
 
     # Dynamically any other director with at least 8 unique films in archive
     dir_counts = {}
+    titles_by_director = defaultdict(list)
     for t in titles_list:
+        titles_by_director[t["director"]].append(t)
         d = t["director"].strip()
         if d and len(d) > 2 and "various" not in d.lower():
             dir_counts[d] = dir_counts.get(d, 0) + 1
@@ -320,25 +362,20 @@ def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any
             s_id = f"dir-{slug}"
             if s_id not in used_shelf_ids:
                 before = len(shelves)
-                items = [t for t in titles_list if t["director"] == d]
+                items = titles_by_director.get(d, [])
                 add_shelf(s_id, f"🎬 {d} Spotlight", "director", items, prefer_format="DVD")
                 if len(shelves) > before:
                     dynamic_directors_added += 1
 
     # 4. Boutique Labels
     for label_name, keywords, shelf_title, cat, s_id in TARGET_LABELS:
-        items = [
-            t for t in titles_list
-            if any(k in t["distributors"] for k in keywords)
-        ]
+        match = _keyword_matcher(keywords)
+        items = [t for t in titles_list if match(t["distributors"])]
         add_shelf(s_id, shelf_title, "label", items, prefer_format="DVD")
 
     # 5. Genres
     for genre_name, keywords in GENRE_KEYWORDS.items():
-        items = [
-            t for t in titles_list
-            if any(k in t["clean_title"].lower() for k in keywords)
-        ]
+        items = titles_matching(keywords)
         genre_slug = re.sub(r'[^a-z0-9]+', '-', genre_name.lower()).strip('-')
         add_shelf(f"genre-{genre_slug}", f"🍿 {genre_name} Archive", "genre", items, prefer_format="DVD")
 
@@ -359,6 +396,8 @@ def get_curated_shelves(repo, force_refresh: bool = False) -> List[Dict[str, Any
 
     _SHELF_CACHE = shelves
     _SHELF_CACHE_BUILT_AT = time.monotonic()
+    _SHELF_CACHE_GENERATION = generation
+    _save_shelves(shelves)
     return shelves
 
 

@@ -174,5 +174,19 @@ class TestWebServer(AioHTTPTestCase):
         self.assertIn("Physical Editions (70)", text_all)
         self.assertIn("table-format-chip", text_all)
 
+class TestCompactHtml(unittest.TestCase):
+    def test_repeated_svgs_become_one_sprite_and_scripts_are_untouched(self):
+        from src.web.app import compact_html
+        icon = '<svg width="20" fill="red"><path d="' + "M1 1L2 2" * 60 + '"/></svg>'
+        script = "<script>\n    el.innerHTML = '" + icon + "';\n</script>"
+        page = "<html><body>\n    <p>A</p>\n    " + icon + "\n\n    " + icon + "\n" + script + "</body></html>"
+        out = compact_html(page)
+        self.assertEqual(out.count('<g id="rw-svg-'), 1)
+        self.assertEqual(out.count('<use href="#rw-svg-'), 2)
+        self.assertIn('<svg width="20" fill="red"><use', out)
+        self.assertIn(script, out)
+        self.assertNotIn("\n    <p>", out)
+
+
 if __name__ == "__main__":
     unittest.main()

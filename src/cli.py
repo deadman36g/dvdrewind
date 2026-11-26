@@ -223,9 +223,16 @@ def main():
     args.func(args)
 
 def _run_web_server(args):
+    import subprocess
     from aiohttp import web
     from src.web.app import create_app
     print(f"Starting DVDRewind web server at http://{args.host}:{args.port} ...")
+    # Fill in missing poster thumbnails at the lowest CPU priority, apart from
+    # the web server so it never competes for the GIL.
+    subprocess.Popen([
+        "nice", "-n", "19", sys.executable, "-c",
+        "from src.web.app import pregenerate_thumbs; pregenerate_thumbs()",
+    ])
     web.run_app(create_app(), host=args.host, port=args.port)
 
 if __name__ == "__main__":

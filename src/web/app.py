@@ -1,7 +1,9 @@
 import asyncio
 import functools
+import hashlib
 import html
 import json
+import os
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
@@ -140,6 +142,37 @@ def poster_thumb(url: Optional[str]) -> Optional[str]:
     return url
 
 
+def _make_thumb(source: Path, thumb: Path) -> None:
+    from PIL import Image
+    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+    with Image.open(source) as im:
+        im = im.convert("RGB")
+        if im.width > THUMB_WIDTH:
+            im = im.resize((THUMB_WIDTH, round(im.height * THUMB_WIDTH / im.width)), Image.LANCZOS)
+        tmp = thumb.with_name(f".{thumb.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        im.save(tmp, "WEBP", quality=80, method=4)
+    tmp.replace(thumb)
+
+
+def pregenerate_thumbs() -> None:
+    """Make every missing poster thumbnail. Run as its own niced process from
+    `serve`, so shelves rarely wait on a first-time resize; it restarts with
+    the server and skips thumbnails that already exist."""
+    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+    existing = set(os.listdir(THUMBS_DIR))
+    made = failed = 0
+    for entry in os.scandir(ARCHIVE_DIR / "posters"):
+        name = entry.name + ".webp"
+        if name in existing or not _THUMB_NAME_RE.match(name) or not entry.is_file():
+            continue
+        try:
+            _make_thumb(Path(entry.path), THUMBS_DIR / name)
+            made += 1
+        except Exception:
+            failed += 1
+    print(f"Poster thumbnails: {made} made, {failed} failed, {len(existing)} already present", flush=True)
+
+
 @_blocking
 def handle_poster_thumb(request: web.Request) -> web.StreamResponse:
     name = request.match_info["name"]
@@ -152,15 +185,7 @@ def handle_poster_thumb(request: web.Request) -> web.StreamResponse:
         if not source.is_file():
             raise web.HTTPNotFound()
         try:
-            from PIL import Image
-            THUMBS_DIR.mkdir(parents=True, exist_ok=True)
-            with Image.open(source) as im:
-                im = im.convert("RGB")
-                if im.width > THUMB_WIDTH:
-                    im = im.resize((THUMB_WIDTH, round(im.height * THUMB_WIDTH / im.width)), Image.LANCZOS)
-                tmp = thumb.with_name(f".{name}.{threading.get_ident()}.tmp")
-                im.save(tmp, "WEBP", quality=80, method=4)
-            tmp.replace(thumb)
+            _make_thumb(source, thumb)
         except Exception:
             raise web.HTTPFound(f"/static/posters/{source_name}")
     return web.FileResponse(thumb, headers={
@@ -195,6 +220,70 @@ EMBED_RESPONSE_HEADERS = {
 }
 
 
+_SCRIPT_BLOCK_RE = re.compile(r"(<script\b.*?</script>)", re.S | re.I)
+_INLINE_SVG_RE = re.compile(r"<svg\b([^>]*)>(.*?)</svg>", re.S)
+_LINE_INDENT_RE = re.compile(r"[ \t]*\n\s*")
+_SVG_DEDUPE_MIN_BYTES = 300
+
+
+def compact_html(page: str) -> str:
+    """Shrink rendered HTML without changing what the browser shows.
+
+    - Film pages repeat the same format/audio/label logo SVGs 150+ times
+      (185 KB of a 485 KB page). Each repeated body is defined once in a hidden
+      sprite and the copies become <use> references; the outer <svg> keeps its
+      size, viewBox and fill, which the referenced content inherits.
+    - Indentation and blank lines collapse to one newline. The site uses no
+      <pre>, <textarea> or white-space: pre*, so this is invisible.
+    Script blocks are left untouched (some hold SVG markup inside JS strings).
+    """
+    parts = _SCRIPT_BLOCK_RE.split(page)
+    counts: dict[str, int] = {}
+    for part in parts[::2]:
+        for m in _INLINE_SVG_RE.finditer(part):
+            body = m.group(2)
+            if len(body) >= _SVG_DEDUPE_MIN_BYTES:
+                counts[body] = counts.get(body, 0) + 1
+    # Content-hashed ids, so a fragment loaded into a page can't clash with it.
+    sprite_ids = {
+        body: "rw-svg-" + hashlib.md5(body.encode("utf-8")).hexdigest()[:10]
+        for body, n in counts.items() if n > 1
+    }
+
+    def use_sprite(m: re.Match) -> str:
+        sprite_id = sprite_ids.get(m.group(2))
+        return f'<svg{m.group(1)}><use href="#{sprite_id}"/></svg>' if sprite_id else m.group(0)
+
+    for i in range(0, len(parts), 2):
+        if sprite_ids:
+            parts[i] = _INLINE_SVG_RE.sub(use_sprite, parts[i])
+        parts[i] = _LINE_INDENT_RE.sub("\n", parts[i])
+    out = "".join(parts)
+    if not sprite_ids:
+        return out
+    # Not display:none: gradients inside a display:none SVG don't paint.
+    sprite = (
+        '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>'
+        + "".join(f'<g id="{sprite_id}">{body}</g>' for body, sprite_id in sprite_ids.items())
+        + "</defs></svg>"
+    )
+    sprite = _LINE_INDENT_RE.sub("\n", sprite)
+    body_tag = re.search(r"<body\b[^>]*>", out)
+    if body_tag:
+        return out[: body_tag.end()] + sprite + out[body_tag.end():]
+    return sprite + out
+
+
+def _render_page(template_name: str, request: web.Request, context: dict[str, Any]) -> web.Response:
+    page = aiohttp_jinja2.render_string(template_name, request, context)
+    return web.Response(text=compact_html(page), content_type="text/html", charset="utf-8")
+
+
+async def handle_healthz(request: web.Request) -> web.Response:
+    """Liveness only: no database work, so the Docker check stays cheap."""
+    return web.Response(text="ok")
+
+
 @web.middleware
 async def performance_middleware(request: web.Request, handler):
     """Cache versioned static assets and compress text assets before proxying."""
@@ -207,10 +296,17 @@ async def performance_middleware(request: web.Request, handler):
         # Posters/backdrops are immutable filenames in normal operation; app
         # assets are versioned in base.html and can safely stay hot in-browser.
         max_age = 604800 if path.startswith(("/static/posters/", "/static/backdrops/", "/static/edition-covers/")) else 86400
-        response.headers.setdefault("Cache-Control", f"public, max-age={max_age}")
+        if "v" in request.query:
+            # base.html bumps ?v= whenever an asset changes, so a versioned URL
+            # never changes content.
+            response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        else:
+            response.headers.setdefault("Cache-Control", f"public, max-age={max_age}")
         if path.endswith(".webp"):
             response.content_type = "image/webp"
-        if path.endswith((".css", ".js", ".svg", ".json", ".txt")):
+        # CSS and JS ship pre-gzipped from the image build (aiohttp serves the
+        # .gz sibling); compressing them again per request cost CPU.
+        if path.endswith((".svg", ".json", ".txt")):
             response.enable_compression()
     return response
 
@@ -224,7 +320,7 @@ def handle_index(request: web.Request) -> web.Response:
         total_titles = repo.conn.execute("SELECT COUNT(*) FROM titles WHERE is_missing = 0").fetchone()[0]
         total_releases = repo.conn.execute("SELECT COUNT(*) FROM releases").fetchone()[0]
 
-        return aiohttp_jinja2.render_template("index.html", request, {
+        return _render_page("index.html", request, {
             "shelves": shelves,
             "total_shelves": len(all_shelves),
             "total_titles": total_titles,
@@ -273,7 +369,7 @@ def handle_api_shelves(request: web.Request) -> web.Response:
             raise web.HTTPBadRequest(text="Unknown shelf category")
 
         env = aiohttp_jinja2.get_env(request.app)
-        html_fragment = env.get_template("shelves_fragment.html").render(shelves=shelves)
+        html_fragment = compact_html(env.get_template("shelves_fragment.html").render(shelves=shelves))
         if cache_key is not None:
             _cache_shelf_fragment(cache_key, html_fragment, len(shelves))
         return web.Response(
@@ -350,7 +446,7 @@ def handle_search(request: web.Request) -> web.Response:
                 })
             pagination_base = f"/search?format={quote_plus(fmt)}&page="
 
-        response = aiohttp_jinja2.render_template("search.html", request, {
+        response = _render_page("search.html", request, {
             "results": results,
             "query": q or fmt,
             "total_results": total_results,
@@ -563,7 +659,7 @@ def handle_movie(request: web.Request) -> web.Response:
         title["cover_gallery"] = attach_art_to_family(repo, title, family_context)
         title["collector_insights"] = build_collector_insights(title, family_context)
 
-        response = aiohttp_jinja2.render_template("movie.html", request, {
+        response = _render_page("movie.html", request, {
             "title": title,
             "query": "",
         })
@@ -602,10 +698,10 @@ def handle_release_specs(request: web.Request) -> web.Response:
         title["is_all_formats"] = is_all
 
         env = aiohttp_jinja2.get_env(request.app)
-        html_fragment = env.get_template("release_specs_fragment.html").render(
+        html_fragment = compact_html(env.get_template("release_specs_fragment.html").render(
             title=title,
             release=release,
-        )
+        ))
         return web.Response(
             text=html_fragment,
             content_type="text/html",
@@ -695,7 +791,7 @@ def handle_compare(request: web.Request) -> web.Response:
             "notes": len(set((e.get("notes_raw") or "").strip() for e in selected_editions)) > 1,
         }
 
-        return aiohttp_jinja2.render_template("compare.html", request, {
+        return _render_page("compare.html", request, {
             "title": title,
             "editions": selected_editions,
             "all_releases": title.get("releases", []),
@@ -715,7 +811,7 @@ def handle_archive_view(request: web.Request) -> web.Response:
         if not title:
             raise web.HTTPNotFound(text=f"Film comparison FID {fid} not found.")
 
-        return aiohttp_jinja2.render_template("archive_view.html", request, {
+        return _render_page("archive_view.html", request, {
             "title": title,
             "query": "",
         })
@@ -1542,12 +1638,19 @@ def create_app() -> web.Application:
         app,
         loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)),
         autoescape=jinja2.select_autoescape(["html", "xml"]),
+        # Templates ship inside the image and never change while it runs.
+        auto_reload=False,
     )
     env.filters['parse_audio'] = parse_audio_track
     env.filters['thumb'] = poster_thumb
+    # Compile now (movie.html alone takes ~0.5 s) instead of on the first
+    # visitor after every restart.
+    for template_name in env.list_templates(extensions=["html"]):
+        env.get_template(template_name)
 
     # Routes
     app.router.add_get("/", handle_index)
+    app.router.add_get("/healthz", handle_healthz)
     app.router.add_get("/search", handle_search)
     app.router.add_get("/api/search", handle_api_search)
     app.router.add_get("/api/shelves", handle_api_shelves)

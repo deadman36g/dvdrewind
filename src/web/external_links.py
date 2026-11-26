@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import re
 from typing import Any, Dict, Optional
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import sqlite3
@@ -148,6 +150,42 @@ def resolve_movie_censorship_url(fid: int, siblings: Optional[list] = None) -> O
     return None
 
 
+# A summary page that answered 404/410 is remembered on disk for a week; a
+# timeout or connection error only pauses retries for an hour in this process.
+# Without this, every visit to such a film re-ran the lookup.
+SUMMARY_MISS_TTL_SECONDS = 7 * 24 * 3600
+NETWORK_RETRY_SECONDS = 3600
+_RECENT_NETWORK_FAILURES: Dict[str, float] = {}
+
+
+def _read_summary_cache(cache_file: Path):
+    """Return (hit, summary). A remembered miss is a hit with summary None."""
+    try:
+        with open(cache_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return False, None
+    if isinstance(data, dict) and data.get("_miss_at"):
+        return time.time() - data["_miss_at"] < SUMMARY_MISS_TTL_SECONDS, None
+    return True, data
+
+
+def _remember_failure(cache_file: Path, url: str, exc: Exception) -> None:
+    if isinstance(exc, urllib.error.HTTPError) and exc.code in (404, 410):
+        try:
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump({"_miss_at": time.time(), "url": url}, f)
+        except OSError:
+            pass
+    else:
+        _RECENT_NETWORK_FAILURES[url] = time.time()
+
+
+def _recently_failed(url: str) -> bool:
+    failed_at = _RECENT_NETWORK_FAILURES.get(url)
+    return failed_at is not None and time.time() - failed_at < NETWORK_RETRY_SECONDS
+
+
 def get_wikipedia_summary(clean_title: str, year: Optional[int] = None, imdb_id: Optional[str] = None, wikipedia_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Fetches lead extract, description, and thumbnail from Wikipedia's REST API.
@@ -159,12 +197,9 @@ def get_wikipedia_summary(clean_title: str, year: Optional[int] = None, imdb_id:
     cache_key = imdb_id if (imdb_id and imdb_id.startswith("tt")) else f"wiki_sum_{_stable_hash(clean_title)}"
     cache_file = WIKI_SUMMARY_DIR / f"{cache_key}.json"
 
-    if cache_file.exists():
-        try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    hit, cached = _read_summary_cache(cache_file)
+    if hit:
+        return cached
 
     resolved_slug = None
     if wikipedia_url:
@@ -182,8 +217,10 @@ def get_wikipedia_summary(clean_title: str, year: Optional[int] = None, imdb_id:
     if not resolved_slug:
         return None
 
+    api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{resolved_slug}"
+    if _recently_failed(api_url):
+        return None
     try:
-        api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{resolved_slug}"
         req = urllib.request.Request(api_url, headers=HEADERS)
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -197,7 +234,8 @@ def get_wikipedia_summary(clean_title: str, year: Optional[int] = None, imdb_id:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(summary, f)
             return summary
-    except Exception:
+    except Exception as exc:
+        _remember_failure(cache_file, api_url, exc)
         return None
 
 
@@ -214,12 +252,11 @@ def get_movie_censorship_summary(movie_censorship_url: str, clean_title: str = "
     cache_id = id_m.group(1) if id_m else str(_stable_hash(movie_censorship_url))
     cache_file = MC_SUMMARY_DIR / f"mc_{cache_id}.json"
 
-    if cache_file.exists():
-        try:
-            with open(cache_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    hit, cached = _read_summary_cache(cache_file)
+    if hit:
+        return cached
+    if _recently_failed(movie_censorship_url):
+        return None
 
     try:
         req = urllib.request.Request(movie_censorship_url, headers={
@@ -265,7 +302,8 @@ def get_movie_censorship_summary(movie_censorship_url: str, clean_title: str = "
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(summary, f)
             return summary
-    except Exception:
+    except Exception as exc:
+        _remember_failure(cache_file, movie_censorship_url, exc)
         return None
 
 

@@ -271,9 +271,14 @@ class ArchiveRepository:
         if not clean_q:
             return []
 
-        # If user typed simple keywords, append * for prefix matching
+        # Prefix-match the word still being typed and any longer word. Short
+        # finished words ("the", "of", "ii") match exactly: "the"* expands to
+        # every title word starting with "the" and dominated query time.
         tokens = [t.replace('"', '') for t in clean_q.split() if t.strip()]
-        fts_query = " ".join(f'"{tok}"*' for tok in tokens)
+        fts_query = " ".join(
+            f'"{tok}"*' if i == len(tokens) - 1 or len(tok) > 3 else f'"{tok}"'
+            for i, tok in enumerate(tokens)
+        )
 
         # Rank and limit inside FTS first, then join only the kept rows. Joining
         # before the LIMIT looked up every match ("the" matches 61k titles).
