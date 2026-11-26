@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -19,8 +19,13 @@ COPY populate_all.py .
 # Pre-gzip CSS/JS once; aiohttp serves the .gz copy to browsers that accept it.
 RUN gzip -k -9 src/web/static/style.css src/web/static/app.js src/web/static/js/*.js
 
-# Prepare persistent archive directories
-RUN mkdir -p /app/archive/posters /app/archive/raw /app/archive/backdrops
+# Run as an ordinary user (uid 1000, group users), not root. Only the data
+# folders are writable; the code stays root-owned and read-only to the app.
+# (config.py also creates tests/fixtures at import.)
+RUN useradd --uid 1000 --gid 100 --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/archive/posters /app/archive/raw /app/archive/backdrops /app/db /app/tests/fixtures \
+    && chown -R app:users /app/archive /app/db /app/tests
+USER app
 
 # Expose web interface port
 EXPOSE 8088

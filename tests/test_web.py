@@ -153,6 +153,15 @@ class TestWebServer(AioHTTPTestCase):
         self.assertEqual(resp.headers["Content-Security-Policy"], "sandbox allow-same-origin")
 
     @unittest_run_loop
+    async def test_every_response_has_basic_security_headers(self):
+        for path in ("/", "/static/style.css", "/api/search?q=blade"):
+            resp = await self.client.request("GET", path)
+            await resp.read()
+            self.assertEqual(resp.headers.get("X-Content-Type-Options"), "nosniff", path)
+            self.assertEqual(resp.headers.get("X-Frame-Options"), "SAMEORIGIN", path)
+            self.assertEqual(resp.headers.get("Referrer-Policy"), "same-origin", path)
+
+    @unittest_run_loop
     async def test_unchanged_html_page_revalidates_with_304(self):
         first = await self.client.request("GET", "/archive/43651")
         etag = first.headers["ETag"]

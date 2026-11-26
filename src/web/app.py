@@ -375,10 +375,21 @@ async def etag_middleware(request: web.Request, handler):
     return response
 
 
+# Basic hardening for every response; handlers that need something stricter
+# (raw archive pages, embeds) set their own values first.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+    "X-Frame-Options": "SAMEORIGIN",
+}
+
+
 @web.middleware
 async def performance_middleware(request: web.Request, handler):
     """Cache versioned static assets and compress text assets before proxying."""
     response = await handler(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
     if request.method.upper() != "GET":
         return response
 

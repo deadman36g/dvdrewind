@@ -8,6 +8,8 @@ services:
       - "8088:8088"
     volumes:
       # Map host directory for persistent SQLite database, posters & archives
+      # The image runs as uid 1000 / gid 100: make ./archive writable by them,
+      # e.g. `sudo chown -R 1000:100 archive`.
       - ./archive:/app/archive
     environment:
       - PYTHONUNBUFFERED=1
